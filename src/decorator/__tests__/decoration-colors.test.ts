@@ -78,4 +78,28 @@ describe('decoration creation with color (hex vs theme)', () => {
       expect(CheckboxCheckedDecorationType()).toBeDefined();
     });
   });
+
+  describe('CodeDecorationType backgroundColor parameter', () => {
+    it('creates code decoration with color only (uses default background)', () => {
+      expect(CodeDecorationType('#e5c07b')).toBeDefined();
+    });
+
+    it('creates code decoration with backgroundColor only', () => {
+      expect(CodeDecorationType(undefined, '#f0f0f0')).toBeDefined();
+    });
+
+    it('creates code decoration with both color and backgroundColor', () => {
+      expect(CodeDecorationType('#e5c07b', '#f0f0f0')).toBeDefined();
+    });
+
+    it('creates code decoration with undefined backgroundColor (uses default)', () => {
+      expect(CodeDecorationType('#e5c07b', undefined)).toBeDefined();
+      expect(CodeDecorationType()).toBeDefined();
+    });
+
+    it('creates code decoration with ThemeColor background', () => {
+      expect(CodeDecorationType('#e5c07b', new ThemeColor('editor.background'))).toBeDefined();
+      expect(CodeDecorationType(undefined, new ThemeColor('editor.background'))).toBeDefined();
+    });
+  });
 });

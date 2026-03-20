@@ -3,14 +3,14 @@ import * as vscode from 'vscode';
 const SECTION = 'markdownInlineEditor' as const;
 
 /** Matches 3- or 6-digit hex color (e.g. #f00 or #ff5500). Invalid values are treated as unset. */
-const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 
-function parseHexColor(value: string | undefined): string | undefined {
+function parseHexColor(value: string | undefined | null): string | undefined {
   if (value === undefined || value === null || typeof value !== 'string') {
     return undefined;
   }
   const trimmed = value.trim();
-  return trimmed && HEX_COLOR_REGEX.test(trimmed) ? trimmed : undefined;
+  return HEX_COLOR_REGEX.test(trimmed) ? trimmed : undefined;
 }
 
 function getColorConfig(key: string): string | undefined {
@@ -92,6 +92,9 @@ export const config = {
     },
     inlineCode(): string | undefined {
       return getColorConfig('inlineCode');
+    },
+    inlineCodeBackground(): string | undefined {
+      return getColorConfig('inlineCodeBackground');
     },
     emphasis(): string | undefined {
       return getColorConfig('emphasis');

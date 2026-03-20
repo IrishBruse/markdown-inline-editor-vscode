@@ -133,6 +133,7 @@ export class Decorator {
       getLinkColor: () => config.colors.link(),
       getListMarkerColor: () => config.colors.listMarker(),
       getInlineCodeColor: () => config.colors.inlineCode(),
+      getInlineCodeBackgroundColor: () => config.colors.inlineCodeBackground(),
       getEmphasisColor: () => config.colors.emphasis(),
       getBlockquoteColor: () => config.colors.blockquote(),
       getImageColor: () => config.colors.image(),
