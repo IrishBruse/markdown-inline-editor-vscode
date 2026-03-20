@@ -1,5 +1,4 @@
 import { window, ThemeColor, ColorThemeKind } from 'vscode';
-import { Decorator } from './decorator';
 
 /**
  * Opacity value for brightness adjustment overlays.
@@ -156,7 +155,7 @@ export function StrikethroughDecorationType() {
  * adapts to the current theme without requiring a restart.
  *
  * @param {string | ThemeColor | undefined} color - Optional hex or theme color for text; when undefined only background is applied
- * @param {string | ThemeColor | undefined} backgroundColor - Optional hex or theme color for background overlay; when undefined uses theme-aware default (magenta for dark, black for light)
+ * @param {string | ThemeColor | undefined} backgroundColor - Optional hex or theme color for background overlay; when undefined uses theme-aware default (white for dark, black for light)
  * @returns {vscode.TextEditorDecorationType} A decoration type for inline code
  */
 export function CodeDecorationType(
@@ -273,7 +272,7 @@ const HEADING_CONFIG = [
   { size: '120%', bold: true },  // H3: Just above body text
   { size: '110%', bold: false }, // H4: Subtle bump
   { size: '100%', bold: false }, // H5: Same size, usually distinct by color/bold
-  { size: '90%', bold: false }, // H6: Slightly diminished
+{ size: '90%', bold: false }, // H6: Slightly diminished
 ];
 /**
  * Creates a heading decoration type with the specified level.
