@@ -6,6 +6,7 @@ export type ScopeEntry = {
   startPos: number;
   endPos: number;
   range: Range;
+  kind?: string;
 };
 
 type RangeFactory = (startPos: number, endPos: number, originalText: string) => Range | null;
@@ -59,6 +60,28 @@ export function filterDecorationsForEditor(
   for (const decoration of decorations) {
     if (headingTypes.has(decoration.type)) {
       headingMarkerEndPositions.add(decoration.startPos);
+    }
+  }
+
+  // Table decoration types that use per-range replacement rendering
+  const tableTypes = new Set<DecorationType>([
+    'tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell',
+  ]);
+
+  // For table blocks, if cursor/selection is on ANY line in the table,
+  // reveal the entire table (show raw markdown, not decorations).
+  const tableScopes = scopes.filter(s => s.kind === 'table');
+  const rawTableRanges: Range[] = [];
+  for (const tableScope of tableScopes) {
+    let tableIsActive = false;
+    for (let line = tableScope.range.start.line; line <= tableScope.range.end.line; line++) {
+      if (activeLines.has(line)) {
+        tableIsActive = true;
+        break;
+      }
+    }
+    if (tableIsActive) {
+      rawTableRanges.push(tableScope.range);
     }
   }
 
@@ -152,6 +175,33 @@ export function filterDecorationsForEditor(
             before: {
               contentText: decoration.emoji,
             },
+          },
+        });
+        filtered.set(decoration.type, ranges);
+      }
+      continue;
+    }
+
+    // Table decorations: whole-block reveal when cursor is inside the table
+    if (tableTypes.has(decoration.type)) {
+      if (rangeIntersectsAny(range, rawTableRanges)) {
+        // Whole-block raw reveal: skip decoration so raw markdown shows
+        continue;
+      }
+      if (decoration.replacement !== undefined) {
+        const ranges = filtered.get(decoration.type) || [];
+        const beforeOpts: Record<string, unknown> = {
+          contentText: decoration.replacement,
+        };
+        if (decoration.cellStyle) {
+          if (decoration.cellStyle.fontWeight) beforeOpts.fontWeight = decoration.cellStyle.fontWeight;
+          if (decoration.cellStyle.fontStyle) beforeOpts.fontStyle = decoration.cellStyle.fontStyle;
+          if (decoration.cellStyle.textDecoration) beforeOpts.textDecoration = decoration.cellStyle.textDecoration;
+        }
+        ranges.push({
+          range,
+          renderOptions: {
+            before: beforeOpts,
           },
         });
         filtered.set(decoration.type, ranges);

@@ -4,7 +4,7 @@
 
 [![CI/CD Status][ci-img]][ci] [![VS Code Marketplace][marketplace-img]][marketplace] [![OpenVSX][openvsx-img]][openvsx] [![License: MIT][license-img]][license]
 
-**Typora-like Markdown editing in VS Code.** Write in a clean, WYSIWYG-style view with context-aware syntax shadowing, inline Mermaid and LaTeX math rendering, hover previews, and clickable task lists.
+**Typora-like Markdown editing in VS Code.** Write in a clean, WYSIWYG-style view with context-aware syntax shadowing, **GFM pipe tables**, inline Mermaid and LaTeX math rendering, hover previews, and clickable task lists.
 
 Your files stay 100% standard Markdown. This extension uses editor decorations — it never rewrites your document.
 
@@ -14,8 +14,9 @@ Your files stay 100% standard Markdown. This extension uses editor decorations �
 
 ## Why people install it
 
-- **No preview pane needed:** headings, emphasis, links, images, lists, code, math, and Mermaid render inline where you write.
+- **No preview pane needed:** headings, emphasis, links, images, lists, code, **GFM tables**, math, and Mermaid render inline where you write.
 - **Rendered -> Ghost -> Raw syntax shadowing:** Markdown markers stay out of the way until you need them, then fade in on the active line or fully reveal for precise edits.
+- **GFM tables:** pipe characters and cell text are drawn as an aligned grid; place the cursor anywhere in the table to reveal raw `|` syntax for editing.
 - **Inline Mermaid and LaTeX math:** render `` ```mermaid `` diagrams, `$...$`, `$$...$$`, and `` ```math `` blocks directly in the editor.
 - **Interactive Markdown:** click task list checkboxes to toggle them, hover links to see targets, and hover images to preview them.
 - **Safe for real workflows:** files remain plain Markdown, and diffs stay raw by default for Git, merge editor, and Copilot inline review contexts.
@@ -88,6 +89,7 @@ The extension uses an intelligent **3-state syntax shadowing system** that adapt
 - **Blockquotes, lists, and checkboxes** stay fully rendered on active lines unless you directly click on the marker
 - **Headings** show raw `#` markers and remove styling when cursor is on the heading line
 - **Ordered list numbers** always remain visible
+- **Tables** switch the **entire** table to raw Markdown (all rows) when your cursor or selection is on any line inside the table
 
 Configure ghost opacity: `markdownInlineEditor.decorations.ghostFaintOpacity` (default: 0.3)
 Configure emoji shortcodes: `markdownInlineEditor.emojis.enabled` (default: true)
@@ -110,6 +112,7 @@ The extension supports the following Markdown (and common GitHub-flavored) featu
 - [x] **Images** (`![alt](img.png)`) • [Details][feat-images]
 - [x] **Blockquotes** (`> quote`) • [Details][feat-blockquotes]
 - [x] **Horizontal Rules** (`---`, `***`, `___`) • [Details][feat-horizontal-rules]
+- [x] **GFM Tables** (pipe tables, `|---|` separator row, `:---` / `:---:` / `---:` column alignment) • [Details][feat-tables]
 
 ### Lists
 - [x] **Unordered Lists** (`-`, `*`, `+`) • [Details][feat-unordered-lists]
@@ -158,9 +161,6 @@ Want to help? Pick an item below and open a PR (or add feedback in the linked is
 
 ### Work in progress
 - [ ] **Default feature activation** – configure which features are decorated by default • [Spec][todo-default-feature-activation]
-
-### High priority
-- [ ] **Tables** • [Spec][todo-tables] • [Issue #23](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/23)
 
 ### Medium priority
 - [ ] **Per-file toggle state** • [Spec][todo-per-file-toggle-state] • [Issue #28](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/28)
@@ -254,9 +254,9 @@ src/
 
 ### Testing
 
-The project maintains comprehensive test coverage with **438+ passing tests** across 33 test suites:
+The project maintains comprehensive test coverage with **560+ passing tests** across 40+ test suites:
 
-- **Parser tests** (`parser/__tests__/`) – Core markdown parsing logic
+- **Parser tests** (`parser/__tests__/`) – Core markdown parsing logic (including GFM tables, math, Mermaid regions)
 - **Parse cache tests** (`markdown-parse-cache/__tests__/`) – Shared caching and LRU eviction
 - **Diff context tests** (`diff-context/__tests__/`) – Diff view detection and policy
 - **Link target tests** (`link-targets/__tests__/`) – Link/image URL resolution
@@ -331,7 +331,7 @@ See [`CONTRIBUTING.md`][contributing] for full contribution guidelines and [`AGE
 
 ### Known Limitations
 
-- **Tables** – Table syntax hiding is not implemented yet • [Issue #23](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/23)
+- **GFM tables** – Multi-line cells, nested block content in cells, and perfect alignment when *every* cell mixes multiple inline formats are limited or not supported yet • [Issue #21](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/21) • [Issue #23](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/23)
 - **Ordered list auto-numbering** – Planned (numbers remain visible today) • [Issue #31](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/31)
 - **H1 heading clipping** – Text can go out of window when H1 is on first line • [#4](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/4)
 - **Very large files** – Files over ~1MB may parse more slowly (see [FAQ][faq])
@@ -362,6 +362,12 @@ Special thanks to these projects, which inspired or enabled this extension:
 - [markless](https://github.com/tejasvi/markless) by [tejasvi](https://github.com/tejasvi) – Advanced decoration-based markdown editor with Mermaid and LaTeX support
 - [Typora](https://typora.io/) – Original inspiration for the inline markdown editing concept
 - [Obsidian](https://obsidian.md/) – Markdown-based knowledge management application that inspired the editing experience
+
+### Contributors
+
+- [@patrick-yip](https://github.com/patrick-yip)
+- [@bircni](https://github.com/bircni)
+- [@ssebs](https://github.com/ssebs)
 
 [ci-img]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/actions/workflows/ci.yaml/badge.svg
 [ci]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/actions/workflows/ci.yaml
@@ -394,6 +400,7 @@ Special thanks to these projects, which inspired or enabled this extension:
 [feat-emoji-support]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/blob/main/docs/features/done/emoji-support.md
 [feat-headings]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/blob/main/docs/features/done/headings.md
 [feat-horizontal-rules]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/blob/main/docs/features/done/horizontal-rules.md
+[feat-tables]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/55
 [feat-images]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/blob/main/docs/features/done/images.md
 [feat-inline-code]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/blob/main/docs/features/done/inline-code.md
 [feat-italic]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/blob/main/docs/features/done/italic.md
@@ -415,4 +422,3 @@ Special thanks to these projects, which inspired or enabled this extension:
 [todo-ordered-list-auto-numbering]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/blob/main/docs/features/todo.md#ordered-list-auto-numbering
 [todo-per-file-toggle-state]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/blob/main/docs/features/todo.md#per-file-toggle-state
 [todo-table-column-alignment]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/blob/main/docs/features/todo.md#table-column-alignment-with-markup
-[todo-tables]: https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/blob/main/docs/features/todo.md#tables

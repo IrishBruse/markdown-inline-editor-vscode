@@ -16,6 +16,10 @@ const markerDecorationTypes: ReadonlySet<DecorationType> = new Set<DecorationTyp
   'checkboxChecked',
   'horizontalRule',
   'frontmatterDelimiter',
+  'tablePipe',
+  'tableSeparatorPipe',
+  'tableSeparatorDash',
+  'tableCell',
 ]);
 
 export function isMarkerDecorationType(type: DecorationType): boolean {

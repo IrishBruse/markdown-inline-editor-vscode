@@ -13,6 +13,8 @@ import type {
   ListItem,
   ThematicBreak,
   Text,
+  Table,
+  TableCell,
 } from "mdast";
 import { getRemarkProcessorSync, getRemarkProcessor } from "./parser-remark";
 import { getEmojiMap } from "./emoji-map-loader";
@@ -33,6 +35,12 @@ export interface DecorationRange {
   url?: string; // URL for link decorations (for clickable links)
   level?: number; // Nesting level for blockquotes
   emoji?: string; // Emoji character for emoji shortcode replacements
+  replacement?: string; // Replacement text for table pipe/cell decorations
+  cellStyle?: {
+    fontWeight?: string;
+    fontStyle?: string;
+    textDecoration?: string;
+  };
 }
 
 /**
@@ -115,7 +123,11 @@ export type DecorationType =
   | "checkboxChecked"
   | "horizontalRule"
   | "frontmatter"
-  | "frontmatterDelimiter";
+  | "frontmatterDelimiter"
+  | "tablePipe"
+  | "tableSeparatorPipe"
+  | "tableSeparatorDash"
+  | "tableCell";
 
 /**
  * Type for the unified processor used to parse markdown text to a Root AST node.
@@ -395,6 +407,16 @@ export class MarkdownParser {
             case "text":
               this.processText(
                 node as Text,
+                decorations,
+                scopes,
+                currentAncestors,
+              );
+              break;
+
+            case "table":
+              this.processTable(
+                node as Table,
+                text,
                 decorations,
                 scopes,
                 currentAncestors,
@@ -2243,5 +2265,448 @@ export class MarkdownParser {
     }
 
     // No closing delimiter found - not valid frontmatter, don't apply decoration
+  }
+
+  /**
+   * Extracts plain display text from a TableCell AST node by walking its
+   * child tree. Avoids regex-based stripping which incorrectly removes
+   * literal underscores and asterisks (e.g. snake_case, 100*200).
+   */
+  private extractCellPlainText(cell: TableCell): string {
+    const walk = (node: Node): string => {
+      switch (node.type) {
+        case "text":
+          return (node as Text).value;
+        case "inlineCode":
+          return (node as InlineCode).value;
+        case "strong":
+        case "emphasis":
+        case "delete": {
+          const parent = node as Strong | Emphasis | Delete;
+          return parent.children.map(walk).join("");
+        }
+        default: {
+          const asParent = node as { children?: Node[] };
+          if (asParent.children) {
+            return asParent.children.map(walk).join("");
+          }
+          return "";
+        }
+      }
+    };
+    return cell.children.map(walk).join("");
+  }
+
+  /**
+   * Returns true if a cell has inline formatting children (strong, emphasis,
+   * delete, inlineCode) that cannot be rendered as whole-cell CSS.
+   * Used to decide whether to show raw syntax vs AST-extracted plain text.
+   */
+  private cellHasMixedFormatting(cell: TableCell): boolean {
+    return cell.children.some(child =>
+      child.type === "strong" || child.type === "emphasis" ||
+      child.type === "delete" || child.type === "inlineCode"
+    );
+  }
+
+  /**
+   * Detects whole-cell formatting and returns CSS properties for the before
+   * pseudo-element. Returns undefined for unformatted or mixed-format cells.
+   *
+   * When undefined is returned and the cell contains formatting markers,
+   * the caller falls back to showing the raw cell text (VS Code cannot
+   * partially style a single contentText string).
+   */
+  private detectCellStyle(
+    trimmed: string,
+  ): { fontWeight?: string; fontStyle?: string; textDecoration?: string } | undefined {
+    // Order matters: check longer markers first to avoid partial matches
+    // Bold-italic: ***text*** or ___text___
+    if (
+      (trimmed.startsWith("***") && trimmed.endsWith("***")) ||
+      (trimmed.startsWith("___") && trimmed.endsWith("___"))
+    ) {
+      return { fontWeight: "bold", fontStyle: "italic" };
+    }
+    // Bold: **text** or __text__
+    if (
+      (trimmed.startsWith("**") && trimmed.endsWith("**")) ||
+      (trimmed.startsWith("__") && trimmed.endsWith("__"))
+    ) {
+      return { fontWeight: "bold" };
+    }
+    // Strikethrough: ~~text~~
+    if (trimmed.startsWith("~~") && trimmed.endsWith("~~")) {
+      return { textDecoration: "line-through" };
+    }
+    // Italic: *text* or _text_
+    if (
+      (trimmed.startsWith("*") && trimmed.endsWith("*") && trimmed.length > 2) ||
+      (trimmed.startsWith("_") && trimmed.endsWith("_") && trimmed.length > 2)
+    ) {
+      return { fontStyle: "italic" };
+    }
+    // Inline code: `text`
+    if (trimmed.startsWith("`") && trimmed.endsWith("`") && trimmed.length > 2) {
+      return { fontWeight: "normal" };
+    }
+    return undefined;
+  }
+
+  /**
+   * Measures display width for monospace column alignment of **plain** cell text
+   * (no markdown markers — callers use `extractCellPlainText` / `detectCellStyle` paths).
+   *
+   * CJK wide characters (Unicode ranges U+2E80–U+9FFF, U+F900–U+FAFF,
+   * U+FE30–U+FE4F, U+20000–U+2FA1F) count as 2 columns; all others as 1.
+   *
+   * Adds a small per-CJK-character correction because VS Code's `before`
+   * pseudo-element renders CJK glyphs slightly wider than exactly 2x
+   * ASCII width in most monospace fonts.
+   *
+   * @param plain - Already-unmarked cell display text
+   * @returns Estimated width in monospace columns
+   */
+  private measureTextWidth(plain: string): number {
+    let width = 0;
+    let cjkCount = 0;
+    for (const char of plain) {
+      const code = char.codePointAt(0)!;
+      if (
+        (code >= 0x2e80 && code <= 0x9fff) ||
+        (code >= 0xf900 && code <= 0xfaff) ||
+        (code >= 0xfe30 && code <= 0xfe4f) ||
+        (code >= 0x20000 && code <= 0x2fa1f)
+      ) {
+        width += 2;
+        cjkCount++;
+      } else {
+        width += 1;
+      }
+    }
+    // Correction: VS Code's before pseudo-element renders CJK glyphs
+    // slightly wider than exactly 2x ASCII in most default fonts.
+    // ceil(n*0.25) ensures every CJK cell gets at least +1 correction.
+    return width + Math.ceil(cjkCount * 0.25);
+  }
+
+  /**
+   * Finds unescaped pipe positions within a line range.
+   * Counts consecutive preceding backslashes: pipe is escaped only when
+   * the count is odd (e.g. \| is escaped, \\| is not).
+   */
+  private findPipePositions(
+    text: string,
+    lineStart: number,
+    lineEnd: number,
+  ): number[] {
+    const pipes: number[] = [];
+    for (let i = lineStart; i < lineEnd; i++) {
+      if (text[i] === "|") {
+        let backslashCount = 0;
+        let j = i - 1;
+        while (j >= lineStart && text[j] === "\\") {
+          backslashCount++;
+          j--;
+        }
+        if (backslashCount % 2 === 0) {
+          pipes.push(i);
+        }
+      }
+    }
+    return pipes;
+  }
+
+  /**
+   * Augments pipe positions with virtual boundary markers for rows that lack
+   * leading and/or trailing pipe characters. Virtual positions enable cell
+   * boundary detection but should NOT generate tablePipe decorations.
+   */
+  private normalizePipePositions(
+    text: string,
+    lineStart: number,
+    trimmedLineEnd: number,
+    pipes: number[],
+  ): { positions: number[]; isVirtual: boolean[] } {
+    if (pipes.length === 0) {
+      return { positions: pipes, isVirtual: [] };
+    }
+
+    const positions = [...pipes];
+    const isVirtual: boolean[] = new Array(pipes.length).fill(false);
+
+    // Find first non-whitespace position on this line
+    let firstContentPos = lineStart;
+    while (firstContentPos < trimmedLineEnd && (text[firstContentPos] === " " || text[firstContentPos] === "\t")) {
+      firstContentPos++;
+    }
+
+    // Inject virtual leading boundary if first pipe is not the first content char.
+    // When the line starts with content at `lineStart`, `firstContentPos - 1` would be
+    // invalid (-1); use -1 as a sentinel so cell ranges use substring(pipes[i] + 1, …) → start at 0.
+    if (pipes[0] !== firstContentPos) {
+      const virtualLead =
+        firstContentPos > lineStart ? firstContentPos - 1 : -1;
+      positions.unshift(virtualLead);
+      isVirtual.unshift(true);
+    }
+
+    // Inject virtual trailing boundary if last pipe is not at the line end
+    if (pipes[pipes.length - 1] < trimmedLineEnd - 1) {
+      positions.push(trimmedLineEnd);
+      isVirtual.push(true);
+    }
+
+    return { positions, isVirtual };
+  }
+
+  /**
+   * Gets the line boundaries (start offset, end offset excluding newline) for a
+   * given character offset within the source text.
+   */
+  private getLineRange(text: string, offset: number): [number, number] {
+    const lineStart =
+      offset === 0 ? 0 : text.lastIndexOf("\n", offset - 1) + 1;
+    let lineEnd = text.indexOf("\n", offset);
+    if (lineEnd === -1) lineEnd = text.length;
+    return [lineStart, lineEnd];
+  }
+
+  /**
+   * Trims trailing whitespace from a line range, returning the new end offset.
+   */
+  private trimLineEnd(
+    text: string,
+    lineStart: number,
+    lineEnd: number,
+  ): number {
+    let end = lineEnd;
+    while (
+      end > lineStart &&
+      (text[end - 1] === " " || text[end - 1] === "\t")
+    ) {
+      end--;
+    }
+    return end;
+  }
+
+  /**
+   * Computes the maximum display width for each column in a table.
+   *
+   * Uses pipe positions on each row line to extract cell content, avoiding
+   * remark-gfm cell positions which include pipe characters.
+   *
+   * @param tableNode - The remark Table AST node
+   * @param source - The full normalized document text
+   * @returns Array of column widths (one per column, minimum 3)
+   */
+  private computeColumnWidths(tableNode: Table, source: string): number[] {
+    let numCols = 0;
+
+    for (const row of tableNode.children) {
+      if (!row.position || row.position.start.offset === undefined) continue;
+      const [lineStart, lineEnd] = this.getLineRange(
+        source,
+        row.position.start.offset,
+      );
+      const trimmed = this.trimLineEnd(source, lineStart, lineEnd);
+      const rawPipes = this.findPipePositions(source, lineStart, trimmed);
+      const { positions: pipes } = this.normalizePipePositions(source, lineStart, trimmed, rawPipes);
+      const cellCount = Math.max(0, pipes.length - 1);
+      if (cellCount > numCols) numCols = cellCount;
+    }
+
+    const widths: number[] = new Array(numCols).fill(3);
+
+    for (const row of tableNode.children) {
+      if (!row.position || row.position.start.offset === undefined) continue;
+      const [lineStart, lineEnd] = this.getLineRange(
+        source,
+        row.position.start.offset,
+      );
+      const trimmed = this.trimLineEnd(source, lineStart, lineEnd);
+      const rawPipes = this.findPipePositions(source, lineStart, trimmed);
+      const { positions: pipes } = this.normalizePipePositions(source, lineStart, trimmed, rawPipes);
+
+      for (let i = 0; i < pipes.length - 1 && i < numCols; i++) {
+        const cellText = source.substring(pipes[i] + 1, pipes[i + 1]).trim();
+        const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
+        const cellStyle = this.detectCellStyle(cellText);
+        // Mixed formatting → raw syntax; otherwise → AST plain text (handles escapes)
+        const showRaw = !cellStyle && astCell && this.cellHasMixedFormatting(astCell);
+        const displayText = (astCell && !showRaw)
+          ? this.extractCellPlainText(astCell)
+          : cellText;
+        const w = this.measureTextWidth(displayText);
+        if (w > widths[i]) widths[i] = w;
+      }
+    }
+
+    return widths;
+  }
+
+  /**
+   * Processes a GFM table node and emits decorations for pipes, cells, and the separator row.
+   *
+   * Produces:
+   * - `tablePipe` decorations for `|` in header and data rows (replaced with `│`)
+   * - `tableSeparatorPipe` decorations for `|` in the separator row (replaced with `├`, `┼`, or `┤`)
+   * - `tableSeparatorDash` decorations for dash segments in the separator row (replaced with `─` repeats)
+   * - `tableCell` decorations for cell content (padded to uniform column width)
+   *
+   * Also adds a scope for the entire table so the visibility model can reveal the
+   * whole block when the cursor is inside it.
+   */
+  private processTable(
+    node: Table,
+    text: string,
+    decorations: DecorationRange[],
+    scopes: ScopeRange[],
+    ancestors: Node[],
+  ): void {
+    if (!this.hasValidPosition(node)) return;
+
+    // Don't process tables inside code blocks
+    if (this.isInCodeBlock(ancestors)) {
+      return;
+    }
+
+    const tableStart = node.position!.start.offset!;
+    const tableEnd = node.position!.end.offset!;
+    const colWidths = this.computeColumnWidths(node, text);
+    const colAligns = node.align ?? [];
+
+    this.addScope(scopes, tableStart, tableEnd, "table");
+
+    for (let rowIdx = 0; rowIdx < node.children.length; rowIdx++) {
+      const row = node.children[rowIdx];
+      if (
+        !row.position ||
+        row.position.start.offset === undefined ||
+        row.position.end.offset === undefined
+      ) {
+        continue;
+      }
+
+      const rowStartOffset = row.position.start.offset;
+      const [lineStart, lineEnd] = this.getLineRange(text, rowStartOffset);
+      const trimmedLineEnd = this.trimLineEnd(text, lineStart, lineEnd);
+      const rawPipes = this.findPipePositions(text, lineStart, trimmedLineEnd);
+      const { positions: pipes, isVirtual } = this.normalizePipePositions(
+        text, lineStart, trimmedLineEnd, rawPipes,
+      );
+
+      // Only decorate real (non-virtual) pipes
+      for (let pIdx = 0; pIdx < pipes.length; pIdx++) {
+        if (!isVirtual[pIdx]) {
+          decorations.push({
+            startPos: pipes[pIdx],
+            endPos: pipes[pIdx] + 1,
+            type: "tablePipe",
+            replacement: "\u2502", // │
+          });
+        }
+      }
+
+      // Derive cells from pipe positions (avoids remark cell positions which include pipes)
+      for (let i = 0; i < pipes.length - 1; i++) {
+        const cellRangeStart = pipes[i] + 1;
+        const cellRangeEnd = pipes[i + 1];
+        if (cellRangeStart >= cellRangeEnd) continue;
+
+        const rawContent = text.substring(cellRangeStart, cellRangeEnd);
+        const trimmedContent = rawContent.trim();
+        const cellStyle = this.detectCellStyle(trimmedContent);
+        const colWidth = i < colWidths.length ? colWidths[i] : 3;
+
+        // Whole-cell styled: extract clean text via AST + apply CSS
+        // Mixed formatting: show raw syntax (VS Code can't partially style)
+        // Plain / escaped: use AST extraction (handles \| → |, \\ → \)
+        const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
+        const showRaw = !cellStyle && astCell && this.cellHasMixedFormatting(astCell);
+        const displayContent = (astCell && !showRaw)
+          ? this.extractCellPlainText(astCell)
+          : trimmedContent;
+        const displayWidth = this.measureTextWidth(displayContent);
+        const totalPad = Math.max(0, colWidth - displayWidth);
+        const align = i < colAligns.length ? colAligns[i] : null;
+
+        let replacement: string;
+        if (align === "right") {
+          replacement = "\u00A0".repeat(totalPad + 1) + displayContent + "\u00A0";
+        } else if (align === "center") {
+          const padLeft = Math.floor(totalPad / 2);
+          const padRight = totalPad - padLeft;
+          replacement = "\u00A0".repeat(padLeft + 1) + displayContent + "\u00A0".repeat(padRight + 1);
+        } else {
+          // left or null (default)
+          replacement = "\u00A0" + displayContent + "\u00A0".repeat(totalPad + 1);
+        }
+
+        decorations.push({
+          startPos: cellRangeStart,
+          endPos: cellRangeEnd,
+          type: "tableCell",
+          replacement,
+          cellStyle,
+        });
+      }
+
+      // After the header row (index 0), process the separator row.
+      // remark-gfm does NOT include the separator row as a child node.
+      if (rowIdx === 0) {
+        const headerEndOffset = row.position.end.offset;
+
+        let sepLineStart = text.indexOf("\n", headerEndOffset);
+        if (sepLineStart === -1) continue;
+        sepLineStart += 1;
+
+        let sepLineEnd: number;
+        if (node.children.length > 1 && node.children[1].position) {
+          const nextRowStart = node.children[1].position.start.offset!;
+          sepLineEnd = text.lastIndexOf("\n", nextRowStart - 1);
+          if (sepLineEnd === -1 || sepLineEnd < sepLineStart) {
+            sepLineEnd = nextRowStart;
+          }
+        } else {
+          sepLineEnd = text.indexOf("\n", sepLineStart);
+          if (sepLineEnd === -1) sepLineEnd = tableEnd;
+        }
+
+        const trimmedSepEnd = this.trimLineEnd(text, sepLineStart, sepLineEnd);
+        const rawSepPipes = this.findPipePositions(text, sepLineStart, trimmedSepEnd);
+        const { positions: sepPipes, isVirtual: sepIsVirtual } = this.normalizePipePositions(
+          text, sepLineStart, trimmedSepEnd, rawSepPipes,
+        );
+
+        // Use │ for separator pipes (same as data rows) and ASCII - for
+        // dashes. Box-drawing ─ (U+2500) renders wider than monospace chars
+        // in many editor fonts, causing cumulative misalignment.
+        for (let pIdx = 0; pIdx < sepPipes.length; pIdx++) {
+          if (!sepIsVirtual[pIdx]) {
+            decorations.push({
+              startPos: sepPipes[pIdx],
+              endPos: sepPipes[pIdx] + 1,
+              type: "tableSeparatorPipe",
+              replacement: "\u2502", // │ (same as regular pipe)
+            });
+          }
+        }
+
+        for (let pIdx = 0; pIdx < sepPipes.length - 1; pIdx++) {
+          const segStart = sepPipes[pIdx] + 1;
+          const segEnd = sepPipes[pIdx + 1];
+          if (segStart >= segEnd) continue;
+
+          const colWidth = pIdx < colWidths.length ? colWidths[pIdx] : 3;
+          decorations.push({
+            startPos: segStart,
+            endPos: segEnd,
+            type: "tableSeparatorDash",
+            replacement: "-".repeat(colWidth + 2),
+          });
+        }
+      }
+    }
   }
 }

@@ -471,6 +471,77 @@ export function CheckboxCheckedDecorationType(color?: string | ThemeColor) {
 }
 
 /**
+ * Creates a decoration type for table pipe characters (|).
+ *
+ * Hides the original pipe and renders a box-drawing vertical line (│) via
+ * per-range `renderOptions.before.contentText`.
+ *
+ * @returns {vscode.TextEditorDecorationType} A decoration type for table pipes
+ */
+export function TablePipeDecorationType() {
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: {
+      contentText: '',
+      color: new ThemeColor('editorLineNumber.foreground'),
+    },
+  });
+}
+
+/**
+ * Creates a decoration type for table separator row pipe characters.
+ *
+ * Hides the original pipe and renders a vertical line (│), same as data-row pipes,
+ * via per-range `renderOptions.before.contentText`.
+ *
+ * @returns {vscode.TextEditorDecorationType} A decoration type for separator pipes
+ */
+export function TableSeparatorPipeDecorationType() {
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: {
+      contentText: '',
+      color: new ThemeColor('editorLineNumber.foreground'),
+    },
+  });
+}
+
+/**
+ * Creates a decoration type for table separator row dash segments.
+ *
+ * Hides the original dashes and renders padded ASCII hyphen (`-`) runs via per-range
+ * `renderOptions.before.contentText` (matches monospace width; avoids U+2500 misalignment).
+ *
+ * @returns {vscode.TextEditorDecorationType} A decoration type for separator dashes
+ */
+export function TableSeparatorDashDecorationType() {
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: {
+      contentText: '',
+      color: new ThemeColor('editorLineNumber.foreground'),
+    },
+  });
+}
+
+/**
+ * Creates a decoration type for table cell content.
+ *
+ * Hides the original cell text (with irregular spacing) and renders
+ * uniformly padded content via per-range `renderOptions.before.contentText`.
+ *
+ * @returns {vscode.TextEditorDecorationType} A decoration type for table cells
+ */
+export function TableCellDecorationType() {
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: {
+      contentText: '',
+    },
+  });
+}
+
+/**
  * Creates a decoration type for mermaid hover indicator.
  *
  * Adds a small visual indicator (⧉) at the start of mermaid code blocks

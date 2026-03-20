@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.19.0..v1.19.1) - 2026-03-20
+
+### Changed
+
+- **(readme)** GFM tables, roadmap, and contributors - ([9efdb61](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9efdb6162f7832785dcfd223baa74f8e8649c72a))
+
+## [1.19.0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.18.2..v1.19.0) - 2026-03-20
+
+### Added
+
+- add GFM table rendering with visual grid decorations ([#55](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/55)) - ([7869f40](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/7869f405e5f2589aabac068cb8598d0a58a0a133))
+
+### Changed
+
+- **(deps)** audit fix lockfile (flatted, undici) - ([e4a8d66](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e4a8d66a5385960a347ba924cc61140d19dd22a2))
+- **(readme)** add contributors to acknowledgments - ([c97f30b](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c97f30bfdd24f5822aa3a8a10e9684a179157b12))
+- improve README - showcase best features early - ([a098673](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/a09867318cfc163221f079fbe3e2b0066a0fd41c))
+
+### Fixed
+
+- **(parser)** address GFM table findings (boundary, docs, tests) - ([35c09bc](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/35c09bc071d54e2473c71541fc8b2079ff906f86))
+
 ## [1.18.2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.18.1..v1.18.2) - 2026-03-09
 
 ### Changed
