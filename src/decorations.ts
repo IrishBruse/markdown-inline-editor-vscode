@@ -272,7 +272,7 @@ const HEADING_CONFIG = [
   { size: '120%', bold: true },  // H3: Just above body text
   { size: '110%', bold: false }, // H4: Subtle bump
   { size: '100%', bold: false }, // H5: Same size, usually distinct by color/bold
-{ size: '90%', bold: false }, // H6: Slightly diminished
+  { size: '90%',  bold: false }, // H6: Slightly diminished
 ];
 /**
  * Creates a heading decoration type with the specified level.
