@@ -43,7 +43,7 @@ Feature: Customizable syntax colors
 
   Scenario: Inline code background uses default when unset
     When "markdownInlineEditor.colors.inlineCodeBackground" is unset
-    Then inline code background uses theme-aware default (magenta for dark, black for light)
+    Then inline code background uses theme-aware default (white for dark, black for light)
 ```
 
 ## Notes
@@ -51,7 +51,7 @@ Feature: Customizable syntax colors
 - Delivers US3 (discoverable settings) via schema and descriptions in Settings UI.
 - Invalid hex is validated in config getters (regex); decorations receive `undefined` and use ThemeColor.
 - All 15 options are optional; theme-derived defaults per data-model.md.
-- `inlineCodeBackground` uses a semi-transparent overlay that composites over the editor background; when unset, uses theme-aware default (magenta overlay for dark themes, black overlay for light themes).
+- `inlineCodeBackground` uses a semi-transparent overlay that composites over the editor background; when unset, uses theme-aware default (white overlay for dark themes, black overlay for light themes).
 
 ## Examples
 
