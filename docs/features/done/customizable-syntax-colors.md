@@ -1,6 +1,6 @@
 ---
 status: DONE
-updateDate: 2025-03-08
+updateDate: 2026-03-20
 priority: Enhancement
 ---
 
@@ -12,9 +12,9 @@ Optional hex color overrides for headings and other inline Markdown syntax. When
 
 ## Implementation
 
-- **Configuration**: 14 optional color properties under `markdownInlineEditor.colors` in `package.json`; config getters in `src/config.ts` with hex validation; decoration factories in `src/decorations.ts` accept optional `color`; `src/decorator/decoration-type-registry.ts` wires config to decoration creation; config and theme change trigger `recreateColorDependentTypes()`.
-- **Settings**: Keys `heading1` … `heading6`, `link`, `listMarker`, `inlineCode`, `emphasis`, `blockquote`, `image`, `horizontalRule`, `checkbox` (14 total).
-- **Format**: Hex `#RGB` or `#RRGGBB`; invalid/malformed values are ignored and theme default is used (no crash).
+- **Configuration**: 15 optional color properties under `markdownInlineEditor.colors` in `package.json`; config getters in `src/config.ts` with hex validation; decoration factories in `src/decorations.ts` accept optional `color`; `src/decorator/decoration-type-registry.ts` wires config to decoration creation; config and theme change trigger `recreateColorDependentTypes()`.
+- **Settings**: Keys `heading1` … `heading6`, `link`, `listMarker`, `inlineCode`, `inlineCodeBackground`, `emphasis`, `blockquote`, `image`, `horizontalRule`, `checkbox` (15 total).
+- **Format**: Hex `#RGB`, `#RRGGBB`, `#RGBA`, `#RRGGBBAA`; invalid/malformed values are ignored and theme default is used (no crash).
 - **Behavior**: Changing a color setting or active theme updates open Markdown editors without reload; user-configured hex is preserved when switching themes.
 
 ## Acceptance Criteria
@@ -35,13 +35,23 @@ Feature: Customizable syntax colors
     When I set "markdownInlineEditor.colors.link" to "not-a-color"
     Then links use textLink.foreground from the theme
     And the extension does not crash
+
+  Scenario: Set inline code background color
+    When I set "markdownInlineEditor.colors.inlineCodeBackground" to "#f0f0f0"
+    And I open a markdown file with "`code`"
+    Then the inline code background uses the configured color
+
+  Scenario: Inline code background uses default when unset
+    When "markdownInlineEditor.colors.inlineCodeBackground" is unset
+    Then inline code background uses theme-aware default (magenta for dark, black for light)
 ```
 
 ## Notes
 
 - Delivers US3 (discoverable settings) via schema and descriptions in Settings UI.
 - Invalid hex is validated in config getters (regex); decorations receive `undefined` and use ThemeColor.
-- All 14 options are optional; theme-derived defaults per data-model.md.
+- All 15 options are optional; theme-derived defaults per data-model.md.
+- `inlineCodeBackground` uses a semi-transparent overlay that composites over the editor background; when unset, uses theme-aware default (magenta overlay for dark themes, black overlay for light themes).
 
 ## Examples
 
@@ -50,6 +60,7 @@ Feature: Customizable syntax colors
   "markdownInlineEditor.colors.heading1": "#e06c75",
   "markdownInlineEditor.colors.link": "#61afef",
   "markdownInlineEditor.colors.inlineCode": "#98c379",
+  "markdownInlineEditor.colors.inlineCodeBackground": "#f0f0f0bb",
   "markdownInlineEditor.colors.image": "#61afef",
   "markdownInlineEditor.colors.horizontalRule": "#5c6370",
   "markdownInlineEditor.colors.checkbox": "#98c379"
