@@ -4,9 +4,7 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": [
-    "src/**/*.ts"
-  ],
+  "include": ["src/**/*.ts"],
   "exclude": [
     "examples",
     "examples/**",
@@ -17,7 +15,8 @@
     "dist",
     "dist/**",
     "**/dist/**",
-    "**/*.test.ts",
-    "**/__tests__/**"
+    "**/__mocks__/**",
+    "**/__tests__/**",
+    "**/*.test.ts"
   ]
 }

@@ -1,12 +1,14 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "rootDir": "src",
     "outDir": "dist",
     "declaration": true,
     "emitDeclarationOnly": true
   },
   "exclude": [
     "**/*.test.ts",
+    "**/__mocks__/**",
     "examples/**",
     "node_modules/**",
     "dist/**"

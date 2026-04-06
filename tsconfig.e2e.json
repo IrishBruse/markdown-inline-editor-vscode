@@ -1,14 +1,11 @@
 {
+  "extends": "@tsconfig/node-lts/tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "commonjs",
-    "lib": ["ES2022"],
+    "isolatedModules": true,
+    "skipLibCheck": true,
     "outDir": "dist/test/e2e",
     "rootDir": "src/test/e2e",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "moduleResolution": "node"
+    "types": ["node", "mocha"]
   },
   "include": ["src/test/e2e/**/*.ts"]
 }
