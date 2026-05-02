@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import type { DecorationRange } from "./parser";
 import { MarkdownParseCache } from "./markdown-parse-cache";
 import { shouldSkipInDiffView } from "./diff-context";
 import {
@@ -7,6 +8,34 @@ import {
   resolveInteractionTarget,
   toInteractionUri,
 } from "./link-interactions/shared";
+
+/**
+ * VS Code rejects DocumentLink ranges where start === end ("Illegal argument: range").
+ * Empty image alt (![](url)) yields a zero-width decoration range; expand by one UTF-16 unit.
+ */
+function rangeIsEmpty(range: vscode.Range): boolean {
+  return (
+    range.start.line === range.end.line &&
+    range.start.character === range.end.character
+  );
+}
+
+function documentLinkRange(
+  document: vscode.TextDocument,
+  decoration: DecorationRange,
+  normalizedText: string,
+): vscode.Range {
+  const range = createDecorationRange(document, decoration, normalizedText);
+  if (!rangeIsEmpty(range)) {
+    return range;
+  }
+  const startOffset = document.offsetAt(range.start);
+  const endOffset = Math.min(startOffset + 1, document.getText().length);
+  if (endOffset <= startOffset) {
+    return range;
+  }
+  return new vscode.Range(range.start, document.positionAt(endOffset));
+}
 
 /**
  * Provides clickable links and images for markdown documents.
@@ -61,7 +90,7 @@ export class MarkdownLinkProvider implements vscode.DocumentLinkProvider {
         }
 
         return [new vscode.DocumentLink(
-          createDecorationRange(document, decoration, text),
+          documentLinkRange(document, decoration, text),
           toInteractionUri(target)
         )];
       });
