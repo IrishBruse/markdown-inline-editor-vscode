@@ -147,4 +147,23 @@ describe("MarkdownLinkProvider", () => {
       provider.resolveDocumentLink(link, new CancellationToken(false)),
     ).toBe(link);
   });
+
+  it("provides a non-empty DocumentLink range for images with empty alt (![](url))", () => {
+    const document = new TextDocument(
+      Uri.file("/test.md"),
+      "markdown",
+      1,
+      "![](https://example.com/x.png)",
+    );
+    const links = provider.provideDocumentLinks(
+      document,
+      new CancellationToken(false),
+    ) as Array<{ range: { start: { line: number; character: number }; end: { line: number; character: number } }; target?: Uri }>;
+
+    const img = links.find((l) => l.target?.toString().includes("example.com"));
+    expect(img).toBeDefined();
+    expect(document.offsetAt(img!.range.end)).toBeGreaterThan(
+      document.offsetAt(img!.range.start),
+    );
+  });
 });
