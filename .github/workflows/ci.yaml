@@ -248,7 +248,7 @@ jobs:
             echo "notes=Changelog file not found" >> $GITHUB_OUTPUT
           fi
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/extension.vsix
           tag_name: ${{ steps.tag_version.outputs.TAG }}
