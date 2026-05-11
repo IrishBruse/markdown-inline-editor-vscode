@@ -70,6 +70,49 @@ suite('Extension E2E', () => {
     // Reaching here without an unhandled exception means the decorator ran cleanly.
   });
 
+  // One document exercising many parsers at once — catches interaction bugs before release.
+  test('release smoke: kitchen-sink markdown decorates without error', async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: 'markdown',
+      content: [
+        '---',
+        'title: Smoke',
+        '---',
+        '',
+        '# Title',
+        '',
+        '| A | B |',
+        '| - | - |',
+        '| 1 | 2 |',
+        '',
+        '- [ ] open',
+        '- [x] done',
+        '',
+        '1. one',
+        '2. two',
+        '',
+        '**bold** _italic_ `code` ~~strike~~',
+        '',
+        '[link](https://example.com/page)',
+        '',
+        '```javascript',
+        'const x = "**not** bold";',
+        '```',
+        '',
+        '> quote line',
+        '',
+        '---',
+        '',
+        'See #99 and @alice.',
+        '',
+        'Emoji :rocket:',
+      ].join('\n'),
+    });
+    await vscode.window.showTextDocument(doc);
+    await delay(900);
+    assert.strictEqual(doc.languageId, 'markdown');
+  });
+
   test('toggle command executes without error on active markdown editor', async () => {
     const doc = await vscode.workspace.openTextDocument({
       language: 'markdown',
@@ -363,6 +406,97 @@ suite('Extension E2E', () => {
     );
   });
 
+  // Image hover (MarkdownImageHoverProvider) — release smoke for image previews.
+  test('image hover provider includes the image URL in hover content', async () => {
+    await withTempFile(
+      '![preview shot](https://example.com/assets/photo.png)',
+      async (_doc, uri) => {
+        const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+          'vscode.executeHoverProvider',
+          uri,
+          new vscode.Position(0, 5)
+        );
+        assert.ok(hovers && hovers.length > 0, 'Expected hover content over image alt text');
+        const hoverText = hovers
+          .flatMap(h => h.contents)
+          .map(c => (typeof c === 'string' ? c : c.value))
+          .join('\n');
+        assert.ok(
+          hoverText.includes('example.com') && hoverText.toLowerCase().includes('image'),
+          `Expected image hover with URL; got: ${hoverText.slice(0, 200)}`
+        );
+      }
+    );
+  });
+
+  // Relative links must resolve for file-backed docs (common README pattern).
+  test('link provider resolves relative ./ path to a sibling markdown file', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'md-e2e-rel-'));
+    const mainPath = path.join(dir, 'readme.md');
+    const siblingPath = path.join(dir, 'other.md');
+    fs.writeFileSync(mainPath, '[See other](./other.md)\n', 'utf8');
+    fs.writeFileSync(siblingPath, '# Other\n\nBody.\n', 'utf8');
+    try {
+      const uri = vscode.Uri.file(mainPath);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc);
+      await delay(600);
+      const links = await vscode.commands.executeCommand<vscode.DocumentLink[]>(
+        'vscode.executeLinkProvider',
+        uri
+      );
+      assert.ok(links && links.length > 0, 'Expected at least one DocumentLink');
+      const normalizedSibling = siblingPath.replace(/\\/g, '/').toLowerCase();
+      const hit = links.some(l => {
+        const fsPath = l.target?.fsPath?.replace(/\\/g, '/').toLowerCase() ?? '';
+        return fsPath === normalizedSibling || fsPath.endsWith('/other.md');
+      });
+      assert.ok(
+        hit,
+        `Expected link target for ./other.md; targets: ${links.map(l => l.target?.toString()).join(', ')}`
+      );
+    } finally {
+      try {
+        fs.unlinkSync(mainPath);
+        fs.unlinkSync(siblingPath);
+        fs.rmdirSync(dir);
+      } catch {
+        /* ignore cleanup */
+      }
+    }
+  });
+
+  // mailto: links must still surface as clickable document links.
+  test('link provider returns a mailto target for email links', async () => {
+    await withTempFile('[Write us](mailto:support@example.com)', async (_doc, uri) => {
+      const links = await vscode.commands.executeCommand<vscode.DocumentLink[]>(
+        'vscode.executeLinkProvider',
+        uri
+      );
+      assert.ok(links && links.length > 0, 'Expected a DocumentLink for mailto');
+      const mail = links.find(l => l.target?.scheme === 'mailto');
+      assert.ok(mail, `Expected mailto link, got: ${links.map(l => l.target?.toString()).join(', ')}`);
+      const targetStr = mail!.target!.toString(true);
+      assert.ok(
+        /support(@|%40)example\.com/i.test(targetStr),
+        `Unexpected mailto target: ${targetStr}`
+      );
+    });
+  });
+
+  // Images must be document links (open in image viewer / preview).
+  test('link provider returns an https target for markdown images', async () => {
+    await withTempFile('![](https://example.com/preview.png)', async (_doc, uri) => {
+      const links = await vscode.commands.executeCommand<vscode.DocumentLink[]>(
+        'vscode.executeLinkProvider',
+        uri
+      );
+      assert.ok(links && links.length > 0, 'Expected DocumentLink for image');
+      const img = links.find(l => l.target?.toString().includes('example.com'));
+      assert.ok(img, `Expected image link target, got: ${links.map(l => l.target?.toString()).join(', ')}`);
+    });
+  });
+
   // navigateToAnchor must move the active editor cursor to the line of the
   // target heading (not just open the file without error).
   test('navigateToAnchor moves cursor to the target heading line', async () => {
@@ -386,6 +520,46 @@ suite('Extension E2E', () => {
         );
       }
     );
+  });
+
+  // navigateToAnchor must match ## headings (not only #).
+  test('navigateToAnchor moves cursor to a ## subheading line', async () => {
+    await withTempFile(
+      '# Title\n\n## Sub section\n\nText.\n\n### Deep\n',
+      async (_doc, uri) => {
+        await vscode.commands.executeCommand(
+          'markdown-inline-editor.navigateToAnchor',
+          'sub-section',
+          uri.toString()
+        );
+        await delay(300);
+        const activeEditor = vscode.window.activeTextEditor;
+        assert.ok(activeEditor, 'Expected an active editor after navigation');
+        const lineText = activeEditor.document.lineAt(activeEditor.selection.active.line).text;
+        assert.ok(
+          lineText.includes('Sub section'),
+          `Expected cursor on ## Sub section, got line: "${lineText}"`
+        );
+      }
+    );
+  });
+
+  // Missing anchor must not throw; document content must be unchanged.
+  test('navigateToAnchor with unknown anchor completes without error', async () => {
+    await withTempFile('# Only heading\n\nParagraph.', async (doc, uri) => {
+      const before = doc.getText();
+      await vscode.commands.executeCommand(
+        'markdown-inline-editor.navigateToAnchor',
+        'this-anchor-is-not-in-the-document',
+        uri.toString()
+      );
+      await delay(200);
+      assert.strictEqual(
+        doc.getText(),
+        before,
+        'Document must be unchanged when anchor is not found'
+      );
+    });
   });
 
   // Switching rapidly between a markdown editor and a non-markdown editor
@@ -664,6 +838,36 @@ suite('Extension E2E', () => {
       entry.decorations.some(d => d.type === 'listItem'),
       'Expected a listItem decoration for - item'
     );
+  });
+
+  test('parse: ordered list produces orderedListItem decorations', async () => {
+    assert.ok(cache, 'parseCache not available from ext.exports');
+    const doc = await vscode.workspace.openTextDocument({
+      language: 'markdown',
+      content: '1. first\n2. second',
+    });
+    await vscode.window.showTextDocument(doc);
+    await delay(400);
+    const entry = cache.get(doc);
+    assert.ok(
+      entry.decorations.some(d => d.type === 'orderedListItem'),
+      'Expected orderedListItem decorations for numbered list'
+    );
+  });
+
+  test('parse: inline backticks produce a code decoration', async () => {
+    assert.ok(cache, 'parseCache not available from ext.exports');
+    const doc = await vscode.workspace.openTextDocument({
+      language: 'markdown',
+      content: 'Use `npm test` here.',
+    });
+    await vscode.window.showTextDocument(doc);
+    await delay(400);
+    const entry = cache.get(doc);
+    const codes = entry.decorations.filter(d => d.type === 'code');
+    assert.ok(codes.length > 0, 'Expected a code decoration for inline backticks');
+    const slice = entry.text.slice(codes[0].startPos, codes[0].endPos);
+    assert.ok(slice.includes('npm test'), `Expected code slice to cover npm test, got "${slice}"`);
   });
 
   test('parse: CRLF — decoration positions are consistent with LF-normalised offsets', async () => {

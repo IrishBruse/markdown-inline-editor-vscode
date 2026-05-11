@@ -156,18 +156,18 @@ describe('MarkdownParser - Ordered List Auto-Numbering', () => {
 
   describe('when orderedLists.autoNumber is false', () => {
     afterEach(() => {
-      jest.restoreAllMocks();
+      vi.restoreAllMocks();
     });
 
     it('should not emit orderedListItem decorations', () => {
-      jest.spyOn(config.orderedLists, 'autoNumber').mockReturnValue(false);
+      vi.spyOn(config.orderedLists, 'autoNumber').mockReturnValue(false);
       const markdown = '1. First\n2. Second';
       const result = parser.extractDecorations(markdown);
       expect(result.filter(d => d.type === 'orderedListItem')).toHaveLength(0);
     });
 
     it('should still decorate checkboxes without hiding the ordered marker', () => {
-      jest.spyOn(config.orderedLists, 'autoNumber').mockReturnValue(false);
+      vi.spyOn(config.orderedLists, 'autoNumber').mockReturnValue(false);
       const markdown = '1. [ ] Task';
       const result = parser.extractDecorations(markdown);
       expect(result.filter(d => d.type === 'orderedListItem')).toHaveLength(0);
@@ -177,11 +177,11 @@ describe('MarkdownParser - Ordered List Auto-Numbering', () => {
 
   describe('when orderedLists.warnWhenSourceNumberDiffers is false', () => {
     afterEach(() => {
-      jest.restoreAllMocks();
+      vi.restoreAllMocks();
     });
 
     it('should not set orderedListMarkerMismatch even for lazy lists', () => {
-      jest.spyOn(config.orderedLists, 'warnWhenSourceNumberDiffers').mockReturnValue(false);
+      vi.spyOn(config.orderedLists, 'warnWhenSourceNumberDiffers').mockReturnValue(false);
       const markdown = '1. First\n1. Second';
       const result = parser.extractDecorations(markdown);
       const ordered = result.filter(d => d.type === 'orderedListItem');
