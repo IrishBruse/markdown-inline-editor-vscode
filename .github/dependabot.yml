@@ -5,7 +5,6 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-      day: 1
       time: "09:00"
     open-pull-requests-limit: 10
     labels:
@@ -48,4 +47,3 @@ updates:
         update-types: ["version-update:semver-major"]
     # Versioning strategy
     versioning-strategy: increase
-
