@@ -4,12 +4,12 @@ import type {
   InlineCode,
   Node,
   Strong,
-  Table,
   TableCell,
+  TableRow,
   Text,
 } from 'mdast';
 import type { ScopeRange } from './types';
-import { addScope } from './common';
+import { addScope, hasValidPosition } from './common';
 
 export function extractCellPlainText(cell: TableCell): string {
   const walk = (node: Node): string => {
@@ -34,6 +34,11 @@ export function extractCellPlainText(cell: TableCell): string {
   return cell.children.map(walk).join('');
 }
 
+/**
+ * True when the cell AST contains strong, emphasis, delete, or inlineCode.
+ * Used to choose raw cell text vs `extractCellPlainText` for display width.
+ * This does **not** treat links or images as mixed (see `MarkdownParser` rich-native check).
+ */
 export function cellHasMixedFormatting(cell: TableCell): boolean {
   return cell.children.some((child) =>
     child.type === 'strong' || child.type === 'emphasis' ||
@@ -71,24 +76,69 @@ export function detectCellStyle(
   return undefined;
 }
 
+export function isWideCodePoint(code: number): boolean {
+  return (
+    (code >= 0x1100 && code <= 0x115f) ||
+    (code >= 0x2e80 && code <= 0x303e) ||
+    (code >= 0x3041 && code <= 0x33ff) ||
+    (code >= 0x3400 && code <= 0x4dbf) ||
+    (code >= 0x4e00 && code <= 0x9fff) ||
+    (code >= 0xa000 && code <= 0xa4cf) ||
+    (code >= 0xac00 && code <= 0xd7a3) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xfe30 && code <= 0xfe4f) ||
+    (code >= 0xff00 && code <= 0xff60) ||
+    (code >= 0xffe0 && code <= 0xffe6) ||
+    (code >= 0x1f000 && code <= 0x1faff) ||
+    (code >= 0x2600 && code <= 0x27bf) ||
+    (code >= 0x20000 && code <= 0x2fa1f) ||
+    (code >= 0x1f1e6 && code <= 0x1f1ff)
+  );
+}
+
+export function isZeroWidthCodePoint(code: number): boolean {
+  return (
+    code === 0x200d ||
+    code === 0x200c ||
+    code === 0xfeff ||
+    (code >= 0xfe00 && code <= 0xfe0f) ||
+    (code >= 0xe0100 && code <= 0xe01ef) ||
+    (code >= 0x0300 && code <= 0x036f)
+  );
+}
+
+/**
+ * Display width for **column budgeting** (max column width), with wide-glyph overshoot.
+ */
 export function measureTextWidth(plain: string): number {
   let width = 0;
-  let cjkCount = 0;
+  let wideOvershoot = 0;
   for (const char of plain) {
     const code = char.codePointAt(0)!;
-    if (
-      (code >= 0x2e80 && code <= 0x9fff) ||
-      (code >= 0xf900 && code <= 0xfaff) ||
-      (code >= 0xfe30 && code <= 0xfe4f) ||
-      (code >= 0x20000 && code <= 0x2fa1f)
-    ) {
+    if (isWideCodePoint(code)) {
       width += 2;
-      cjkCount++;
-    } else {
+      wideOvershoot += 0.5;
+    } else if (!isZeroWidthCodePoint(code)) {
       width += 1;
     }
   }
-  return width + Math.ceil(cjkCount * 0.25);
+  return width + Math.ceil(wideOvershoot);
+}
+
+/**
+ * Literal monospace column count without wide overshoot (for NBSP padding).
+ */
+export function measureRenderedWidth(plain: string): number {
+  let width = 0;
+  for (const char of plain) {
+    const code = char.codePointAt(0)!;
+    if (isWideCodePoint(code)) {
+      width += 2;
+    } else if (!isZeroWidthCodePoint(code)) {
+      width += 1;
+    }
+  }
+  return width;
 }
 
 export function findPipePositions(
@@ -145,6 +195,81 @@ export function normalizePipePositions(
   return { positions, isVirtual };
 }
 
+/**
+ * Pipe column boundaries from remark-gfm `TableCell` positions (cell starts
+ * act as interior pipe indices, plus optional leading and trailing `|`).
+ */
+export function getAstTablePipeOffsetsFromRow(
+  row: TableRow,
+  text: string,
+): number[] | null {
+  const cells = row.children;
+  if (cells.length === 0) {
+    return null;
+  }
+  for (const c of cells) {
+    if (!hasValidPosition(c as Node)) {
+      return null;
+    }
+  }
+
+  const pipes: number[] = [];
+  for (let i = 0; i < cells.length; i++) {
+    const start = (cells[i] as TableCell).position!.start.offset!;
+    if (i === 0) {
+      if (text[start] === '|') {
+        pipes.push(start);
+      }
+    } else {
+      pipes.push(start);
+    }
+  }
+
+  const lastCell = cells[cells.length - 1] as TableCell;
+  const endOff = lastCell.position!.end.offset!;
+  const trailingIdx = endOff - 1;
+  if (
+    trailingIdx >= 0 &&
+    text[trailingIdx] === '|' &&
+    (pipes.length === 0 || pipes[pipes.length - 1] !== trailingIdx)
+  ) {
+    pipes.push(trailingIdx);
+  }
+
+  for (let k = 1; k < pipes.length; k++) {
+    if (pipes[k] <= pipes[k - 1]) {
+      return null;
+    }
+  }
+
+  return pipes;
+}
+
+export function getTableRowPipeLayout(
+  row: TableRow,
+  text: string,
+  lineStart: number,
+  trimmedLineEnd: number,
+): { positions: number[]; isVirtual: boolean[] } {
+  const astPipes = getAstTablePipeOffsetsFromRow(row, text);
+  let rawPipes: number[];
+  if (
+    astPipes !== null &&
+    astPipes.length > 0 &&
+    astPipes.every((p) => p >= lineStart && p < trimmedLineEnd)
+  ) {
+    rawPipes = astPipes;
+  } else {
+    rawPipes = findPipePositions(text, lineStart, trimmedLineEnd);
+  }
+  return normalizePipePositions(
+    text,
+    lineStart,
+    trimmedLineEnd,
+    rawPipes,
+  );
+}
+
 export function getLineRange(text: string, offset: number): [number, number] {
   const lineStart = offset === 0 ? 0 : text.lastIndexOf('\n', offset - 1) + 1;
   let lineEnd = text.indexOf('\n', offset);
@@ -163,42 +288,48 @@ export function trimLineEnd(text: string, lineStart: number, lineEnd: number): n
   return end;
 }
 
-export function computeColumnWidths(tableNode: Table, source: string): number[] {
-  let numCols = 0;
+const TABLE_CELL_NBSP = '\u00A0';
 
-  for (const row of tableNode.children) {
-    if (!row.position || row.position.start.offset === undefined) continue;
-    const [lineStart, lineEnd] = getLineRange(source, row.position.start.offset);
-    const trimmed = trimLineEnd(source, lineStart, lineEnd);
-    const rawPipes = findPipePositions(source, lineStart, trimmed);
-    const { positions: pipes } = normalizePipePositions(source, lineStart, trimmed, rawPipes);
-    const cellCount = Math.max(0, pipes.length - 1);
-    if (cellCount > numCols) numCols = cellCount;
+/** GFM column alignment from `Table.align` entries. */
+export type GfmColumnAlign = 'left' | 'right' | 'center' | null | undefined;
+
+/**
+ * NBSP repeat counts for leading and trailing cell padding (includes gutter next to pipes).
+ * Shared by native pad splits and synthetic `tableCell` replacement strings.
+ */
+export function leadingTrailingNbspRepeatCounts(
+  align: GfmColumnAlign,
+  totalPad: number,
+): { leading: number; trailing: number } {
+  if (align === 'right') {
+    return { leading: totalPad + 1, trailing: 1 };
   }
-
-  const widths: number[] = new Array(numCols).fill(3);
-
-  for (const row of tableNode.children) {
-    if (!row.position || row.position.start.offset === undefined) continue;
-    const [lineStart, lineEnd] = getLineRange(source, row.position.start.offset);
-    const trimmed = trimLineEnd(source, lineStart, lineEnd);
-    const rawPipes = findPipePositions(source, lineStart, trimmed);
-    const { positions: pipes } = normalizePipePositions(source, lineStart, trimmed, rawPipes);
-
-    for (let i = 0; i < pipes.length - 1 && i < numCols; i++) {
-      const cellText = source.substring(pipes[i] + 1, pipes[i + 1]).trim();
-      const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
-      const cellStyle = detectCellStyle(cellText);
-      const showRaw = !cellStyle && astCell && cellHasMixedFormatting(astCell);
-      const displayText = (astCell && !showRaw)
-        ? extractCellPlainText(astCell)
-        : cellText;
-      const width = measureTextWidth(displayText);
-      if (width > widths[i]) widths[i] = width;
-    }
+  if (align === 'center') {
+    const padLeft = Math.floor(totalPad / 2);
+    const padRight = totalPad - padLeft;
+    return { leading: padLeft + 1, trailing: padRight + 1 };
   }
+  return { leading: 1, trailing: totalPad + 1 };
+}
 
-  return widths;
+export function buildSyntheticTableCellReplacement(
+  align: GfmColumnAlign,
+  totalPad: number,
+  displayContent: string,
+): string {
+  const { leading, trailing } = leadingTrailingNbspRepeatCounts(align, totalPad);
+  return TABLE_CELL_NBSP.repeat(leading) + displayContent + TABLE_CELL_NBSP.repeat(trailing);
+}
+
+export function buildNativeTableCellPadParts(
+  align: GfmColumnAlign,
+  totalPad: number,
+): { leadingNbsp: string; trailingNbsp: string } {
+  const { leading, trailing } = leadingTrailingNbspRepeatCounts(align, totalPad);
+  return {
+    leadingNbsp: TABLE_CELL_NBSP.repeat(leading),
+    trailingNbsp: TABLE_CELL_NBSP.repeat(trailing),
+  };
 }
 
 export function addTableScope(scopes: ScopeRange[], tableStart: number, tableEnd: number): void {

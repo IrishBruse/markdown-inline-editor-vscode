@@ -188,6 +188,16 @@ export function CodeDecorationType(
 }
 
 /**
+ * Default inline-code background overlay when no explicit background is configured
+ * (same formula as {@link CodeDecorationType} with `backgroundColor` omitted).
+ */
+export function defaultInlineCodeOverlayBackground(): string {
+  return isDarkTheme()
+    ? `rgba(255, 255, 255, ${BRIGHTNESS_OVERLAY_OPACITY})`
+    : `rgba(0, 0, 0, ${BRIGHTNESS_OVERLAY_OPACITY})`;
+}
+
+/**
  * Creates a decoration type for code block styling.
  *
  * @returns {vscode.TextEditorDecorationType} A decoration type for code blocks
@@ -625,6 +635,20 @@ export function TableCellDecorationType() {
     textDecoration: 'none; display: none;',
     before: {
       contentText: '',
+    },
+    // Empty after helps relayout after display:none (same idea as hide decorations).
+    after: {
+      contentText: '',
+    },
+  });
+}
+
+/** NBSP pad for rich cells where source must stay visible (not display:none). */
+export function TableCellNativePadDecorationType() {
+  return window.createTextEditorDecorationType({
+    before: {
+      contentText: '',
+      color: new ThemeColor('editor.foreground'),
     },
   });
 }

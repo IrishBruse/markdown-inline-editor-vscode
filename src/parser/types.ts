@@ -6,11 +6,20 @@ export interface DecorationRange {
   level?: number;
   emoji?: string;
   replacement?: string;
+  /** `tablePipe` only: NBSP prefix before the pipe glyph (native cell trailing pad). */
+  replacementPrefix?: string;
   cellStyle?: {
     fontWeight?: string;
     fontStyle?: string;
     textDecoration?: string;
+    /**
+     * When true, tableCell `before` uses `textPreformat.*` so whole-cell inline code
+     * matches normal markdown code styling instead of `editor.foreground`.
+     */
+    useTextPreformatColors?: boolean;
   };
+  /** `tableCell` only: `before` width in `ch` for monospace column alignment. */
+  tableCellWidthCh?: number;
   slug?: string;
   issueNumber?: number;
   ownerRepo?: string;
@@ -79,5 +88,6 @@ export type DecorationType =
   | "tableSeparatorPipe"
   | "tableSeparatorDash"
   | "tableCell"
+  | "tableCellNativePad"
   | "mention"
   | "issueReference";
