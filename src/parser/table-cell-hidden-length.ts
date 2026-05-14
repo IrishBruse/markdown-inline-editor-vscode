@@ -2,7 +2,6 @@ import type {
   Delete,
   Emphasis,
   Image,
-  InlineCode,
   Link,
   Node,
   Strong,
@@ -154,17 +153,10 @@ export function countHiddenMarkerLength(cell: TableCell, source: string): number
         return;
       }
       case 'inlineCode': {
-        const ic = node as InlineCode;
-        const start = ic.position?.start.offset;
-        const end = ic.position?.end.offset;
-        if (start === undefined || end === undefined) {
-          return;
-        }
-        const span = end - start;
-        const innerLen = ic.value.length;
-        if (span > innerLen) {
-          total += span - innerLen;
-        }
+        // Backtick fences use `transparent` (see `TransparentDecorationType`), not
+        // `display: none`, so they still consume column width. Do not subtract them here,
+        // and do not use `span - innerLen` (that also removes escape `\` bytes that stay
+        // visible in the source).
         return;
       }
       case 'link': {

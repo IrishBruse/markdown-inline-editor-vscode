@@ -298,6 +298,9 @@ describe('MarkdownParser - Tables', () => {
       const result = parser.extractDecorations(md);
       expect(byType(result, 'tableCellNativePad').length).toBeGreaterThanOrEqual(1);
       expect(byType(result, 'tablePipe').length).toBeGreaterThan(0);
+      const dashes = byType(result, 'tableSeparatorDash');
+      const firstColDash = dashes[0]?.replacement ?? '';
+      expect(firstColDash.length).toBe(18);
     });
   });
 
