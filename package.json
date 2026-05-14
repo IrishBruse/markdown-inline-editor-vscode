@@ -112,6 +112,12 @@
           "description": "Opacity for code block language identifiers",
           "markdownDescription": "Opacity of code block language identifiers (0.0-1.0)."
         },
+        "markdownInlineEditor.links.showEmoji": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a chain icon after hyperlink text",
+          "markdownDescription": "Show a chain emoji (🔗) after decorated link text."
+        },
         "markdownInlineEditor.links.singleClickOpen": {
           "type": "boolean",
           "default": false,
