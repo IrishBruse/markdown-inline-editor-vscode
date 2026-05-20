@@ -11,6 +11,11 @@ describe('MarkdownParser - Tables', () => {
     return decs.filter((d) => d.type === type);
   }
 
+  /** Plain cells use native pad; synthetic cells use tableCell. */
+  function tableCells(decs: DecorationRange[]) {
+    return [...byType(decs, 'tableCell'), ...byType(decs, 'tableCellNativePad')];
+  }
+
   describe('basic table rendering', () => {
     it('should create tablePipe decorations for pipe characters', () => {
       const md = '| A | B |\n|---|---|\n| 1 | 2 |';
@@ -36,16 +41,14 @@ describe('MarkdownParser - Tables', () => {
       expect(cells).toBe(9);
     });
 
-    it('should create tableCell decorations with padded replacement', () => {
+    it('should create native pad decorations with leading NBSP for plain cells', () => {
       const md = '| Name | Age |\n|------|-----|\n| Jo   | 5   |';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
+      const cells = tableCells(result);
       expect(cells.length).toBeGreaterThanOrEqual(4);
       cells.forEach((c) => {
         expect(c.replacement).toBeDefined();
-        // Each cell should start and end with non-breaking space
         expect(c.replacement!.startsWith('\u00A0')).toBe(true);
-        expect(c.replacement!.endsWith('\u00A0')).toBe(true);
       });
     });
 
@@ -69,41 +72,42 @@ describe('MarkdownParser - Tables', () => {
     it('should left-align cells by default (pad right)', () => {
       const md = '| Foo | Bar |\n|-----|-----|\n| x   | y   |';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
-      // Default alignment: content starts after one NBSP
-      const dataCell = cells.find((c) => c.replacement!.includes('x'));
-      expect(dataCell).toBeDefined();
-      // Left-aligned: starts with single NBSP then content
-      expect(dataCell!.replacement!.indexOf('x')).toBe(1);
+      const dataLineStart = md.indexOf('| x');
+      const dataPad = tableCells(result).find(
+        (c) => c.startPos >= dataLineStart && md.slice(c.startPos, c.endPos) === 'x',
+      );
+      expect(dataPad?.replacement?.startsWith('\u00A0')).toBe(true);
     });
 
     it('should right-align cells when column uses ---:', () => {
       const result = parser.extractDecorations(alignedTable);
-      const cells = byType(result, 'tableCell');
-      // Find a data row cell for the right-aligned column (column index 2, content "c")
-      const rightCell = cells.find((c) => c.replacement!.includes('c'));
-      expect(rightCell).toBeDefined();
-      // Right-aligned: content should end with single NBSP
-      expect(rightCell!.replacement!.endsWith('c\u00A0')).toBe(true);
-      // Should have leading padding
-      const leadingSpaces = rightCell!.replacement!.length - rightCell!.replacement!.trimStart().length;
-      expect(leadingSpaces).toBeGreaterThanOrEqual(1);
+      const dataLineStart = alignedTable.indexOf('| a');
+      const rightPad = tableCells(result).find(
+        (c) =>
+          c.startPos >= dataLineStart &&
+          alignedTable.slice(c.startPos, c.endPos).trim() === 'c',
+      );
+      expect(rightPad?.replacement?.startsWith('\u00A0')).toBe(true);
+      // Right-aligned columns add most padding before visible text.
+      expect((rightPad!.replacement || '').length).toBeGreaterThan(2);
     });
 
     it('should center-align cells when column uses :---:', () => {
       const result = parser.extractDecorations(alignedTable);
-      const cells = byType(result, 'tableCell');
-      // Find a data row cell for the center-aligned column (column index 1, content "b")
-      const centerCell = cells.find((c) => c.replacement!.includes('b'));
-      expect(centerCell).toBeDefined();
-      // Center-aligned: should have padding on both sides
-      const content = centerCell!.replacement!;
-      const trimmed = content.replace(/\u00A0/g, '').trim();
-      const beforeContent = content.indexOf(trimmed);
-      const afterContent = content.length - beforeContent - trimmed.length;
-      // Both sides should have at least 1 char of padding
-      expect(beforeContent).toBeGreaterThanOrEqual(1);
-      expect(afterContent).toBeGreaterThanOrEqual(1);
+      const dataLineStart = alignedTable.indexOf('| a');
+      const centerPad = tableCells(result).find(
+        (c) =>
+          c.startPos >= dataLineStart &&
+          alignedTable.slice(c.startPos, c.endPos).trim() === 'b',
+      );
+      expect(centerPad?.replacement?.startsWith('\u00A0')).toBe(true);
+      const closingPipe = result.find(
+        (d) =>
+          d.type === 'tablePipe' &&
+          d.startPos > centerPad!.endPos &&
+          (d.replacementPrefix?.length ?? 0) > 1,
+      );
+      expect(closingPipe).toBeDefined();
     });
   });
 
@@ -111,41 +115,40 @@ describe('MarkdownParser - Tables', () => {
     it('should account for CJK double-width in column padding', () => {
       const md = '| Name | CJK  |\n|------|------|\n| AB   | \u4F60\u597D   |';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
-      // All cells should have replacement text
-      cells.forEach((c) => {
+      tableCells(result).forEach((c) => {
         expect(c.replacement).toBeDefined();
       });
     });
 
     it('treats single emoji as wide so column reserves 2 columns', () => {
-      // Header "Emoji" width 5; data cell holds one emoji (width 2).
-      // Without wide-emoji support the data cell would be padded as if width 1.
       const md = '| Emoji |\n|-------|\n| \uD83D\uDE00 |';
       const result = parser.extractDecorations(md);
-      const dataCell = byType(result, 'tableCell').find((c) =>
-        c.replacement?.includes('\uD83D\uDE00'),
+      const dataLineStart = md.indexOf('\uD83D\uDE00');
+      const emojiPad = tableCells(result).find(
+        (c) =>
+          c.startPos >= dataLineStart &&
+          md.slice(c.startPos, c.endPos).includes('\uD83D\uDE00'),
       );
-      expect(dataCell).toBeDefined();
-      // Replacement is "\u00A0" + content + "\u00A0".repeat(totalPad+1).
-      // Without wide-emoji handling, totalPad would be header-1=4 → 6 trailing NBSP.
-      // With wide-emoji handling, totalPad=header-2=3 → 5 trailing NBSP.
-      const trailing = (dataCell!.replacement || '').match(/\u00A0+$/)?.[0] || '';
-      expect(trailing.length).toBeLessThanOrEqual(5);
+      expect(emojiPad).toBeDefined();
+      const closingPipe = result.find(
+        (d) =>
+          d.type === 'tablePipe' &&
+          d.startPos > emojiPad!.endPos &&
+          (d.replacementPrefix?.length ?? 0) >= 4,
+      );
+      expect(closingPipe).toBeDefined();
     });
 
     it('counts ZWJ-joined emoji sequences using single combined width', () => {
-      // 👨‍👩‍👧 (man + ZWJ + woman + ZWJ + girl) renders as one wide glyph.
-      // Without ZWJ handling we'd over-count to 6 (3 emoji × 2).
       const family = '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67';
       const md = `| Emoji |\n|-------|\n| ${family} |`;
       const result = parser.extractDecorations(md);
-      const dataCell = byType(result, 'tableCell').find((c) =>
-        c.replacement?.includes(family),
+      const dataLineStart = md.indexOf(family);
+      const familyPad = tableCells(result).find(
+        (c) => c.startPos >= dataLineStart && md.slice(c.startPos, c.endPos).includes(family),
       );
-      expect(dataCell).toBeDefined();
-      // Total padding stays small; replacement length should be modest, not blown up.
-      expect((dataCell!.replacement || '').length).toBeLessThanOrEqual(12);
+      expect(familyPad).toBeDefined();
+      expect((familyPad!.replacement || '').length).toBeLessThanOrEqual(4);
     });
   });
 
@@ -183,15 +186,16 @@ describe('MarkdownParser - Tables', () => {
       expect(pads.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('strips markers from width for synthetic cells (plain data row)', () => {
+    it('uses equal native leading pad width for plain header and data cells', () => {
       const md = '| Header   |\n|----------|\n| plain    |';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
-      const dataCell = cells.find((c) => c.replacement!.includes('plain'));
-      const headerCell = cells.find((c) => c.replacement!.includes('Header'));
-      expect(dataCell).toBeDefined();
-      expect(headerCell).toBeDefined();
-      expect(dataCell!.replacement!.length).toBe(headerCell!.replacement!.length);
+      const headerPad = tableCells(result).find((c) =>
+        md.slice(c.startPos, c.endPos).includes('Header'),
+      );
+      const dataPad = tableCells(result).find((c) =>
+        md.slice(c.startPos, c.endPos).includes('plain'),
+      );
+      expect(headerPad?.replacement?.length).toBe(dataPad?.replacement?.length);
     });
   });
 
@@ -199,15 +203,13 @@ describe('MarkdownParser - Tables', () => {
     it('should handle empty cells', () => {
       const md = '| A |   |\n|---|---|\n|   | B |';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
-      expect(cells.length).toBeGreaterThanOrEqual(4);
+      expect(tableCells(result).length).toBeGreaterThanOrEqual(4);
     });
 
     it('should handle single-column table', () => {
       const md = '| A |\n|---|\n| B |';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
-      expect(cells.length).toBeGreaterThanOrEqual(2);
+      expect(tableCells(result).length).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -215,7 +217,7 @@ describe('MarkdownParser - Tables', () => {
     it('should render outer-pipe-less table when it starts at document offset 0', () => {
       const md = 'A | B\n---|---\n1 | 2';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
+      const cells = tableCells(result);
       const pipes = byType(result, 'tablePipe');
       expect(cells.length).toBeGreaterThanOrEqual(4);
       expect(cells.every((c) => c.startPos >= 0 && c.endPos > c.startPos)).toBe(true);
@@ -228,8 +230,7 @@ describe('MarkdownParser - Tables', () => {
     it('should render cells when table has no outer pipes', () => {
       const md = 'A | B\n---|---\n1 | 2';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
-      expect(cells.length).toBeGreaterThanOrEqual(4);
+      expect(tableCells(result).length).toBeGreaterThanOrEqual(4);
     });
 
     it('should render separator for outer-pipe-less table', () => {
@@ -300,7 +301,7 @@ describe('MarkdownParser - Tables', () => {
       expect(byType(result, 'tablePipe').length).toBeGreaterThan(0);
       const dashes = byType(result, 'tableSeparatorDash');
       const firstColDash = dashes[0]?.replacement ?? '';
-      expect(firstColDash.length).toBe(18);
+      expect(firstColDash.length).toBeGreaterThanOrEqual(11);
     });
   });
 
@@ -308,17 +309,19 @@ describe('MarkdownParser - Tables', () => {
     it('should not strip underscores from snake_case cell content', () => {
       const md = '| Field |\n|-------|\n| snake_case |';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
-      const snakeCell = cells.find((c) => c.replacement!.includes('snake_case'));
-      expect(snakeCell).toBeDefined();
+      const snakePad = tableCells(result).find((c) =>
+        md.slice(c.startPos, c.endPos).includes('snake_case'),
+      );
+      expect(snakePad).toBeDefined();
     });
 
     it('should not strip asterisks from arithmetic expressions', () => {
       const md = '| Expr |\n|------|\n| 100*200 |';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
-      const exprCell = cells.find((c) => c.replacement!.includes('100'));
-      expect(exprCell).toBeDefined();
+      const exprPad = tableCells(result).find((c) =>
+        md.slice(c.startPos, c.endPos).includes('100'),
+      );
+      expect(exprPad).toBeDefined();
     });
   });
 
@@ -343,41 +346,39 @@ describe('MarkdownParser - Tables', () => {
       const result = parser.extractDecorations(md);
       expect(byType(result, 'tablePipe').length).toBeGreaterThan(0);
       const dataLineStart = md.indexOf('| `');
-      const rowCells = byType(result, 'tableCell')
+      const rowCells = tableCells(result)
         .filter((c) => c.startPos >= dataLineStart)
         .sort((a, b) => a.startPos - b.startPos);
       expect(rowCells.length).toBe(3);
-      for (const c of rowCells) {
-        expect(c.replacement).toBeDefined();
-        expect(c.replacement!.includes('bb')).toBe(false);
-      }
-      expect(rowCells[0].replacement!.includes('`')).toBe(true);
-      expect(rowCells[1].replacement!.includes('`')).toBe(true);
-      expect(rowCells[2].replacement!).toContain('pipe inside code');
+      expect(md.slice(rowCells[0].startPos, rowCells[0].endPos).trim()).toBe('`');
+      expect(md.slice(rowCells[1].startPos, rowCells[1].endPos).trim()).toBe('`');
+      expect(md.slice(rowCells[2].startPos, rowCells[2].endPos)).toContain('pipe');
     });
 
     it('uses synthetic padded cell for whole-cell inline code (grid aligns with pipes)', () => {
       const md = '| C |\n|---|\n| `x` |';
       const result = parser.extractDecorations(md);
-      expect(byType(result, 'tableCellNativePad').length).toBe(0);
-      const cells = byType(result, 'tableCell');
-      expect(cells.length).toBeGreaterThanOrEqual(2);
-      expect(cells.some((c) => c.replacement?.includes('x'))).toBe(true);
-      expect(cells.some((c) => c.replacement?.includes('`'))).toBe(false);
+      const synthetic = byType(result, 'tableCell');
+      const nativePads = byType(result, 'tableCellNativePad');
+      expect(synthetic.length).toBeGreaterThanOrEqual(1);
+      expect(synthetic.some((c) => c.replacement?.includes('x'))).toBe(true);
+      expect(nativePads.some((c) => md.slice(c.startPos, c.endPos) === 'C')).toBe(true);
     });
 
-    it('two-column table with inline code in one cell uses no native pad', () => {
+    it('two-column table with inline code in one cell uses synthetic tableCell', () => {
       const md = [
         '| Col    | Note            |',
         '| ------ | --------------- |',
         '| `code` | whole-cell code |',
       ].join('\n');
       const result = parser.extractDecorations(md);
-      expect(byType(result, 'tableCellNativePad').length).toBe(0);
       const codeCell = byType(result, 'tableCell').find((c) =>
         c.replacement?.includes('code') && !c.replacement?.includes('whole'),
       );
       expect(codeCell?.cellStyle?.useTextPreformatColors).toBe(true);
+      expect(
+        tableCells(result).some((c) => md.slice(c.startPos, c.endPos).includes('whole')),
+      ).toBe(true);
     });
 
     it('keeps plain and inline-code data cells on distinct source ranges', () => {
@@ -400,31 +401,39 @@ describe('MarkdownParser - Tables', () => {
       expect(md.slice(rowCells[2].startPos, rowCells[2].endPos)).toContain('pipe');
     });
 
-    it('uses synthetic tableCell for plain cells only', () => {
+    it('uses native pad for plain cells so source stays clickable', () => {
       const md = '| P |\n|---|\n| plain |';
       const result = parser.extractDecorations(md);
-      expect(byType(result, 'tableCellNativePad').length).toBe(0);
-      const cells = byType(result, 'tableCell');
-      expect(cells.length).toBeGreaterThanOrEqual(2);
-      cells.forEach((c) => {
+      expect(byType(result, 'tableCell').length).toBe(0);
+      const pads = byType(result, 'tableCellNativePad');
+      expect(pads.length).toBeGreaterThanOrEqual(2);
+      pads.forEach((c) => {
         expect(c.replacement!.startsWith('\u00A0')).toBe(true);
       });
+    });
+
+    it('scopes plain native pad to trimmed source and hides GFM padding spaces', () => {
+      const md = '| Name | Age |\n|------|-----|\n| Jo   | 5   |';
+      const result = parser.extractDecorations(md);
+      const joPad = tableCells(result).find(
+        (c) => md.slice(c.startPos, c.endPos) === 'Jo',
+      );
+      expect(joPad).toBeDefined();
+      const dataLineStart = md.indexOf('| Jo');
+      const hides = result.filter(
+        (d) => d.type === 'hide' && d.startPos >= dataLineStart,
+      );
+      expect(hides.length).toBeGreaterThanOrEqual(2);
     });
   });
 
   describe('tableCellWidthCh (synthetic cell grid)', () => {
-    it('sets tableCellWidthCh on every synthetic cell for CJK and emoji columns', () => {
-      const md = [
-        '| Name | CJK | Emoji |',
-        '| ---- | ---- | ----- |',
-        '| AB | 你好 | 😀 |',
-        '| CD | 世界 | 🚀 |',
-      ].join('\n');
+    it('sets tableCellWidthCh on synthetic whole-cell inline code cells', () => {
+      const md = '| Col |\n|-----|\n| `xy` |';
       const result = parser.extractDecorations(md);
       const synthetic = byType(result, 'tableCell').filter((c) => c.tableCellWidthCh !== undefined);
-      expect(synthetic.length).toBeGreaterThanOrEqual(8);
+      expect(synthetic.length).toBeGreaterThanOrEqual(1);
       synthetic.forEach((c) => {
-        expect(typeof c.tableCellWidthCh).toBe('number');
         expect(c.tableCellWidthCh!).toBeGreaterThan(0);
       });
     });

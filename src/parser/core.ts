@@ -300,14 +300,23 @@ export class MarkdownParser {
               );
               break;
 
-            case "inlineCode":
-              this.processInlineCode(
-                node as InlineCode,
-                text,
-                decorations,
-                scopes,
-              );
+            case "inlineCode": {
+              const inlineCodeNode = node as InlineCode;
+              if (
+                !this.isInlineCodeHandledBySyntheticTableCell(
+                  inlineCodeNode,
+                  currentAncestors,
+                )
+              ) {
+                this.processInlineCode(
+                  inlineCodeNode,
+                  text,
+                  decorations,
+                  scopes,
+                );
+              }
               break;
+            }
 
             case "code":
               this.processCodeBlock(
@@ -1341,6 +1350,25 @@ export class MarkdownParser {
    * A cell that is only a single inline code span (no other phrasing) can use the same
    * synthetic padded cell path as plain text so pipes align with `tableCellWidthCh`.
    */
+  /**
+   * Whole-cell inline code uses synthetic `tableCell` rendering; skip per-span
+   * `code` decorations so `filterDecorationsInCodeBlocks` does not drop the cell.
+   */
+  private isInlineCodeHandledBySyntheticTableCell(
+    node: InlineCode,
+    ancestors: Node[],
+  ): boolean {
+    const tableCell = ancestors.find((a) => a.type === "tableCell");
+    if (!tableCell) {
+      return false;
+    }
+    if (!this.isSingleInlineCodeOnlyTableCell(tableCell as TableCell)) {
+      return false;
+    }
+    const phrasing = this.getTableCellPhrasingChildren(tableCell as TableCell);
+    return phrasing.length === 1 && phrasing[0] === node;
+  }
+
   private isSingleInlineCodeOnlyTableCell(cell: TableCell): boolean {
     const phrasing = this.getTableCellPhrasingChildren(cell);
     if (phrasing.length !== 1 || phrasing[0]!.type !== "inlineCode") {
@@ -1356,6 +1384,9 @@ export class MarkdownParser {
   private shouldRenderTableCellNative(
     astCell: TableCell | undefined,
     trimmedCell: string,
+    detectedCellStyle:
+      | { fontWeight?: string; fontStyle?: string; textDecoration?: string }
+      | undefined,
   ): boolean {
     if (!astCell) {
       return false;
@@ -1363,9 +1394,28 @@ export class MarkdownParser {
     if (this.isSingleInlineCodeOnlyTableCell(astCell)) {
       return false;
     }
+    // Whole-cell marker styling without phrasing nodes needs synthetic contentText.
+    if (detectedCellStyle && !this.tableCellAstHasRichMarkdown(astCell)) {
+      return false;
+    }
     return (
       this.tableCellAstHasRichMarkdown(astCell) ||
-      this.cellTextHasDollarMathSyntax(trimmedCell)
+      this.cellTextHasDollarMathSyntax(trimmedCell) ||
+      !this.cellHasMixedFormatting(astCell)
+    );
+  }
+
+  /** Plain text cells: native layout with visible source for correct click positions. */
+  private isPlainNativeTableCell(
+    astCell: TableCell | undefined,
+    detectedCellStyle:
+      | { fontWeight?: string; fontStyle?: string; textDecoration?: string }
+      | undefined,
+  ): boolean {
+    return (
+      !!astCell &&
+      !detectedCellStyle &&
+      !this.cellHasMixedFormatting(astCell)
     );
   }
 
@@ -1422,9 +1472,20 @@ export class MarkdownParser {
         const cellStyle = this.detectCellStyle(cellText);
         const showRaw =
           !cellStyle && astCell && this.cellHasMixedFormatting(astCell);
-        const useNative = this.shouldRenderTableCellNative(astCell, cellText);
+        const useNative = this.shouldRenderTableCellNative(
+          astCell,
+          cellText,
+          cellStyle,
+        );
+        const isPlainNative = this.isPlainNativeTableCell(astCell, cellStyle);
         let w: number;
-        if (useNative && astCell) {
+        if (useNative && astCell && isPlainNative) {
+          const displayTextForWidth =
+            astCell && !showRaw
+              ? this.extractCellPlainText(astCell)
+              : cellText;
+          w = measureTextWidthHelper(displayTextForWidth);
+        } else if (useNative && astCell) {
           const rawInteriorLen = pipes[i + 1] - pipes[i] - 1;
           const hiddenLen = countHiddenMarkerLength(astCell, source);
           w = Math.max(0, rawInteriorLen - hiddenLen);
@@ -1514,24 +1575,75 @@ export class MarkdownParser {
         const useNative = this.shouldRenderTableCellNative(
           astCell,
           trimmedContent,
+          cellStyle,
         );
         if (useNative) {
-          const hiddenLen = astCell
-            ? countHiddenMarkerLength(astCell, text)
-            : 0;
-          const displayWidth = Math.max(0, rawContent.length - hiddenLen);
+          const isPlainNative = this.isPlainNativeTableCell(astCell, cellStyle);
+          const plainDisplayContent =
+            astCell && !showRaw
+              ? this.extractCellPlainText(astCell)
+              : trimmedContent;
+          let displayWidth: number;
+          if (isPlainNative) {
+            displayWidth = measureRenderedWidthHelper(plainDisplayContent);
+          } else {
+            const hiddenLen = astCell
+              ? countHiddenMarkerLength(astCell, text)
+              : 0;
+            displayWidth = Math.max(0, rawContent.length - hiddenLen);
+          }
           const totalPad = Math.max(0, colWidth - displayWidth);
           const { leadingNbsp, trailingNbsp } = buildNativeTableCellPadParts(
             align,
             totalPad,
           );
           nativeTrailBeforePipe.set(pipes[i + 1], trailingNbsp);
-          decorations.push({
-            startPos: cellRangeStart,
-            endPos: cellRangeEnd,
-            type: "tableCellNativePad",
-            replacement: leadingNbsp,
-          });
+
+          if (isPlainNative) {
+            const leadingPadLen =
+              rawContent.length - rawContent.trimStart().length;
+            const trailingPadLen =
+              rawContent.length - rawContent.trimEnd().length;
+            const contentStart = cellRangeStart + leadingPadLen;
+            const contentEnd = cellRangeEnd - trailingPadLen;
+
+            if (leadingPadLen > 0) {
+              decorations.push({
+                startPos: cellRangeStart,
+                endPos: contentStart,
+                type: "hide",
+              });
+            }
+            if (contentStart < contentEnd) {
+              decorations.push({
+                startPos: contentStart,
+                endPos: contentEnd,
+                type: "tableCellNativePad",
+                replacement: leadingNbsp,
+              });
+            } else {
+              decorations.push({
+                startPos: cellRangeStart,
+                endPos: cellRangeEnd,
+                type: "tableCellNativePad",
+                replacement: leadingNbsp,
+              });
+            }
+            if (trailingPadLen > 0) {
+              decorations.push({
+                startPos: contentEnd,
+                endPos: cellRangeEnd,
+                type: "hide",
+              });
+            }
+          } else {
+            decorations.push({
+              startPos: cellRangeStart,
+              endPos: cellRangeEnd,
+              type: "tableCellNativePad",
+              replacement: leadingNbsp,
+            });
+          }
           continue;
         }
 
@@ -1547,14 +1659,66 @@ export class MarkdownParser {
           displayContent,
         );
 
+        const leadingPadLen =
+          rawContent.length - rawContent.trimStart().length;
+        const trailingPadLen =
+          rawContent.length - rawContent.trimEnd().length;
+        let contentStart = cellRangeStart + leadingPadLen;
+        let contentEnd = cellRangeEnd - trailingPadLen;
+
+        if (astCell !== undefined && this.isSingleInlineCodeOnlyTableCell(astCell)) {
+          const ic = this.getTableCellPhrasingChildren(astCell)[0] as InlineCode;
+          if (this.hasValidPosition(ic)) {
+            const icStart = ic.position!.start.offset!;
+            const icEnd = ic.position!.end.offset!;
+            let markerLen = 0;
+            while (icStart + markerLen < icEnd && text[icStart + markerLen] === "`") {
+              markerLen++;
+            }
+            if (markerLen > 0) {
+              contentStart = icStart + markerLen;
+              contentEnd = icEnd - markerLen;
+            }
+          }
+        }
+
+        // Synthetic cells use display:none; click position maps across the
+        // decoration range. Scope tableCell to trimmed source and hide GFM
+        // padding spaces so clicks land on visible characters.
+        if (contentStart >= contentEnd) {
+          decorations.push({
+            startPos: cellRangeStart,
+            endPos: cellRangeEnd,
+            type: "tableCell",
+            replacement,
+            cellStyle,
+            tableCellWidthCh: colWidth + 2,
+          });
+          continue;
+        }
+
+        if (leadingPadLen > 0) {
+          decorations.push({
+            startPos: cellRangeStart,
+            endPos: contentStart,
+            type: "hide",
+          });
+        }
         decorations.push({
-          startPos: cellRangeStart,
-          endPos: cellRangeEnd,
+          startPos: contentStart,
+          endPos: contentEnd,
           type: "tableCell",
           replacement,
           cellStyle,
           tableCellWidthCh: colWidth + 2,
         });
+        if (trailingPadLen > 0) {
+          decorations.push({
+            startPos: contentEnd,
+            endPos: cellRangeEnd,
+            type: "hide",
+          });
+        }
       }
 
       for (let pIdx = 0; pIdx < pipes.length; pIdx++) {
