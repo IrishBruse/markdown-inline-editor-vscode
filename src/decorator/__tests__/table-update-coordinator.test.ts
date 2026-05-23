@@ -5,7 +5,6 @@ import type { TableBlock } from '../../parser';
 
 vi.mock('../../tables/table-renderer', () => ({
   renderTableSvg: vi.fn().mockResolvedValue('<svg></svg>'),
-  estimateEditorContentWidth: vi.fn().mockReturnValue(400),
 }));
 
 vi.mock('../../mermaid/mermaid-renderer', () => ({

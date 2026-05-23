@@ -7,13 +7,19 @@ import {
 
 export type TableSvgHostOptions = {
   theme: 'default' | 'dark';
-  contentWidth: number;
   fontSize: number;
   lineHeight: number;
   fontFamily?: string;
   /** Source line count; SVG is at least this tall so it covers hidden markdown rows. */
   numLines: number;
 };
+
+/** Horizontal inset inside a cell border (pixels). */
+const CELL_PAD_X = 1;
+/** Baseline offset from the top of a row's first text line (pixels). */
+const CELL_TEXT_TOP = 1;
+
+const MIN_COLUMN_DISPLAY_WIDTH = 1;
 
 function escapeXml(text: string): string {
   return text
@@ -58,6 +64,24 @@ export function wrapTextToColumnWidth(text: string, maxDisplayWidth: number): st
   return lines;
 }
 
+/** Per-column display widths (character units) from cell content, matching decorated tables. */
+export function computeColumnDisplayWidths(rows: TableRowData[]): number[] {
+  let columnCount = 0;
+  for (const row of rows) {
+    columnCount = Math.max(columnCount, row.cells.length);
+  }
+  const widths = new Array(columnCount).fill(MIN_COLUMN_DISPLAY_WIDTH);
+  for (const row of rows) {
+    for (let i = 0; i < row.cells.length; i++) {
+      const w = measureTextWidth(row.cells[i].text);
+      if (w > widths[i]) {
+        widths[i] = w;
+      }
+    }
+  }
+  return widths;
+}
+
 /**
  * Renders a GFM table as native SVG in the extension host (no webview required).
  */
@@ -66,37 +90,36 @@ export function renderTableSvgHost(
   options: TableSvgHostOptions,
   theme: TableHtmlTheme = tableHtmlThemeForMode(options.theme === 'dark')
 ): string {
-  const width = Math.max(200, options.contentWidth);
   const fontSize = options.fontSize;
   const lineHeight = options.lineHeight;
-  const pad = 8;
+  const charWidth = fontSize * 0.6;
   const fontFamily = sanitizeFontFamily(options.fontFamily);
 
-  let columnCount = 0;
-  for (const row of rows) {
-    columnCount = Math.max(columnCount, row.cells.length);
-  }
-  if (columnCount === 0 || rows.length === 0) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="1" viewBox="0 0 ${width} 1"></svg>`;
+  const columnDisplayWidths = computeColumnDisplayWidths(rows);
+  if (columnDisplayWidths.length === 0 || rows.length === 0) {
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"></svg>';
   }
 
-  const colWidth = width / columnCount;
-  // Convert pixel column inner width to display-width units (matches parser/tables.ts)
-  const maxDisplayWidth = Math.max(
-    3,
-    Math.floor((colWidth - pad * 2) / (fontSize * 0.6))
+  const columnPixelWidths = columnDisplayWidths.map(
+    (displayWidth) => displayWidth * charWidth + CELL_PAD_X * 2
   );
+  const width = columnPixelWidths.reduce((sum, colWidth) => sum + colWidth, 0);
 
   const parts: string[] = [];
   let y = 0;
 
   for (const row of rows) {
     const cells = row.cells;
-    const cellLinesList = cells.map((cell) => wrapTextToColumnWidth(cell.text, maxDisplayWidth));
+    const cellLinesList = cells.map((cell, columnIndex) =>
+      wrapTextToColumnWidth(
+        cell.text,
+        columnDisplayWidths[columnIndex] ?? MIN_COLUMN_DISPLAY_WIDTH
+      )
+    );
 
-    let rowHeight = pad * 2;
+    let rowHeight = lineHeight;
     for (const lines of cellLinesList) {
-      const h = lines.length * lineHeight + pad * 2;
+      const h = lines.length * lineHeight;
       if (h > rowHeight) {
         rowHeight = h;
       }
@@ -104,6 +127,7 @@ export function renderTableSvgHost(
 
     let x = 0;
     for (let c = 0; c < cells.length; c++) {
+      const colWidth = columnPixelWidths[c] ?? columnPixelWidths[0];
       const bg = row.isHeader ? theme.headerBackground : theme.cellBackground;
       parts.push(
         `<rect x="${x}" y="${y}" width="${colWidth}" height="${rowHeight}" ` +
@@ -118,9 +142,9 @@ export function renderTableSvgHost(
       const styleAttr = fontStyle ? ` font-style="${fontStyle}"` : '';
 
       for (let li = 0; li < lines.length; li++) {
-        const textY = y + pad + fontSize + li * lineHeight;
+        const textY = y + CELL_TEXT_TOP + fontSize + li * lineHeight;
         parts.push(
-          `<text x="${x + pad}" y="${textY}" font-family="${escapeXml(fontFamily)}" ` +
+          `<text x="${x + CELL_PAD_X}" y="${textY}" font-family="${escapeXml(fontFamily)}" ` +
           `font-size="${fontSize}" fill="${theme.foreground}"${weightAttr}${styleAttr}>${escapeXml(lines[li])}</text>`
         );
       }

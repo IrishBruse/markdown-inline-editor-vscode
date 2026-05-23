@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { renderTableSvgHost, wrapTextToColumnWidth } from '../table-svg-host';
+import {
+  computeColumnDisplayWidths,
+  renderTableSvgHost,
+  wrapTextToColumnWidth,
+} from '../table-svg-host';
 
 describe('table-svg-host', () => {
   it('wraps long text into multiple lines', () => {
@@ -16,7 +20,7 @@ describe('table-svg-host', () => {
         { isHeader: true, cells: [{ text: 'Name', align: null }] },
         { isHeader: false, cells: [{ text: 'Alice', align: null }] },
       ],
-      { theme: 'dark', contentWidth: 400, fontSize: 14, lineHeight: 21, numLines: 3 }
+      { theme: 'dark', fontSize: 14, lineHeight: 21, numLines: 3 }
     );
     expect(svg).toContain('<svg');
     expect(svg).toContain('<rect');
@@ -24,10 +28,24 @@ describe('table-svg-host', () => {
     expect(svg).not.toContain('foreignObject');
   });
 
+  it('sizes columns from cell content instead of a fixed editor width', () => {
+    const rows = [
+      { isHeader: true, cells: [{ text: 'A', align: null }, { text: 'B', align: null }] },
+      { isHeader: false, cells: [{ text: '1', align: null }, { text: '2', align: null }] },
+    ];
+    const svg = renderTableSvgHost(
+      rows,
+      { theme: 'dark', fontSize: 14, lineHeight: 21, numLines: 3 }
+    );
+    const width = Number(svg.match(/width="([\d.]+)"/)?.[1] ?? 0);
+    expect(width).toBeLessThan(120);
+    expect(computeColumnDisplayWidths(rows)).toEqual([1, 1]);
+  });
+
   it('svg height covers at least numLines of editor line height', () => {
     const svg = renderTableSvgHost(
       [{ isHeader: false, cells: [{ text: 'x', align: null }] }],
-      { theme: 'dark', contentWidth: 200, fontSize: 14, lineHeight: 21, numLines: 5 }
+      { theme: 'dark', fontSize: 14, lineHeight: 21, numLines: 5 }
     );
     const height = Number(svg.match(/height="([\d.]+)"/)?.[1] ?? 0);
     expect(height).toBeGreaterThanOrEqual(5 * 21);
@@ -36,7 +54,7 @@ describe('table-svg-host', () => {
   it('escapes XML in cell content', () => {
     const svg = renderTableSvgHost(
       [{ isHeader: false, cells: [{ text: '<tag>', align: null }] }],
-      { theme: 'light', contentWidth: 300, fontSize: 14, lineHeight: 21, numLines: 1 }
+      { theme: 'light', fontSize: 14, lineHeight: 21, numLines: 1 }
     );
     expect(svg).toContain('&lt;tag&gt;');
   });

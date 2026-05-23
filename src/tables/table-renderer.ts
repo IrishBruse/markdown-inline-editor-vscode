@@ -9,7 +9,6 @@ import { renderTableSvgHost } from './table-svg-host';
 export type TableRenderOptions = {
   theme: 'default' | 'dark';
   fontFamily?: string;
-  contentWidth: number;
   numLines: number;
 };
 
@@ -28,21 +27,6 @@ function getEditorLineHeight(fontSize: number): number {
   return Math.max(8, Math.round(fontSize * lineHeightSetting));
 }
 
-/**
- * Estimates editor content width in pixels for table wrapping.
- */
-export function estimateEditorContentWidth(editor: vscode.TextEditor): number {
-  const editorConfig = vscode.workspace.getConfiguration('editor');
-  const fontSize = editorConfig.get<number>('fontSize', 14);
-  let maxChars = 80;
-  for (const range of editor.visibleRanges) {
-    for (let line = range.start.line; line <= range.end.line; line++) {
-      maxChars = Math.max(maxChars, editor.document.lineAt(line).text.length);
-    }
-  }
-  return Math.round(fontSize * 0.6 * Math.max(maxChars, 40));
-}
-
 export async function renderTableSvg(
   rows: TableRowData[],
   options: TableRenderOptions
@@ -51,10 +35,9 @@ export async function renderTableSvg(
   const editorConfig = vscode.workspace.getConfiguration('editor');
   const fontSize = editorConfig.get<number>('fontSize', 14);
   const lineHeight = getEditorLineHeight(fontSize);
-  const width = Math.max(200, options.contentWidth);
   const fallbackHeight = (options.numLines + 2) * lineHeight;
 
-  const cacheKey = `${JSON.stringify(rows)}|${darkMode}|${width}|${fontSize}|${lineHeight}|${options.fontFamily ?? ''}`;
+  const cacheKey = `${JSON.stringify(rows)}|${darkMode}|${fontSize}|${lineHeight}|${options.fontFamily ?? ''}`;
   const cached = tableSvgCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -64,7 +47,6 @@ export async function renderTableSvg(
     try {
       return renderTableSvgHost(rows, {
         theme: options.theme,
-        contentWidth: width,
         fontSize,
         lineHeight,
         fontFamily: options.fontFamily,
@@ -77,7 +59,7 @@ export async function renderTableSvg(
         : (typeof error === 'string' ? error : String(error) || 'Rendering failed');
       return createErrorSvg(
         message.trim().length > 0 ? message : 'Table rendering failed',
-        width,
+        200,
         fallbackHeight,
         darkMode,
         'Table Rendering Error'

@@ -65,7 +65,7 @@ function cellInlineStyle(
     'word-wrap:break-word',
     'overflow-wrap:break-word',
     'vertical-align:top',
-    'padding:6px 10px',
+    'padding:0 1px',
   ];
   if (textAlign === 'center') {
     parts.push('text-align:center');
