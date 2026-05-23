@@ -115,7 +115,9 @@ export function computeColumnDisplayWidths(rows: TableRowData[]): number[] {
   const widths = new Array(columnCount).fill(MIN_COLUMN_DISPLAY_WIDTH);
   for (const row of rows) {
     for (let i = 0; i < row.cells.length; i++) {
-      const w = measureTextWidth(row.cells[i].text);
+      const cell = row.cells[i];
+      const edgePad = (cell.leadingSpaces ?? 0) + (cell.trailingSpaces ?? 0);
+      const w = measureTextWidth(cell.text) + edgePad;
       if (w > widths[i]) {
         widths[i] = w;
       }
@@ -189,13 +191,15 @@ export function renderTableSvgHost(
       const styleAttr = fontStyle ? ` font-style="${fontStyle}"` : '';
 
       const align = cell.align;
-      let textX = x + CELL_PAD_X;
+      const leadingPadPx = (cell.leadingSpaces ?? 0) * charWidth;
+      const trailingPadPx = (cell.trailingSpaces ?? 0) * charWidth;
+      let textX = x + CELL_PAD_X + leadingPadPx;
       let anchorAttr = '';
       if (align === 'center') {
         textX = x + colWidth / 2;
         anchorAttr = ' text-anchor="middle"';
       } else if (align === 'right') {
-        textX = x + colWidth - CELL_PAD_X;
+        textX = x + colWidth - CELL_PAD_X - trailingPadPx;
         anchorAttr = ' text-anchor="end"';
       }
 

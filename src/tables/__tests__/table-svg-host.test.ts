@@ -75,6 +75,22 @@ describe('table-svg-host', () => {
     expect(height).toBeGreaterThanOrEqual(5 * 21);
   });
 
+  it('offsets left-aligned text by source leading spaces', () => {
+    const fontSize = 14;
+    const lineHeight = 21;
+    const charWidth = fontSize * 0.6;
+    const leadingSpaces = 2;
+    const svg = renderTableSvgHost(
+      [{
+        isHeader: false,
+        cells: [{ text: 'x', align: null, leadingSpaces, trailingSpaces: 0 }],
+      }],
+      { theme: 'dark', fontSize, lineHeight, numLines: 1 }
+    );
+    const textX = 4 + leadingSpaces * charWidth;
+    expect(svg).toContain(`x="${textX}"`);
+  });
+
   it('escapes XML in cell content', () => {
     const svg = renderTableSvgHost(
       [{ isHeader: false, cells: [{ text: '<tag>', align: null }] }],

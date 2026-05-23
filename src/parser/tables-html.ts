@@ -12,12 +12,41 @@ import {
 export type TableCellData = {
   text: string;
   align: 'left' | 'center' | 'right' | null;
+  /** Spaces/tabs between `|` and cell content in source. */
+  leadingSpaces?: number;
+  /** Spaces/tabs between cell content and `|` in source. */
+  trailingSpaces?: number;
   cellStyle?: {
     fontWeight?: string;
     fontStyle?: string;
     textDecoration?: string;
   };
 };
+
+/** Counts leading/trailing whitespace in raw cell text (between pipes). */
+export function countSourceEdgeSpaces(raw: string): { leading: number; trailing: number } {
+  let leading = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (ch === ' ' || ch === '\t') {
+      leading++;
+    } else {
+      break;
+    }
+  }
+
+  let trailing = 0;
+  for (let i = raw.length - 1; i >= leading; i--) {
+    const ch = raw[i];
+    if (ch === ' ' || ch === '\t') {
+      trailing++;
+    } else {
+      break;
+    }
+  }
+
+  return { leading, trailing };
+}
 
 export type TableRowData = {
   isHeader: boolean;
@@ -60,12 +89,20 @@ function escapeHtml(text: string): string {
 function cellInlineStyle(
   cellStyle: TableCellData['cellStyle'],
   textAlign: 'left' | 'center' | 'right' | null,
+  leadingSpaces = 0,
+  trailingSpaces = 0,
 ): string {
+  const padLeft =
+    leadingSpaces > 0 ? `calc(4px + ${leadingSpaces}ch)` : '4px';
+  const padRight =
+    textAlign === 'right' && trailingSpaces > 0
+      ? `calc(4px + ${trailingSpaces}ch)`
+      : '4px';
   const parts = [
     'word-wrap:break-word',
     'overflow-wrap:break-word',
     'vertical-align:top',
-    'padding:0 4px',
+    `padding:0 ${padRight} 0 ${padLeft}`,
   ];
   if (textAlign === 'center') {
     parts.push('text-align:center');
@@ -137,8 +174,15 @@ export function extractTableRowData(node: Table, source: string): {
       const rawContent = source.substring(cellRangeStart, cellRangeEnd);
       const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
       const { text, cellStyle } = getCellDisplay(astCell, rawContent);
+      const { leading, trailing } = countSourceEdgeSpaces(rawContent);
       const align = i < colAligns.length ? colAligns[i] : null;
-      cells.push({ text, align, cellStyle });
+      cells.push({
+        text,
+        align,
+        cellStyle,
+        leadingSpaces: leading,
+        trailingSpaces: trailing,
+      });
     }
 
     if (cells.length > 0) {
@@ -165,7 +209,12 @@ export function buildTableHtml(
 
     for (const cell of row.cells) {
       const style = [
-        cellInlineStyle(cell.cellStyle, cell.align),
+        cellInlineStyle(
+          cell.cellStyle,
+          cell.align,
+          cell.leadingSpaces ?? 0,
+          cell.trailingSpaces ?? 0,
+        ),
         `border:1px solid ${theme.border}`,
         `color:${theme.foreground}`,
         `background:${bg}`,

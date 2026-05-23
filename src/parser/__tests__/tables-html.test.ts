@@ -1,10 +1,21 @@
 import { readFileSync } from 'fs';
-import { buildTableHtml, extractTableRowData, tableHtmlThemeForMode } from '../tables-html';
+import {
+  buildTableHtml,
+  countSourceEdgeSpaces,
+  extractTableRowData,
+  tableHtmlThemeForMode,
+} from '../tables-html';
 import { MarkdownParser } from '../../parser';
 import { vi } from 'vitest';
 import { config } from '../../config';
 
 describe('tables-html', () => {
+  it('countSourceEdgeSpaces counts leading and trailing spaces', () => {
+    expect(countSourceEdgeSpaces(' a ')).toEqual({ leading: 1, trailing: 1 });
+    expect(countSourceEdgeSpaces('     c ')).toEqual({ leading: 5, trailing: 1 });
+    expect(countSourceEdgeSpaces('   ')).toEqual({ leading: 3, trailing: 0 });
+  });
+
   it('buildTableHtml wraps cells with word-break styles', () => {
     const html = buildTableHtml([
       {
@@ -79,5 +90,18 @@ describe('MarkdownParser - custom table mode', () => {
     expect(rows[0].isHeader).toBe(true);
     expect(rows[0].cells[0].text).toBe('Name');
     expect(rows[1].cells[1].text).toBe('5');
+  });
+
+  it('extractTableRowData preserves source leading spaces', () => {
+    const md = '| Name | Age |\n|------|-----|\n| Jo   | 5   |';
+    const ast = parser['processor'].parse(md);
+    const tableNode = (ast as { children: { type: string }[] }).children.find(
+      (n) => n.type === 'table'
+    );
+    expect(tableNode).toBeDefined();
+    const { rows } = extractTableRowData(tableNode as never, md);
+    expect(rows[0].cells[0].leadingSpaces).toBe(1);
+    expect(rows[1].cells[0].leadingSpaces).toBe(1);
+    expect(rows[1].cells[1].trailingSpaces).toBeGreaterThanOrEqual(1);
   });
 });
