@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeColumnDisplayWidths,
+  getSeparatorBorderY,
+  getSourceLineIndex,
   renderTableSvgHost,
   wrapTextToColumnWidth,
 } from '../table-svg-host';
@@ -28,6 +30,28 @@ describe('table-svg-host', () => {
     expect(svg).not.toContain('foreignObject');
   });
 
+  it('maps row indices to source lines with a gap for the separator', () => {
+    expect(getSourceLineIndex(0)).toBe(0);
+    expect(getSourceLineIndex(1)).toBe(2);
+    expect(getSourceLineIndex(2)).toBe(3);
+  });
+
+  it('places header and body rects meeting at the separator line midpoint', () => {
+    const lineHeight = 21;
+    const borderY = getSeparatorBorderY(lineHeight);
+    const svg = renderTableSvgHost(
+      [
+        { isHeader: true, cells: [{ text: 'Name', align: null }] },
+        { isHeader: false, cells: [{ text: 'Jo', align: null }] },
+      ],
+      { theme: 'dark', fontSize: 14, lineHeight, numLines: 3 }
+    );
+    expect(svg).toContain(`<rect x="0" y="0"`);
+    expect(svg).toContain(`height="${borderY}"`);
+    expect(svg).toContain(`<rect x="0" y="${borderY}"`);
+    expect(svg).toContain('height="63"');
+  });
+
   it('sizes columns from cell content instead of a fixed editor width', () => {
     const rows = [
       { isHeader: true, cells: [{ text: 'A', align: null }, { text: 'B', align: null }] },
@@ -38,7 +62,7 @@ describe('table-svg-host', () => {
       { theme: 'dark', fontSize: 14, lineHeight: 21, numLines: 3 }
     );
     const width = Number(svg.match(/width="([\d.]+)"/)?.[1] ?? 0);
-    expect(width).toBeLessThan(120);
+    expect(width).toBeLessThan(140);
     expect(computeColumnDisplayWidths(rows)).toEqual([1, 1]);
   });
 

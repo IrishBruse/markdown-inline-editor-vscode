@@ -15,11 +15,53 @@ export type TableSvgHostOptions = {
 };
 
 /** Horizontal inset inside a cell border (pixels). */
-const CELL_PAD_X = 1;
-/** Baseline offset from the top of a row's first text line (pixels). */
+const CELL_PAD_X = 4;
+/** Extra display-width units added to each column for breathing room. */
+const COLUMN_PAD_DISPLAY = 1;
+/** Baseline offset from the top of a source line (pixels). */
 const CELL_TEXT_TOP = 1;
 
 const MIN_COLUMN_DISPLAY_WIDTH = 1;
+
+/** Source line index of the GFM `|---|---|` separator row. */
+export const TABLE_SEPARATOR_SOURCE_LINE = 1;
+
+/**
+ * Maps a parsed table row index to the source line index in the markdown.
+ * Line 1 is always the `|---|---|` separator and has no rendered row.
+ */
+export function getSourceLineIndex(rowIndex: number): number {
+  return rowIndex === 0 ? 0 : rowIndex + 1;
+}
+
+/** Vertical center of the separator row (where `---` sits in source). */
+export function getSeparatorBorderY(lineHeight: number): number {
+  return (TABLE_SEPARATOR_SOURCE_LINE + 0.5) * lineHeight;
+}
+
+/** Top Y for a row background rect (header/body meet at the separator midpoint). */
+export function getRowRectY(rowIndex: number, lineHeight: number): number {
+  if (rowIndex === 0) {
+    return 0;
+  }
+  if (rowIndex === 1) {
+    return getSeparatorBorderY(lineHeight);
+  }
+  return getSourceLineIndex(rowIndex) * lineHeight;
+}
+
+/** Source line used to align cell text with editor lines. */
+export function getRowTextSourceLine(rowIndex: number): number {
+  return rowIndex === 0 ? 0 : getSourceLineIndex(rowIndex);
+}
+
+/** Minimum rect height so header and first body row share the separator line. */
+export function getRowMinRectHeight(rowIndex: number, lineHeight: number): number {
+  if (rowIndex === 0 || rowIndex === 1) {
+    return lineHeight * 1.5;
+  }
+  return lineHeight;
+}
 
 function escapeXml(text: string): string {
   return text
@@ -101,15 +143,19 @@ export function renderTableSvgHost(
   }
 
   const columnPixelWidths = columnDisplayWidths.map(
-    (displayWidth) => displayWidth * charWidth + CELL_PAD_X * 2
+    (displayWidth) =>
+      (displayWidth + COLUMN_PAD_DISPLAY * 2) * charWidth + CELL_PAD_X * 2
   );
   const width = columnPixelWidths.reduce((sum, colWidth) => sum + colWidth, 0);
 
   const parts: string[] = [];
-  let y = 0;
+  const sourceLineCount = Math.max(options.numLines, getSourceLineIndex(rows.length - 1) + 1);
 
-  for (const row of rows) {
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex];
     const cells = row.cells;
+    const y = getRowRectY(rowIndex, lineHeight);
+    const textSourceLine = getRowTextSourceLine(rowIndex);
     const cellLinesList = cells.map((cell, columnIndex) =>
       wrapTextToColumnWidth(
         cell.text,
@@ -124,6 +170,7 @@ export function renderTableSvgHost(
         rowHeight = h;
       }
     }
+    rowHeight = Math.max(rowHeight, getRowMinRectHeight(rowIndex, lineHeight));
 
     let x = 0;
     for (let c = 0; c < cells.length; c++) {
@@ -141,21 +188,31 @@ export function renderTableSvgHost(
       const weightAttr = fontWeight ? ` font-weight="${fontWeight}"` : '';
       const styleAttr = fontStyle ? ` font-style="${fontStyle}"` : '';
 
+      const align = cell.align;
+      let textX = x + CELL_PAD_X;
+      let anchorAttr = '';
+      if (align === 'center') {
+        textX = x + colWidth / 2;
+        anchorAttr = ' text-anchor="middle"';
+      } else if (align === 'right') {
+        textX = x + colWidth - CELL_PAD_X;
+        anchorAttr = ' text-anchor="end"';
+      }
+
+      const textBaseY = textSourceLine * lineHeight;
       for (let li = 0; li < lines.length; li++) {
-        const textY = y + CELL_TEXT_TOP + fontSize + li * lineHeight;
+        const textY = textBaseY + CELL_TEXT_TOP + fontSize + li * lineHeight;
         parts.push(
-          `<text x="${x + CELL_PAD_X}" y="${textY}" font-family="${escapeXml(fontFamily)}" ` +
-          `font-size="${fontSize}" fill="${theme.foreground}"${weightAttr}${styleAttr}>${escapeXml(lines[li])}</text>`
+          `<text x="${textX}" y="${textY}" font-family="${escapeXml(fontFamily)}" ` +
+          `font-size="${fontSize}" fill="${theme.foreground}"${weightAttr}${styleAttr}${anchorAttr}>` +
+          `${escapeXml(lines[li])}</text>`
         );
       }
       x += colWidth;
     }
-    y += rowHeight;
   }
 
-  const contentHeight = Math.max(1, y);
-  const minSourceHeight = Math.max(1, options.numLines) * lineHeight;
-  const totalHeight = Math.max(contentHeight, minSourceHeight);
+  const totalHeight = Math.max(1, sourceLineCount) * lineHeight;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${totalHeight}" ` +
     `viewBox="0 0 ${width} ${totalHeight}">${parts.join('')}</svg>`
