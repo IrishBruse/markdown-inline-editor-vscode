@@ -136,6 +136,17 @@
           "description": "Render LaTeX math inline ($...$ and $$...$$)",
           "markdownDescription": "Render LaTeX math inline ($...$ and $$...$$). When disabled, math delimiters are shown as plain text."
         },
+        "markdownInlineEditor.tables.renderingMode": {
+          "type": "string",
+          "enum": [
+            "decorated",
+            "raw",
+            "custom"
+          ],
+          "default": "decorated",
+          "description": "How GFM tables are rendered inline",
+          "markdownDescription": "How GitHub-flavored markdown tables are shown in the editor. `decorated` (default) replaces pipes and pads cells for aligned inline preview. `raw` leaves table source unchanged. `custom` uses the custom table renderer when available."
+        },
         "markdownInlineEditor.orderedLists.autoNumber": {
           "type": "boolean",
           "default": true,

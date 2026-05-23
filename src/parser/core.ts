@@ -1393,6 +1393,10 @@ export class MarkdownParser {
       return;
     }
 
+    if (config.tables.renderingMode() === 'raw') {
+      return;
+    }
+
     const tableStart = node.position!.start.offset!;
     const tableEnd = node.position!.end.offset!;
     const colWidths = this.computeColumnWidths(node, text);

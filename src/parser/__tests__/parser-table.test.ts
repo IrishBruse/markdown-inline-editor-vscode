@@ -1,3 +1,5 @@
+import { vi } from 'vitest';
+import { config } from '../../config';
 import { MarkdownParser, DecorationRange } from '../../parser';
 
 describe('MarkdownParser - Tables', () => {
@@ -222,6 +224,20 @@ describe('MarkdownParser - Tables', () => {
       const cells = byType(result, 'tableCell');
       const exprCell = cells.find((c) => c.replacement!.includes('100'));
       expect(exprCell).toBeDefined();
+    });
+  });
+
+  describe('when tables.renderingMode is raw', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should not emit table decorations', () => {
+      vi.spyOn(config.tables, 'renderingMode').mockReturnValue('raw');
+      const md = '| A | B |\n|---|---|\n| 1 | 2 |';
+      const result = parser.extractDecorations(md);
+      const tableTypes = ['tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell'];
+      expect(result.filter((d) => tableTypes.includes(d.type))).toHaveLength(0);
     });
   });
 

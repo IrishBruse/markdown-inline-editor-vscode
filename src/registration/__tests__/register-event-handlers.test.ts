@@ -139,6 +139,7 @@ describe('registerEventHandlers', () => {
       'markdownInlineEditor.decorations.frontmatterDelimiterOpacity',
       'markdownInlineEditor.decorations.codeBlockLanguageOpacity',
       'markdownInlineEditor.links.singleClickOpen',
+      'markdownInlineEditor.tables.renderingMode',
       'markdownInlineEditor.colors',
       'editor.fontSize',
       'editor.lineHeight',

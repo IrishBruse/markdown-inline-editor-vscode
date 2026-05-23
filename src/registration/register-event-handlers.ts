@@ -55,6 +55,10 @@ export function registerEventHandlers(
         decorator.recreateColorDependentTypes();
       }
 
+      if (event.affectsConfiguration('markdownInlineEditor.tables.renderingMode')) {
+        decorator.updateDecorationsForSelection();
+      }
+
       if (event.affectsConfiguration('editor.fontSize') || event.affectsConfiguration('editor.lineHeight')) {
         decorator.clearMathDecorationCache();
       }

@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 
 const SECTION = 'markdownInlineEditor' as const;
 
+export type TableRenderingMode = 'decorated' | 'raw' | 'custom';
+
 /** Matches `#` + 3, 4, 6, or 8 hex digits (#RGB, #RGBA, #RRGGBB, #RRGGBBAA). Invalid values are treated as unset. */
 const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 
@@ -69,6 +71,14 @@ export const config = {
       return vscode.workspace
         .getConfiguration(SECTION)
         .get<boolean>('math.enabled', true);
+    },
+  },
+  tables: {
+    /** `decorated`: inline table rendering (default). `raw`: source markdown as written. `custom`: reserved for custom renderer. */
+    renderingMode(): TableRenderingMode {
+      return vscode.workspace
+        .getConfiguration(SECTION)
+        .get<TableRenderingMode>('tables.renderingMode', 'decorated');
     },
   },
   orderedLists: {
