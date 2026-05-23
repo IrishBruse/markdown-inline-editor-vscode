@@ -15,6 +15,7 @@ export type PendingRender = {
   resolve: (svg: string) => void;
   reject: (error: Error) => void;
   timeoutId: NodeJS.Timeout;
+  kind: 'mermaid' | 'table';
 };
 
 /**
@@ -34,6 +35,10 @@ export type TableRenderRequest = {
   fontFamily?: string;
   fontSize: number;
   lineHeight: number;
+  foreground: string;
+  border: string;
+  headerBackground: string;
+  cellBackground: string;
   requestId: string;
 };
 

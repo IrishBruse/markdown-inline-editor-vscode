@@ -232,13 +232,13 @@ describe('MarkdownParser - Tables', () => {
       vi.restoreAllMocks();
     });
 
-    it('should not emit pipe/cell decorations', () => {
+    it('should not emit pipe/cell or hide decorations', () => {
       vi.spyOn(config.tables, 'renderingMode').mockReturnValue('custom');
       const md = '| A | B |\n|---|---|\n| 1 | 2 |';
       const result = parser.extractDecorations(md);
       const tableTypes = ['tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell'];
       expect(result.filter((d) => tableTypes.includes(d.type))).toHaveLength(0);
-      expect(result.some((d) => d.type === 'hide')).toBe(true);
+      expect(result.some((d) => d.type === 'hide')).toBe(false);
     });
   });
 

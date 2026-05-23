@@ -21,6 +21,20 @@ function getColorConfig(key: string): string | undefined {
   );
 }
 
+/**
+ * Fingerprint of workspace settings that affect markdown parse results.
+ * Included in parse cache keys so config changes trigger a re-parse.
+ */
+export function getParseSettingsKey(): string {
+  return [
+    config.tables.renderingMode(),
+    config.mentions.enabled(),
+    config.orderedLists.autoNumber(),
+    config.orderedLists.warnWhenSourceNumberDiffers(),
+    config.emojis.enabled(),
+  ].join('\0');
+}
+
 export const config = {
   diffView: {
     applyDecorations(): boolean {

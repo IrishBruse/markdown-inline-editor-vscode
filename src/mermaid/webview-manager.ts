@@ -71,6 +71,7 @@ export class MermaidWebviewManager {
             ),
           ])
             .then(() => {
+              this.refreshWebviewHtml();
               this.initTimeoutId = setTimeout(() => {
                 vscode.commands.executeCommand('workbench.view.explorer');
                 this.initTimeoutId = undefined;
@@ -99,8 +100,22 @@ export class MermaidWebviewManager {
    */
   setWebviewView(view: vscode.WebviewView): void {
     this.webviewView = view;
+    this.refreshWebviewHtml();
     // Resolve webviewLoaded immediately when webview is created
     this.resolveWebviewLoaded?.();
+  }
+
+  /**
+   * Reload webview HTML so table renderer updates apply after extension reload.
+   */
+  refreshWebviewHtml(): void {
+    if (!this.webviewView || !this._extensionContext) {
+      return;
+    }
+    this.webviewView.webview.html = this.getWebviewContent(
+      this.webviewView.webview,
+      this._extensionContext.extensionUri
+    );
   }
 
   /**
@@ -175,32 +190,105 @@ export class MermaidWebviewManager {
 
       const requestId = data.requestId;
 
+      function escapeXml(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      function wrapText(ctx, text, maxWidth) {
+        const words = String(text).split(/\\s+/).filter(Boolean);
+        if (words.length === 0) {
+          return [''];
+        }
+        const lines = [];
+        let line = '';
+        for (const word of words) {
+          const trial = line ? line + ' ' + word : word;
+          if (ctx.measureText(trial).width > maxWidth && line) {
+            lines.push(line);
+            line = word;
+          } else {
+            line = trial;
+          }
+        }
+        if (line) {
+          lines.push(line);
+        }
+        return lines;
+      }
+
+      function renderTableToNativeSvg(data) {
+        const pad = 8;
+        const fontFamily = data.fontFamily || 'sans-serif';
+        const font = data.fontSize + 'px ' + fontFamily;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.font = font;
+
+        const container = document.createElement('div');
+        container.style.cssText = 'position:absolute;left:-10000px;visibility:hidden;width:' + data.width + 'px;';
+        container.innerHTML = data.html;
+        document.body.appendChild(container);
+
+        const table = container.querySelector('table');
+        if (!table) {
+          container.remove();
+          throw new Error('No table element in HTML');
+        }
+
+        const tableRows = [...table.rows];
+        const numCols = tableRows[0]?.cells.length || 1;
+        const colWidth = data.width / numCols;
+        const innerWidth = Math.max(20, colWidth - pad * 2);
+        const parts = [];
+        let y = 0;
+
+        for (const row of tableRows) {
+          const cells = [...row.cells];
+          const cellLinesList = cells.map((cell) => wrapText(ctx, cell.textContent || '', innerWidth));
+          let rowHeight = pad * 2;
+          for (const lines of cellLinesList) {
+            const h = lines.length * data.lineHeight + pad * 2;
+            if (h > rowHeight) {
+              rowHeight = h;
+            }
+          }
+
+          let x = 0;
+          for (let c = 0; c < cells.length; c++) {
+            const isHeader = cells[c].tagName === 'TH';
+            const bg = isHeader ? data.headerBackground : data.cellBackground;
+            parts.push(
+              '<rect x="' + x + '" y="' + y + '" width="' + colWidth + '" height="' + rowHeight +
+              '" fill="' + bg + '" stroke="' + data.border + '" stroke-width="1"/>'
+            );
+            const lines = cellLinesList[c];
+            for (let li = 0; li < lines.length; li++) {
+              const textY = y + pad + data.fontSize + li * data.lineHeight;
+              parts.push(
+                '<text x="' + (x + pad) + '" y="' + textY +
+                '" font-family="' + escapeXml(fontFamily) +
+                '" font-size="' + data.fontSize +
+                '" fill="' + data.foreground + '">' +
+                escapeXml(lines[li]) + '</text>'
+              );
+            }
+            x += colWidth;
+          }
+          y += rowHeight;
+        }
+
+        container.remove();
+        const totalHeight = Math.max(1, y);
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="' + data.width + '" height="' + totalHeight +
+          '" viewBox="0 0 ' + data.width + ' ' + totalHeight + '">' + parts.join('') + '</svg>';
+      }
+
       if (data.type === 'table') {
         try {
-          const container = document.createElement('div');
-          const fontFamily = data.fontFamily || 'var(--vscode-font-family)';
-          container.style.cssText = [
-            'position:absolute',
-            'left:-10000px',
-            'top:0',
-            'visibility:hidden',
-            'width:' + data.width + 'px',
-            'font-family:' + fontFamily,
-            'font-size:' + data.fontSize + 'px',
-            'line-height:' + data.lineHeight + 'px',
-            'color:var(--vscode-foreground)',
-          ].join(';');
-          container.innerHTML = data.html;
-          document.body.appendChild(container);
-          const width = Math.max(1, Math.ceil(container.scrollWidth));
-          const height = Math.max(1, Math.ceil(container.scrollHeight));
-          const innerHtml = container.innerHTML;
-          container.remove();
-          const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">' +
-            '<foreignObject width="100%" height="100%">' +
-            '<div xmlns="http://www.w3.org/1999/xhtml" style="font-family:' + fontFamily + ';font-size:' + data.fontSize + 'px;line-height:' + data.lineHeight + 'px;color:var(--vscode-foreground);">' +
-            innerHtml +
-            '</div></foreignObject></svg>';
+          const svg = renderTableToNativeSvg(data);
           vscode.postMessage({ svg, requestId });
         } catch (error) {
           const errorMessage = error?.message || error?.toString?.() || String(error) || 'Table render failed';
@@ -272,8 +360,8 @@ export class MermaidWebviewManager {
       }
     });
     
-    // Signal ready after mermaid is loaded
-    vscode.postMessage({ ready: true });
+    // Signal ready after mermaid is loaded (version bumps force extension to refresh webview HTML)
+    vscode.postMessage({ ready: true, rendererVersion: 2 });
   </script>
 </body>
 </html>`;
@@ -297,11 +385,16 @@ export class MermaidWebviewManager {
         // Create a proper error SVG - height will be adjusted in getMermaidDecoration
         const isDark = vscode.window.activeColorTheme.kind === ColorThemeKind.Dark ||
           vscode.window.activeColorTheme.kind === ColorThemeKind.HighContrast;
+        const pending = this.pendingRenders.get(requestId);
+        const errorTitle = pending?.kind === 'table'
+          ? 'Table Rendering Error'
+          : 'Mermaid Rendering Error';
         const errorSvg = createErrorSvg(
           message.error,
           400, // Default width - will be resized later
           200, // Default height - will be resized later
-          isDark
+          isDark,
+          errorTitle
         );
         resolve(errorSvg);
         this.pendingRenders.delete(requestId);
@@ -427,11 +520,13 @@ export class MermaidWebviewManager {
         reject(error);
       };
       
+      const kind = data.type === 'table' ? 'table' : 'mermaid';
       // Store resolve/reject with timeout ID in Map
-      this.pendingRenders.set(requestId, { 
-        resolve: wrappedResolve, 
+      this.pendingRenders.set(requestId, {
+        resolve: wrappedResolve,
         reject: wrappedReject,
-        timeoutId 
+        timeoutId,
+        kind,
       });
 
       try {

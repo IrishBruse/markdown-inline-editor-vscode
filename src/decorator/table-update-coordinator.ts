@@ -4,7 +4,7 @@ import type { TableBlock } from '../parser';
 import { renderTableSvg, estimateEditorContentWidth } from '../tables/table-renderer';
 import { svgToDataUri } from '../mermaid/mermaid-renderer';
 import { TableDiagramDecorations } from './table-diagram-decorations';
-import { createRange, isSelectionOrCursorInsideOffsets } from './editor-decoration-applier';
+import { createRange, isCaretInsideOffsets } from './editor-decoration-applier';
 import { logWarn } from '../logging';
 import { createErrorSvg } from '../mermaid/error-handler';
 
@@ -64,6 +64,13 @@ async function mapWithConcurrency<T, R>(
 
 export class TableUpdateCoordinator {
   private tableUpdateToken = 0;
+  private latestUpdateGeneration = 0;
+
+  /** Cancels in-flight table renders (e.g. when rendering mode changes). */
+  invalidate(): void {
+    this.tableUpdateToken++;
+    this.latestUpdateGeneration++;
+  }
 
   constructor(
     private readonly tableDecorations: TableDiagramDecorations,
@@ -81,7 +88,8 @@ export class TableUpdateCoordinator {
       return;
     }
 
-    const token = ++this.tableUpdateToken;
+    const generation = ++this.latestUpdateGeneration;
+    const runToken = this.tableUpdateToken;
     const theme = window.activeColorTheme.kind === ColorThemeKind.Dark ||
       window.activeColorTheme.kind === ColorThemeKind.HighContrast
       ? 'dark'
@@ -97,11 +105,11 @@ export class TableUpdateCoordinator {
       tableBlocks,
       this.maxConcurrency,
       async (block): Promise<{ key: string; range: Range; dataUri: string } | null> => {
-        if (token !== this.tableUpdateToken || editor.document.version !== documentVersion) {
+        if (runToken !== this.tableUpdateToken || editor.document.version !== documentVersion) {
           return null;
         }
 
-        if (isSelectionOrCursorInsideOffsets(
+        if (isCaretInsideOffsets(
           block.startPos,
           block.endPos,
           normalizedText,
@@ -137,7 +145,8 @@ export class TableUpdateCoordinator {
                 message.trim().length > 0 ? message : 'Table rendering failed',
                 contentWidth,
                 block.numLines * 20,
-                theme === 'dark'
+                theme === 'dark',
+                'Table Rendering Error'
               );
               return svgToDataUri(errorSvg);
             }
@@ -146,7 +155,7 @@ export class TableUpdateCoordinator {
         }
 
         const dataUri = await dataUriPromise;
-        if (token !== this.tableUpdateToken || editor.document.version !== documentVersion) {
+        if (runToken !== this.tableUpdateToken || editor.document.version !== documentVersion) {
           return null;
         }
 
@@ -164,7 +173,27 @@ export class TableUpdateCoordinator {
       rangesByKey.set(result.key, ranges);
     }
 
-    if (token !== this.tableUpdateToken || editor.document.version !== documentVersion) {
+    if (
+      generation !== this.latestUpdateGeneration ||
+      runToken !== this.tableUpdateToken ||
+      editor.document.version !== documentVersion
+    ) {
+      return;
+    }
+
+    if (rangesByKey.size === 0) {
+      const allCaretsInsideTables = tableBlocks.length > 0 && tableBlocks.every((block) =>
+        isCaretInsideOffsets(
+          block.startPos,
+          block.endPos,
+          normalizedText,
+          editor.selections,
+          editor.document
+        )
+      );
+      if (allCaretsInsideTables) {
+        this.tableDecorations.clear(editor);
+      }
       return;
     }
 

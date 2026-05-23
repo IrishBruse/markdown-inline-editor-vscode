@@ -1419,11 +1419,8 @@ export class MarkdownParser {
       if (rows.length === 0) {
         return;
       }
-      decorations.push({
-        startPos: tableStart,
-        endPos: tableEnd,
-        type: 'hide',
-      });
+      // Source is hidden by the table overlay decoration (transparent text), not by
+      // `hide` decorations. Using `hide` here leaves blank gaps while SVGs load async.
       tableBlocks.push({
         startPos: tableStart,
         endPos: tableEnd,

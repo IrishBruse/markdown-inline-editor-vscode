@@ -22,7 +22,13 @@ function escapeXml(text: string): string {
  * @param isDark - Whether to use dark theme colors
  * @returns SVG string with error message
  */
-export function createErrorSvg(errorMessage: string, width: number, height: number, isDark: boolean): string {
+export function createErrorSvg(
+  errorMessage: string,
+  width: number,
+  height: number,
+  isDark: boolean,
+  title: string = 'Mermaid Rendering Error'
+): string {
   const bgColor = isDark ? '#2d2d2d' : '#f5f5f5';
   const textColor = isDark ? '#ff6b6b' : '#d32f2f';
   const borderColor = isDark ? '#ff6b6b' : '#d32f2f';
@@ -72,7 +78,7 @@ export function createErrorSvg(errorMessage: string, width: number, height: numb
   <rect width="${width}" height="${contentHeight}" fill="${bgColor}" stroke="${borderColor}" stroke-width="2" rx="4"/>
   <circle cx="${padding + iconSize / 2}" cy="${padding + iconSize / 2}" r="${iconSize / 2}" fill="${borderColor}" opacity="0.2"/>
   <text x="${padding + iconSize / 2}" y="${padding + iconSize / 2 + 5}" font-family="Arial, sans-serif" font-size="24" fill="${borderColor}" text-anchor="middle" font-weight="bold">⚠</text>
-  <text x="${padding + iconSize + 15}" y="${titleY}" font-family="Arial, sans-serif" font-size="14" fill="${textColor}" font-weight="bold">Mermaid Rendering Error</text>
+  <text x="${padding + iconSize + 15}" y="${titleY}" font-family="Arial, sans-serif" font-size="14" fill="${textColor}" font-weight="bold">${escapeXml(title)}</text>
   <text x="${padding}" y="${messageStartY}" font-family="monospace, Arial, sans-serif" font-size="11" fill="${secondaryTextColor}">
     ${textLines}
   </text>

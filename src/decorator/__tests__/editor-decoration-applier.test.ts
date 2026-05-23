@@ -4,6 +4,7 @@ import {
   applyFilteredDecorations,
   buildScopeEntries,
   createRange,
+  isCaretInsideOffsets,
   isSelectionOrCursorInsideOffsets,
 } from '../editor-decoration-applier';
 
@@ -106,6 +107,29 @@ describe('editor-decoration-applier', () => {
     expect(
       isSelectionOrCursorInsideOffsets(0, 2, document.getText(), [outside], document as any)
     ).toBe(false);
+  });
+
+  it('isCaretInsideOffsets ignores non-empty selections that span the range', () => {
+    const document = new (vscode.TextDocument as any)(
+      vscode.Uri.file('/test.md'),
+      'markdown',
+      1,
+      'abcdef'
+    );
+    const span = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
+    const caretOutside = new vscode.Range(new vscode.Position(0, 5), new vscode.Position(0, 5));
+
+    expect(
+      isCaretInsideOffsets(0, 3, document.getText(), [span], document as any)
+    ).toBe(false);
+    expect(
+      isCaretInsideOffsets(0, 3, document.getText(), [caretOutside], document as any)
+    ).toBe(false);
+    expect(
+      isCaretInsideOffsets(0, 3, document.getText(), [
+        new vscode.Range(new vscode.Position(0, 1), new vscode.Position(0, 1)),
+      ], document as any)
+    ).toBe(true);
   });
 
   it('applies ranges, render options, ghost faint, and reports non-empty counts', () => {

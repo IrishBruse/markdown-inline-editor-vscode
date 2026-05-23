@@ -67,6 +67,31 @@ export function isSelectionOrCursorInsideOffsets(
   });
 }
 
+/**
+ * True when any caret (empty selection) is inside the offset span.
+ * Use for table overlays: only hide preview when the user is editing in the table,
+ * not when a selection range merely passes through while dragging.
+ */
+export function isCaretInsideOffsets(
+  startPos: number,
+  endPos: number,
+  normalizedText: string,
+  selections: readonly Range[],
+  document: TextDocument
+): boolean {
+  const mappedStart = mapNormalizedToOriginal(startPos, normalizedText);
+  const mappedEnd = mapNormalizedToOriginal(endPos, normalizedText);
+
+  return selections.some((selection) => {
+    const selectionStart = document.offsetAt(selection.start);
+    const selectionEnd = document.offsetAt(selection.end);
+    if (selectionStart !== selectionEnd) {
+      return false;
+    }
+    return selectionStart >= mappedStart && selectionStart <= mappedEnd;
+  });
+}
+
 export function applyFilteredDecorations(
   editor: TextEditor,
   filteredDecorations: Map<DecorationType, Array<Range | DecorationOptions>>,

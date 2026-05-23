@@ -1,4 +1,5 @@
 import { type TextEditor, window, Uri, type TextEditorDecorationType, type Range, ColorThemeKind } from 'vscode';
+import { MERMAID_CONSTANTS } from '../mermaid/constants';
 
 type TableDecorationEntry = {
   decorationType: TextEditorDecorationType;
@@ -10,7 +11,9 @@ export class TableDiagramDecorations {
   private cache = new Map<string, TableDecorationEntry>();
   private usageCounter = 0;
 
-  constructor(private maxEntries: number = 50) {}
+  constructor(
+    private maxEntries: number = MERMAID_CONSTANTS.DECORATION_CACHE_MAX_ENTRIES,
+  ) {}
 
   apply(editor: TextEditor, rangesByKey: Map<string, Range[]>, dataUrisByKey: Map<string, string>): void {
     const usedKeys = new Set<string>();
@@ -28,6 +31,7 @@ export class TableDiagramDecorations {
     }
 
     this.disposeUnused(editor, usedKeys);
+    this.trimCacheAfterApply(editor, usedKeys);
   }
 
   clear(editor: TextEditor): void {
@@ -39,6 +43,9 @@ export class TableDiagramDecorations {
   }
 
   clearAll(): void {
+    for (const entry of this.cache.values()) {
+      entry.decorationType.dispose();
+    }
     this.cache.clear();
   }
 
@@ -69,7 +76,6 @@ export class TableDiagramDecorations {
       isDarkTheme,
     };
     this.cache.set(key, entry);
-    this.evictIfNeeded();
     return entry;
   }
 
@@ -84,14 +90,28 @@ export class TableDiagramDecorations {
     }
   }
 
-  private evictIfNeeded(): void {
-    if (this.cache.size <= this.maxEntries) {
-      return;
+  /**
+   * Shrinks the cache after a full apply pass. Eviction is deferred so entries
+   * created during the apply loop are not disposed before all ranges are set.
+   */
+  private trimCacheAfterApply(editor: TextEditor, protectKeys: Set<string>): void {
+    while (this.cache.size > this.maxEntries) {
+      const lruKey = this.findLruKey(protectKeys);
+      if (!lruKey) {
+        break;
+      }
+      this.evictKey(editor, lruKey);
     }
+  }
 
+  private findLruKey(protectKeys: Set<string>): string | undefined {
     let lruKey: string | undefined;
     let lruAccess = Infinity;
+
     for (const [key, entry] of this.cache.entries()) {
+      if (protectKeys.has(key)) {
+        continue;
+      }
       if (entry.lastUsed < lruAccess) {
         lruAccess = entry.lastUsed;
         lruKey = key;
@@ -99,9 +119,26 @@ export class TableDiagramDecorations {
     }
 
     if (lruKey) {
-      const entry = this.cache.get(lruKey);
-      entry?.decorationType.dispose();
-      this.cache.delete(lruKey);
+      return lruKey;
     }
+
+    for (const [key, entry] of this.cache.entries()) {
+      if (entry.lastUsed < lruAccess) {
+        lruAccess = entry.lastUsed;
+        lruKey = key;
+      }
+    }
+
+    return lruKey;
+  }
+
+  private evictKey(editor: TextEditor, key: string): void {
+    const entry = this.cache.get(key);
+    if (!entry) {
+      return;
+    }
+    editor.setDecorations(entry.decorationType, []);
+    entry.decorationType.dispose();
+    this.cache.delete(key);
   }
 }

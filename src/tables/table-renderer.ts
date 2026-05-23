@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
 import { LRUCache } from '../utils/lru-cache';
 import { MERMAID_CONSTANTS } from '../mermaid/constants';
-import { getMermaidWebviewManager } from '../mermaid/mermaid-renderer';
-import { processSvg } from '../mermaid/svg-processor';
 import { createErrorSvg } from '../mermaid/error-handler';
-import { buildTableHtml, tableHtmlThemeForMode, type TableRowData } from '../parser/tables-html';
+import { tableHtmlThemeForMode, type TableRowData } from '../parser/tables-html';
 import { logWarn } from '../logging';
+import { renderTableSvgHost } from './table-svg-host';
 
 export type TableRenderOptions = {
   theme: 'default' | 'dark';
@@ -49,38 +48,28 @@ export async function renderTableSvg(
   options: TableRenderOptions
 ): Promise<string> {
   const darkMode = options.theme === 'dark';
-  const theme = tableHtmlThemeForMode(darkMode);
-  const html = buildTableHtml(rows, theme);
   const editorConfig = vscode.workspace.getConfiguration('editor');
   const fontSize = editorConfig.get<number>('fontSize', 14);
   const lineHeight = getEditorLineHeight(fontSize);
   const width = Math.max(200, options.contentWidth);
   const fallbackHeight = (options.numLines + 2) * lineHeight;
 
-  const cacheKey = `${html}|${darkMode}|${width}|${fontSize}|${lineHeight}|${options.fontFamily ?? ''}`;
+  const cacheKey = `${JSON.stringify(rows)}|${darkMode}|${width}|${fontSize}|${lineHeight}|${options.fontFamily ?? ''}`;
   const cached = tableSvgCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const promise = (async () => {
-    const manager = getMermaidWebviewManager();
-    if (!manager) {
-      throw new Error('Table renderer not initialized. Mermaid webview is required.');
-    }
-
+  const promise = Promise.resolve().then(() => {
     try {
-      const svgString = await manager.requestTableSvg({
-        html,
-        width,
-        fontFamily: options.fontFamily,
+      return renderTableSvgHost(rows, {
+        theme: options.theme,
+        contentWidth: width,
         fontSize,
         lineHeight,
-      });
-      const heightMatch = svgString.match(/height="([\d.]+)"/);
-      const measuredHeight = heightMatch ? parseFloat(heightMatch[1]) : fallbackHeight;
-      const height = Math.max(fallbackHeight, measuredHeight);
-      return processSvg(svgString, height, width);
+        fontFamily: options.fontFamily,
+        numLines: options.numLines,
+      }, tableHtmlThemeForMode(darkMode));
     } catch (error) {
       logWarn('Table render failed', error);
       const message = error instanceof Error
@@ -90,10 +79,11 @@ export async function renderTableSvg(
         message.trim().length > 0 ? message : 'Table rendering failed',
         width,
         fallbackHeight,
-        darkMode
+        darkMode,
+        'Table Rendering Error'
       );
     }
-  })();
+  });
 
   tableSvgCache.set(cacheKey, promise);
   promise.catch(() => {

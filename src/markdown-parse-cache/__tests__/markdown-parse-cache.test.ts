@@ -1,3 +1,5 @@
+import { vi } from 'vitest';
+import { config } from '../../config';
 import { MarkdownParser } from '../../parser';
 import { MarkdownParseCache } from '../../markdown-parse-cache';
 import { TextDocument, Uri } from '../../test/__mocks__/vscode';
@@ -39,6 +41,18 @@ describe('MarkdownParseCache', () => {
 
     expect(first).not.toBe(second);
     expect(second.version).toBe(2);
+  });
+
+  it('reparses when parse-affecting settings change', () => {
+    const cache = new MarkdownParseCache(parser, 10);
+    const document = new TextDocument(Uri.file('/test.md'), 'markdown', 1, '| A |\n|---|---|\n| 1 |');
+
+    const first = cache.get(document);
+    vi.spyOn(config.tables, 'renderingMode').mockReturnValue('custom');
+    const second = cache.get(document);
+
+    expect(first).not.toBe(second);
+    vi.restoreAllMocks();
   });
 
   it('evicts least recently used entry when cache is full', () => {

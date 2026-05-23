@@ -488,14 +488,17 @@ export class Decorator {
   }
 
   /**
-   * Clears cached table SVG renders. Called when editor font or theme changes.
+   * Clears cached table SVG renders and parse results for the active document.
+   * Called when table rendering mode or editor font/theme changes.
    */
   clearTableDecorationCache(): void {
     clearTableSvgCache();
-    this.tableDecorations.clearAll();
+    this.tableCoordinator.invalidate();
     if (this.activeEditor) {
       this.tableDecorations.clear(this.activeEditor);
+      this.invalidateCache(this.activeEditor.document);
     }
+    this.tableDecorations.clearAll();
   }
 
   private isSelectionOrCursorInsideOffsets(

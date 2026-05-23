@@ -1,5 +1,6 @@
 import type * as vscode from 'vscode';
 import type { DecorationRange, ScopeRange, MermaidBlock, TableBlock, MathRegion, MarkdownParser } from './parser';
+import { getParseSettingsKey } from './config';
 import { logDebug, logPerformanceMetric } from './logging';
 
 export type ParseEntry = {
@@ -14,6 +15,7 @@ export type ParseEntry = {
 
 type CacheEntry = ParseEntry & {
   lastAccessed: number;
+  settingsKey: string;
 };
 
 export class MarkdownParseCache {
@@ -24,8 +26,9 @@ export class MarkdownParseCache {
 
   get(document: vscode.TextDocument): ParseEntry {
     const cacheKey = document.uri.toString();
+    const settingsKey = getParseSettingsKey();
     const cached = this.cache.get(cacheKey);
-    if (cached && cached.version === document.version) {
+    if (cached && cached.version === document.version && cached.settingsKey === settingsKey) {
       cached.lastAccessed = ++this.accessCounter;
       logDebug('parse cache hit', { uri: cacheKey, version: document.version });
       return cached;
@@ -44,6 +47,7 @@ export class MarkdownParseCache {
       tableBlocks,
       mathRegions,
       lastAccessed: ++this.accessCounter,
+      settingsKey,
     };
 
     if (this.cache.size >= this.maxEntries && !this.cache.has(cacheKey)) {
