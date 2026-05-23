@@ -56,15 +56,18 @@ export function registerEventHandlers(
       }
 
       if (event.affectsConfiguration('markdownInlineEditor.tables.renderingMode')) {
+        decorator.clearTableDecorationCache();
         decorator.updateDecorationsForSelection();
       }
 
       if (event.affectsConfiguration('editor.fontSize') || event.affectsConfiguration('editor.lineHeight')) {
         decorator.clearMathDecorationCache();
+        decorator.clearTableDecorationCache();
       }
     }),
     vscode.window.onDidChangeActiveColorTheme(() => {
       decorator.recreateColorDependentTypes();
+      decorator.clearTableDecorationCache();
     }),
   ];
 }

@@ -196,6 +196,13 @@ export { ensureSvgDimensions, svgToDataUriBase64 } from './svg-processor';
 /**
  * Dispose and clean up the Mermaid renderer
  */
+/**
+ * Returns the shared webview manager (initialized by initMermaidRenderer).
+ */
+export function getMermaidWebviewManager(): MermaidWebviewManager | undefined {
+  return webviewManager;
+}
+
 export function disposeMermaidRenderer(): void {
   if (webviewManager) {
     webviewManager.dispose();

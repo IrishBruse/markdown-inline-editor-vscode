@@ -1,3 +1,5 @@
+import type { TableRowData } from './tables-html';
+
 export interface DecorationRange {
   startPos: number;
   endPos: number;
@@ -30,6 +32,14 @@ export interface MermaidBlock {
   numLines: number;
 }
 
+export interface TableBlock {
+  startPos: number;
+  endPos: number;
+  numLines: number;
+  columnCount: number;
+  rows: TableRowData[];
+}
+
 export interface MathRegion {
   startPos: number;
   endPos: number;
@@ -42,6 +52,7 @@ export interface ParseResult {
   decorations: DecorationRange[];
   scopes: ScopeRange[];
   mermaidBlocks: MermaidBlock[];
+  tableBlocks: TableBlock[];
   mathRegions: MathRegion[];
 }
 

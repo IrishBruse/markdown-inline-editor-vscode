@@ -27,6 +27,16 @@ export type RenderRequest = {
   requestId: string;
 };
 
+export type TableRenderRequest = {
+  type: 'table';
+  html: string;
+  width: number;
+  fontFamily?: string;
+  fontSize: number;
+  lineHeight: number;
+  requestId: string;
+};
+
 /**
  * Message received from webview
  */

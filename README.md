@@ -89,7 +89,7 @@ The extension uses an intelligent **3-state syntax shadowing system** that adapt
 - **Blockquotes, lists, and checkboxes** stay fully rendered on active lines unless you directly click on the marker
 - **Headings** show raw `#` markers and remove styling when cursor is on the heading line
 - **Ordered list numbers** always remain visible
-- **Tables** switch the **entire** table to raw Markdown (all rows) when your cursor or selection is on any line inside the table
+- **Tables** switch the **entire** table to raw Markdown (all rows) when your cursor or selection is on any line inside the table (decorated and custom modes)
 
 Configure ghost opacity: `markdownInlineEditor.decorations.ghostFaintOpacity` (default: 0.3)
 Configure emoji shortcodes: `markdownInlineEditor.emojis.enabled` (default: true)
@@ -146,6 +146,8 @@ Everything works out of the box. If you want to tune the experience, open Settin
   - Disable if you prefer seeing `:shortcode:` text.
 - **Syntax colors** (`colors.heading1` … `colors.checkbox`, 15 options including `inlineCodeBackground`)
   - Optional hex overrides (e.g. `#e06c75`) for headings, links, list markers, inline code, inline code background, emphasis, blockquote, image, horizontal rule, checkbox. Unset or invalid values use theme-derived defaults (for headings, unset keeps the editor’s markdown heading syntax colors rather than forcing a single foreground). See [Customizable Syntax Colors][feat-customizable-syntax-colors].
+- **Table rendering** (`tables.renderingMode`, default `decorated`)
+  - `decorated`: monospace grid with padded cells. `raw`: source pipes unchanged. `custom`: preview-style table with per-cell word wrapping (SVG overlay); cursor in the table shows raw GFM for editing.
 
 ### Example `settings.json`
 
@@ -154,7 +156,8 @@ Everything works out of the box. If you want to tune the experience, open Settin
   "markdownInlineEditor.decorations.ghostFaintOpacity": 0.25,
   "markdownInlineEditor.defaultBehaviors.diffView.applyDecorations": false,
   "markdownInlineEditor.links.singleClickOpen": false,
-  "markdownInlineEditor.emojis.enabled": true
+  "markdownInlineEditor.emojis.enabled": true,
+  "markdownInlineEditor.tables.renderingMode": "custom"
 }
 ```
 

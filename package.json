@@ -145,7 +145,7 @@
           ],
           "default": "decorated",
           "description": "How GFM tables are rendered inline",
-          "markdownDescription": "How GitHub-flavored markdown tables are shown in the editor. `decorated` (default) replaces pipes and pads cells for aligned inline preview. `raw` leaves table source unchanged. `custom` uses the custom table renderer when available."
+          "markdownDescription": "How GitHub-flavored markdown tables are shown in the editor. `decorated` (default) replaces pipes and pads cells for aligned inline preview. `raw` leaves table source unchanged. `custom` renders a preview-style HTML table with per-cell word wrapping (SVG overlay); place the cursor in the table to edit raw GFM."
         },
         "markdownInlineEditor.orderedLists.autoNumber": {
           "type": "boolean",

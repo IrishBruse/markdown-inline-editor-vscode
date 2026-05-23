@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ColorThemeKind } from 'vscode';
-import type { PendingRender, RenderResponse } from './types';
+import type { PendingRender, RenderResponse, TableRenderRequest } from './types';
 import { MERMAID_CONSTANTS } from './constants';
 import { createErrorSvg } from './error-handler';
 import { logWarn } from '../logging';
@@ -169,11 +169,50 @@ export class MermaidWebviewManager {
     window.addEventListener('message', async (event) => {
       const data = event.data;
       
-      if (!data || !data.source) {
+      if (!data) {
         return;
       }
 
       const requestId = data.requestId;
+
+      if (data.type === 'table') {
+        try {
+          const container = document.createElement('div');
+          const fontFamily = data.fontFamily || 'var(--vscode-font-family)';
+          container.style.cssText = [
+            'position:absolute',
+            'left:-10000px',
+            'top:0',
+            'visibility:hidden',
+            'width:' + data.width + 'px',
+            'font-family:' + fontFamily,
+            'font-size:' + data.fontSize + 'px',
+            'line-height:' + data.lineHeight + 'px',
+            'color:var(--vscode-foreground)',
+          ].join(';');
+          container.innerHTML = data.html;
+          document.body.appendChild(container);
+          const width = Math.max(1, Math.ceil(container.scrollWidth));
+          const height = Math.max(1, Math.ceil(container.scrollHeight));
+          const innerHtml = container.innerHTML;
+          container.remove();
+          const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">' +
+            '<foreignObject width="100%" height="100%">' +
+            '<div xmlns="http://www.w3.org/1999/xhtml" style="font-family:' + fontFamily + ';font-size:' + data.fontSize + 'px;line-height:' + data.lineHeight + 'px;color:var(--vscode-foreground);">' +
+            innerHtml +
+            '</div></foreignObject></svg>';
+          vscode.postMessage({ svg, requestId });
+        } catch (error) {
+          const errorMessage = error?.message || error?.toString?.() || String(error) || 'Table render failed';
+          vscode.postMessage({ error: errorMessage, requestId });
+        }
+        return;
+      }
+
+      if (!data.source) {
+        return;
+      }
+
       const diagramType = getDiagramType(data.source);
       
       try {
@@ -306,8 +345,28 @@ export class MermaidWebviewManager {
   /**
    * Request SVG rendering with timeout and optional cancellation
    */
+  async requestTableSvg(
+    data: Omit<TableRenderRequest, 'requestId' | 'type'>,
+    timeoutMs: number = MERMAID_CONSTANTS.REQUEST_TIMEOUT_MS,
+    cancellationToken?: vscode.CancellationToken
+  ): Promise<string> {
+    return this.requestWebviewSvg(
+      { type: 'table', ...data },
+      timeoutMs,
+      cancellationToken
+    );
+  }
+
   async requestSvg(
     data: { source: string; darkMode: boolean; fontFamily?: string },
+    timeoutMs: number = MERMAID_CONSTANTS.REQUEST_TIMEOUT_MS,
+    cancellationToken?: vscode.CancellationToken
+  ): Promise<string> {
+    return this.requestWebviewSvg({ ...data }, timeoutMs, cancellationToken);
+  }
+
+  private async requestWebviewSvg(
+    data: Record<string, unknown>,
     timeoutMs: number = MERMAID_CONSTANTS.REQUEST_TIMEOUT_MS,
     cancellationToken?: vscode.CancellationToken
   ): Promise<string> {

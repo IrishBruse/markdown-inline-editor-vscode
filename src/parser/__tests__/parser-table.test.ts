@@ -227,6 +227,21 @@ describe('MarkdownParser - Tables', () => {
     });
   });
 
+  describe('when tables.renderingMode is custom', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should not emit pipe/cell decorations', () => {
+      vi.spyOn(config.tables, 'renderingMode').mockReturnValue('custom');
+      const md = '| A | B |\n|---|---|\n| 1 | 2 |';
+      const result = parser.extractDecorations(md);
+      const tableTypes = ['tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell'];
+      expect(result.filter((d) => tableTypes.includes(d.type))).toHaveLength(0);
+      expect(result.some((d) => d.type === 'hide')).toBe(true);
+    });
+  });
+
   describe('when tables.renderingMode is raw', () => {
     afterEach(() => {
       vi.restoreAllMocks();

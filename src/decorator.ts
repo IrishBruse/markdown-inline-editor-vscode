@@ -1,5 +1,5 @@
 import { DecorationOptions, Range, TextEditor, TextDocument, TextDocumentChangeEvent, window, TextEditorSelectionChangeKind, Memento } from 'vscode';
-import { DecorationRange, DecorationType, MermaidBlock, MathRegion, ScopeRange } from './parser';
+import { DecorationRange, DecorationType, MermaidBlock, TableBlock, MathRegion, ScopeRange } from './parser';
 import { config } from './config';
 import { isDiffLikeUri, isDiffViewVisible } from './diff-context';
 import { MarkdownParseCache } from './markdown-parse-cache';
@@ -15,6 +15,9 @@ import { DecorationTypeRegistry } from './decorator/decoration-type-registry';
 import { filterDecorationsForEditor, ScopeEntry } from './decorator/visibility-model';
 import { handleCheckboxClick } from './decorator/checkbox-toggle';
 import { MermaidDiagramDecorations } from './decorator/mermaid-diagram-decorations';
+import { TableDiagramDecorations } from './decorator/table-diagram-decorations';
+import { TableUpdateCoordinator } from './decorator/table-update-coordinator';
+import { clearTableSvgCache } from './tables/table-renderer';
 import { DecoratorUpdateScheduler } from './decorator/update-scheduler';
 import { MathDecorations } from './math/math-decorations';
 import { MermaidHoverIndicatorDecorationType } from './decorations';
@@ -29,6 +32,7 @@ const PERFORMANCE_CONSTANTS = {
   DEBOUNCE_TIMEOUT_MS: 150,
   IDLE_CALLBACK_TIMEOUT_MS: 300,
   MERMAID_MAX_CONCURRENCY: 4,
+  TABLE_MAX_CONCURRENCY: 2,
 } as const;
 
 
@@ -67,6 +71,11 @@ export class Decorator {
   private readonly mermaidCoordinator = new MermaidUpdateCoordinator(
     this.mermaidDecorations,
     PERFORMANCE_CONSTANTS.MERMAID_MAX_CONCURRENCY
+  );
+  private tableDecorations = new TableDiagramDecorations();
+  private readonly tableCoordinator = new TableUpdateCoordinator(
+    this.tableDecorations,
+    PERFORMANCE_CONSTANTS.TABLE_MAX_CONCURRENCY
   );
   private mathDecorations = new MathDecorations();
   private mermaidHoverIndicatorDecorationType = MermaidHoverIndicatorDecorationType();
@@ -268,6 +277,7 @@ export class Decorator {
     // Also clear ghost faint decoration (not in decorationTypeMap)
     this.activeEditor.setDecorations(this.decorationTypes.getGhostFaintDecorationType(), []);
     this.mermaidDecorations.clear(this.activeEditor);
+    this.tableDecorations.clear(this.activeEditor);
     this.mathDecorations.clear(this.activeEditor);
     this.activeEditor.setDecorations(this.mermaidHoverIndicatorDecorationType, []);
   }
@@ -304,7 +314,7 @@ export class Decorator {
     // Parse document (uses cache if version unchanged)
     const cycleStart = Date.now();
     const version = document.version;
-    const { decorations, scopes, text, mermaidBlocks, mathRegions } = this.parseDocument(document);
+    const { decorations, scopes, text, mermaidBlocks, tableBlocks, mathRegions } = this.parseDocument(document);
     const parseDurationMs = Date.now() - cycleStart;
 
     // Re-validate version before applying (race condition protection)
@@ -332,6 +342,7 @@ export class Decorator {
       }
     }
     void this.updateMermaidDiagrams(mermaidBlocks, text, document.version);
+    void this.updateCustomTables(tableBlocks, text, document.version);
     if (config.debug.performanceEnabled()) {
       logPerformanceMetric('decorator.update', {
         uri: document.uri.toString(),
@@ -342,6 +353,7 @@ export class Decorator {
         decorations: decorations.length,
         scopes: scopes.length,
         mermaidBlocks: mermaidBlocks.length,
+        tableBlocks: tableBlocks.length,
         mathRegions: mathRegions.length,
         filteredDecorationTypes: filtered.size,
       });
@@ -418,6 +430,7 @@ export class Decorator {
     scopes: ScopeEntry[];
     text: string;
     mermaidBlocks: MermaidBlock[];
+    tableBlocks: TableBlock[];
     mathRegions: MathRegion[];
   } {
     const entry = this.parseCache.get(document);
@@ -427,6 +440,7 @@ export class Decorator {
       scopes: scopeEntries,
       text: entry.text,
       mermaidBlocks: entry.mermaidBlocks,
+      tableBlocks: entry.tableBlocks,
       mathRegions: entry.mathRegions,
     };
   }
@@ -448,6 +462,40 @@ export class Decorator {
       documentVersion,
       this.mermaidHoverIndicatorDecorationType
     );
+  }
+
+  private async updateCustomTables(
+    tableBlocks: TableBlock[],
+    text: string,
+    documentVersion: number
+  ): Promise<void> {
+    if (!this.activeEditor) {
+      return;
+    }
+
+    if (config.tables.renderingMode() !== 'custom') {
+      this.tableDecorations.clear(this.activeEditor);
+      return;
+    }
+
+    const editor = this.activeEditor;
+    await this.tableCoordinator.update(
+      editor,
+      tableBlocks,
+      text,
+      documentVersion
+    );
+  }
+
+  /**
+   * Clears cached table SVG renders. Called when editor font or theme changes.
+   */
+  clearTableDecorationCache(): void {
+    clearTableSvgCache();
+    this.tableDecorations.clearAll();
+    if (this.activeEditor) {
+      this.tableDecorations.clear(this.activeEditor);
+    }
   }
 
   private isSelectionOrCursorInsideOffsets(

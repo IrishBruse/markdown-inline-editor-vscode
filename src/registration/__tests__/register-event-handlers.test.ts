@@ -19,6 +19,7 @@ describe('registerEventHandlers', () => {
       recreateCodeBlockLanguageDecorationType: vi.fn(),
       recreateColorDependentTypes: vi.fn(),
       clearMathDecorationCache: vi.fn(),
+      clearTableDecorationCache: vi.fn(),
     };
     const linkClickHandler = {
       setEnabled: vi.fn(),
@@ -78,6 +79,7 @@ describe('registerEventHandlers', () => {
       recreateCodeBlockLanguageDecorationType: vi.fn(),
       recreateColorDependentTypes: vi.fn(),
       clearMathDecorationCache: vi.fn(),
+      clearTableDecorationCache: vi.fn(),
     };
 
     registerEventHandlers(decorator as any, { setEnabled: vi.fn() } as any);
@@ -126,6 +128,7 @@ describe('registerEventHandlers', () => {
       recreateCodeBlockLanguageDecorationType: vi.fn(),
       recreateColorDependentTypes: vi.fn(),
       clearMathDecorationCache: vi.fn(),
+      clearTableDecorationCache: vi.fn(),
     };
     const linkClickHandler = {
       setEnabled: vi.fn(),
