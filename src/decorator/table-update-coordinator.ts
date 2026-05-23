@@ -4,7 +4,7 @@ import type { TableBlock } from '../parser';
 import { renderTableSvg, estimateEditorContentWidth } from '../tables/table-renderer';
 import { svgToDataUri } from '../mermaid/mermaid-renderer';
 import { TableDiagramDecorations } from './table-diagram-decorations';
-import { createRange, isCaretInsideOffsets } from './editor-decoration-applier';
+import { createRange, isSelectionOrCursorInsideOffsets } from './editor-decoration-applier';
 import { logWarn } from '../logging';
 import { createErrorSvg } from '../mermaid/error-handler';
 
@@ -109,7 +109,7 @@ export class TableUpdateCoordinator {
           return null;
         }
 
-        if (isCaretInsideOffsets(
+        if (isSelectionOrCursorInsideOffsets(
           block.startPos,
           block.endPos,
           normalizedText,
@@ -181,22 +181,8 @@ export class TableUpdateCoordinator {
       return;
     }
 
-    if (rangesByKey.size === 0) {
-      const allCaretsInsideTables = tableBlocks.length > 0 && tableBlocks.every((block) =>
-        isCaretInsideOffsets(
-          block.startPos,
-          block.endPos,
-          normalizedText,
-          editor.selections,
-          editor.document
-        )
-      );
-      if (allCaretsInsideTables) {
-        this.tableDecorations.clear(editor);
-      }
-      return;
-    }
-
+    // Apply even when empty so disposeUnused removes overlays for tables covered by
+    // selection/caret (those blocks return null above).
     this.tableDecorations.apply(editor, rangesByKey, dataUrisByKey);
   }
 }
