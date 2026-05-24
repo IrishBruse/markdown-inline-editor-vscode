@@ -1,5 +1,5 @@
 import { measureTextWidth } from '../parser/tables';
-import type { TableHtmlTheme, TableRowData } from '../parser/tables-html';
+import type { TableCellData, TableHtmlTheme, TableRowData } from '../parser/tables-html';
 
 export type TableSvgHostOptions = {
   fontSize: number;
@@ -9,10 +9,8 @@ export type TableSvgHostOptions = {
   numLines: number;
 };
 
-/** Horizontal inset inside a cell border (pixels). */
+/** Symmetric horizontal inset inside a cell border (pixels). */
 const CELL_PAD_X = 4;
-/** Extra display-width units added to each column for breathing room. */
-const COLUMN_PAD_DISPLAY = 1;
 /** Baseline offset from the top of a source line (pixels). */
 const CELL_TEXT_TOP = 1;
 
@@ -101,6 +99,15 @@ export function wrapTextToColumnWidth(text: string, maxDisplayWidth: number): st
   return lines;
 }
 
+/**
+ * Display width for one cell when sizing columns.
+ * Matches decorated-table `computeColumnWidths`: trimmed content only, no source
+ * padding spaces (those only align pipes in the markdown source).
+ */
+export function cellContentDisplayWidth(cell: TableCellData): number {
+  return measureTextWidth(cell.text);
+}
+
 /** Per-column display widths (character units) from cell content, matching decorated tables. */
 export function computeColumnDisplayWidths(rows: TableRowData[]): number[] {
   let columnCount = 0;
@@ -110,9 +117,7 @@ export function computeColumnDisplayWidths(rows: TableRowData[]): number[] {
   const widths = new Array(columnCount).fill(MIN_COLUMN_DISPLAY_WIDTH);
   for (const row of rows) {
     for (let i = 0; i < row.cells.length; i++) {
-      const cell = row.cells[i];
-      const edgePad = (cell.leadingSpaces ?? 0) + (cell.trailingSpaces ?? 0);
-      const w = measureTextWidth(cell.text) + edgePad;
+      const w = cellContentDisplayWidth(row.cells[i]);
       if (w > widths[i]) {
         widths[i] = w;
       }
@@ -140,8 +145,7 @@ export function renderTableSvgHost(
   }
 
   const columnPixelWidths = columnDisplayWidths.map(
-    (displayWidth) =>
-      (displayWidth + COLUMN_PAD_DISPLAY * 2) * charWidth + CELL_PAD_X * 2
+    (displayWidth) => displayWidth * charWidth + CELL_PAD_X * 2,
   );
   const width = columnPixelWidths.reduce((sum, colWidth) => sum + colWidth, 0);
 
@@ -186,15 +190,13 @@ export function renderTableSvgHost(
       const styleAttr = fontStyle ? ` font-style="${fontStyle}"` : '';
 
       const align = cell.align;
-      const leadingPadPx = (cell.leadingSpaces ?? 0) * charWidth;
-      const trailingPadPx = (cell.trailingSpaces ?? 0) * charWidth;
-      let textX = x + CELL_PAD_X + leadingPadPx;
+      let textX = x + CELL_PAD_X;
       let anchorAttr = '';
       if (align === 'center') {
         textX = x + colWidth / 2;
         anchorAttr = ' text-anchor="middle"';
       } else if (align === 'right') {
-        textX = x + colWidth - CELL_PAD_X - trailingPadPx;
+        textX = x + colWidth - CELL_PAD_X;
         anchorAttr = ' text-anchor="end"';
       }
 

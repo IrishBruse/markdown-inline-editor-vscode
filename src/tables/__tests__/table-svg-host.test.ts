@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getTableThemeFallback } from '../../parser/tables-html';
 import {
+  cellContentDisplayWidth,
   computeColumnDisplayWidths,
   getSeparatorBorderY,
   getSourceLineIndex,
@@ -82,21 +83,62 @@ describe('table-svg-host', () => {
     expect(height).toBeGreaterThanOrEqual(5 * 21);
   });
 
-  it('offsets left-aligned text by source leading spaces', () => {
+  it('does not widen left-aligned columns for source trailing spaces', () => {
+    const rows = [
+      {
+        isHeader: true,
+        cells: [
+          { text: 'Foo', align: null, leadingSpaces: 1, trailingSpaces: 1 },
+          { text: 'Bar', align: null, leadingSpaces: 1, trailingSpaces: 1 },
+        ],
+      },
+      {
+        isHeader: false,
+        cells: [
+          { text: 'x', align: null, leadingSpaces: 1, trailingSpaces: 3 },
+          { text: 'y', align: null, leadingSpaces: 1, trailingSpaces: 3 },
+        ],
+      },
+    ];
+    expect(computeColumnDisplayWidths(rows)).toEqual([3, 3]);
+    expect(cellContentDisplayWidth(rows[1].cells[0])).toBe(1);
+  });
+
+  it('uses symmetric horizontal padding for left and right aligned cells', () => {
     const fontSize = 14;
-    const lineHeight = 21;
     const charWidth = fontSize * 0.6;
-    const leadingSpaces = 2;
+    const rows = [
+      { isHeader: true, cells: [{ text: 'Left', align: 'left' as const, leadingSpaces: 1 }] },
+      { isHeader: true, cells: [{ text: 'Right', align: 'right' as const }] },
+    ];
+    const leftSvg = renderTableSvgHost(
+      [rows[0]],
+      { fontSize, lineHeight: 21, numLines: 1 },
+      darkTheme,
+    );
+    const rightSvg = renderTableSvgHost(
+      [rows[1]],
+      { fontSize, lineHeight: 21, numLines: 1 },
+      darkTheme,
+    );
+    const padPx = 4;
+    const leftTextX = padPx;
+    const rightTextX = 5 * charWidth + padPx;
+    expect(leftSvg).toContain(`x="${leftTextX}"`);
+    expect(rightSvg).toContain(`x="${rightTextX}"`);
+    expect(rightSvg).toContain('text-anchor="end"');
+  });
+
+  it('ignores source leading spaces for overlay text position', () => {
     const svg = renderTableSvgHost(
       [{
         isHeader: false,
-        cells: [{ text: 'x', align: null, leadingSpaces, trailingSpaces: 0 }],
+        cells: [{ text: 'x', align: null, leadingSpaces: 2, trailingSpaces: 0 }],
       }],
-      { fontSize, lineHeight, numLines: 1 },
+      { fontSize: 14, lineHeight: 21, numLines: 1 },
       darkTheme,
     );
-    const textX = 4 + leadingSpaces * charWidth;
-    expect(svg).toContain(`x="${textX}"`);
+    expect(svg).toContain('x="4"');
   });
 
   it('escapes XML in cell content', () => {
