@@ -9,8 +9,8 @@ export type TableSvgHostOptions = {
   numLines: number;
 };
 
-/** Symmetric horizontal inset inside a cell border (pixels). */
-const CELL_PAD_X = 4;
+/** Symmetric horizontal inset inside a cell border, in character widths per side. */
+const CELL_PAD_SPACES = 2;
 /** Baseline offset from the top of a source line (pixels). */
 const CELL_TEXT_TOP = 1;
 
@@ -137,6 +137,7 @@ export function renderTableSvgHost(
   const fontSize = options.fontSize;
   const lineHeight = options.lineHeight;
   const charWidth = fontSize * 0.6;
+  const cellPadX = CELL_PAD_SPACES * charWidth;
   const fontFamily = sanitizeFontFamily(options.fontFamily);
 
   const columnDisplayWidths = computeColumnDisplayWidths(rows);
@@ -145,7 +146,7 @@ export function renderTableSvgHost(
   }
 
   const columnPixelWidths = columnDisplayWidths.map(
-    (displayWidth) => displayWidth * charWidth + CELL_PAD_X * 2,
+    (displayWidth) => displayWidth * charWidth + cellPadX * 2,
   );
   const width = columnPixelWidths.reduce((sum, colWidth) => sum + colWidth, 0);
 
@@ -190,13 +191,13 @@ export function renderTableSvgHost(
       const styleAttr = fontStyle ? ` font-style="${fontStyle}"` : '';
 
       const align = cell.align;
-      let textX = x + CELL_PAD_X;
+      let textX = x + cellPadX;
       let anchorAttr = '';
       if (align === 'center') {
         textX = x + colWidth / 2;
         anchorAttr = ' text-anchor="middle"';
       } else if (align === 'right') {
-        textX = x + colWidth - CELL_PAD_X;
+        textX = x + colWidth - cellPadX;
         anchorAttr = ' text-anchor="end"';
       }
 

@@ -121,7 +121,7 @@ describe('table-svg-host', () => {
       { fontSize, lineHeight: 21, numLines: 1 },
       darkTheme,
     );
-    const padPx = 4;
+    const padPx = 2 * charWidth;
     const leftTextX = padPx;
     const rightTextX = 5 * charWidth + padPx;
     expect(leftSvg).toContain(`x="${leftTextX}"`);
@@ -138,7 +138,7 @@ describe('table-svg-host', () => {
       { fontSize: 14, lineHeight: 21, numLines: 1 },
       darkTheme,
     );
-    expect(svg).toContain('x="4"');
+    expect(svg).toContain(`x="${2 * 14 * 0.6}"`);
   });
 
   it('escapes XML in cell content', () => {

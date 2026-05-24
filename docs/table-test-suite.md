@@ -23,6 +23,14 @@
 | 1   | 2   | 3   | 4   | 5   |
 | a   | b   | c   | d   | e   |
 
+| aa  | bb  | cc  |
+| --- | --- | --- |
+| 1   | 1   | 1   |
+| 2   | 2   | 2   |
+| 3   | 3   | 3   |
+| 4   | 4   | 4   |
+| 5   | 5   | 5   |
+
 ## Header vs data width
 
 | Short | MuchLongerHeader |
