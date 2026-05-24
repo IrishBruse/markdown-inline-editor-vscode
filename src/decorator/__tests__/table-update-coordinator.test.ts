@@ -5,6 +5,12 @@ import type { TableBlock } from '../../parser';
 
 vi.mock('../../tables/table-renderer', () => ({
   renderTableSvg: vi.fn().mockResolvedValue('<svg></svg>'),
+  getTableThemeColors: vi.fn().mockReturnValue({
+    foreground: '#cccccc',
+    border: '#3c3c3c',
+    headerBackground: '#2a2d2e',
+    cellBackground: '#1e1e1e',
+  }),
 }));
 
 vi.mock('../../mermaid/mermaid-renderer', () => ({

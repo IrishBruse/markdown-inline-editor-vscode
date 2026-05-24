@@ -60,22 +60,28 @@ export type TableHtmlTheme = {
   cellBackground: string;
 };
 
-const DEFAULT_THEME: TableHtmlTheme = {
+const DARK_FALLBACK_THEME: TableHtmlTheme = {
   foreground: '#cccccc',
   border: '#3c3c3c',
-  headerBackground: '#2d2d2d',
-  cellBackground: 'transparent',
+  headerBackground: '#2a2d2e',
+  cellBackground: '#1e1e1e',
 };
 
-const LIGHT_THEME: TableHtmlTheme = {
+const LIGHT_FALLBACK_THEME: TableHtmlTheme = {
   foreground: '#333333',
   border: '#cccccc',
   headerBackground: '#f3f3f3',
-  cellBackground: 'transparent',
+  cellBackground: '#ffffff',
 };
 
+/** Fallback palette when VS Code theme colors cannot be resolved (e.g. in tests). */
+export function getTableThemeFallback(darkMode: boolean): TableHtmlTheme {
+  return darkMode ? DARK_FALLBACK_THEME : LIGHT_FALLBACK_THEME;
+}
+
+/** @deprecated Use getTableThemeColors() for live theme; this is test/fallback only. */
 export function tableHtmlThemeForMode(darkMode: boolean): TableHtmlTheme {
-  return darkMode ? DEFAULT_THEME : LIGHT_THEME;
+  return getTableThemeFallback(darkMode);
 }
 
 function escapeHtml(text: string): string {
@@ -198,7 +204,7 @@ export function extractTableRowData(node: Table, source: string): {
  */
 export function buildTableHtml(
   rows: TableRowData[],
-  theme: TableHtmlTheme = DEFAULT_THEME,
+  theme: TableHtmlTheme = DARK_FALLBACK_THEME,
 ): string {
   const rowsHtml: string[] = [];
 

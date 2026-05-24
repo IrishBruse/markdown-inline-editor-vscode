@@ -1,7 +1,8 @@
 import { createHash } from 'crypto';
 import { ColorThemeKind, Range, TextEditor, window, workspace } from 'vscode';
 import type { TableBlock } from '../parser';
-import { renderTableSvg } from '../tables/table-renderer';
+import { getTableThemeColors, renderTableSvg } from '../tables/table-renderer';
+import type { TableHtmlTheme } from '../parser/tables-html';
 import { svgToDataUri } from '../mermaid/mermaid-renderer';
 import { TableDiagramDecorations } from './table-diagram-decorations';
 import { createRange, isSelectionOrCursorInsideOffsets } from './editor-decoration-applier';
@@ -9,7 +10,7 @@ import { logWarn } from '../logging';
 import { createErrorSvg } from '../mermaid/error-handler';
 
 type TableBlockKeyCacheEntry = {
-  theme: 'default' | 'dark';
+  theme: TableHtmlTheme;
   fontFamily?: string;
   key: string;
 };
@@ -18,19 +19,24 @@ const tableBlockKeyCache = new WeakMap<TableBlock, TableBlockKeyCacheEntry>();
 
 function getTableBlockCacheKey(
   block: TableBlock,
-  theme: 'default' | 'dark',
+  theme: TableHtmlTheme,
   fontFamily: string | undefined,
 ): string {
   const cached = tableBlockKeyCache.get(block);
   if (
     cached &&
-    cached.theme === theme &&
+    cached.theme.foreground === theme.foreground &&
+    cached.theme.border === theme.border &&
+    cached.theme.headerBackground === theme.headerBackground &&
+    cached.theme.cellBackground === theme.cellBackground &&
     cached.fontFamily === fontFamily
   ) {
     return cached.key;
   }
 
-  const keySource = `${JSON.stringify(block.rows)}\n${theme}\n${fontFamily ?? ''}`;
+  const keySource =
+    `${JSON.stringify(block.rows)}\n${theme.foreground}\n${theme.border}\n` +
+    `${theme.headerBackground}\n${theme.cellBackground}\n${fontFamily ?? ''}`;
   const key = createHash('sha256').update(keySource).digest('hex');
   tableBlockKeyCache.set(block, { theme, fontFamily, key });
   return key;
@@ -87,11 +93,10 @@ export class TableUpdateCoordinator {
 
     const generation = ++this.latestUpdateGeneration;
     const runToken = this.tableUpdateToken;
-    const theme = window.activeColorTheme.kind === ColorThemeKind.Dark ||
-      window.activeColorTheme.kind === ColorThemeKind.HighContrast
-      ? 'dark'
-      : 'default';
+    const tableTheme = getTableThemeColors();
     const fontFamily = workspace.getConfiguration('editor').get<string>('fontFamily');
+    const isDarkTheme = window.activeColorTheme.kind === ColorThemeKind.Dark ||
+      window.activeColorTheme.kind === ColorThemeKind.HighContrast;
 
     const rangesByKey = new Map<string, Range[]>();
     const dataUrisByKey = new Map<string, string>();
@@ -120,13 +125,13 @@ export class TableUpdateCoordinator {
           return null;
         }
 
-        const key = getTableBlockCacheKey(block, theme, fontFamily);
+        const key = getTableBlockCacheKey(block, tableTheme, fontFamily);
         let dataUriPromise = dataUriPromisesByKey.get(key);
         if (!dataUriPromise) {
           dataUriPromise = (async () => {
             try {
               const svg = await renderTableSvg(block.rows, {
-                theme,
+                theme: tableTheme,
                 fontFamily,
                 numLines: block.numLines,
               });
@@ -140,7 +145,7 @@ export class TableUpdateCoordinator {
                 message.trim().length > 0 ? message : 'Table rendering failed',
                 200,
                 block.numLines * 20,
-                theme === 'dark',
+                isDarkTheme,
                 'Table Rendering Error'
               );
               return svgToDataUri(errorSvg);

@@ -1,12 +1,7 @@
 import { measureTextWidth } from '../parser/tables';
-import {
-  tableHtmlThemeForMode,
-  type TableHtmlTheme,
-  type TableRowData,
-} from '../parser/tables-html';
+import type { TableHtmlTheme, TableRowData } from '../parser/tables-html';
 
 export type TableSvgHostOptions = {
-  theme: 'default' | 'dark';
   fontSize: number;
   lineHeight: number;
   fontFamily?: string;
@@ -132,7 +127,7 @@ export function computeColumnDisplayWidths(rows: TableRowData[]): number[] {
 export function renderTableSvgHost(
   rows: TableRowData[],
   options: TableSvgHostOptions,
-  theme: TableHtmlTheme = tableHtmlThemeForMode(options.theme === 'dark')
+  theme: TableHtmlTheme,
 ): string {
   const fontSize = options.fontSize;
   const lineHeight = options.lineHeight;

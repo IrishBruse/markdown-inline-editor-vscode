@@ -17,7 +17,7 @@ import { handleCheckboxClick } from './decorator/checkbox-toggle';
 import { MermaidDiagramDecorations } from './decorator/mermaid-diagram-decorations';
 import { TableDiagramDecorations } from './decorator/table-diagram-decorations';
 import { TableUpdateCoordinator } from './decorator/table-update-coordinator';
-import { clearTableSvgCache } from './tables/table-renderer';
+import { clearTableSvgCache, clearTableThemeCache } from './tables/table-renderer';
 import { DecoratorUpdateScheduler } from './decorator/update-scheduler';
 import { MathDecorations } from './math/math-decorations';
 import { MermaidHoverIndicatorDecorationType } from './decorations';
@@ -493,6 +493,7 @@ export class Decorator {
    */
   clearTableDecorationCache(): void {
     clearTableSvgCache();
+    clearTableThemeCache();
     this.tableCoordinator.invalidate();
     if (this.activeEditor) {
       this.tableDecorations.clear(this.activeEditor);

@@ -2,12 +2,13 @@ import * as vscode from 'vscode';
 import { LRUCache } from '../utils/lru-cache';
 import { MERMAID_CONSTANTS } from '../mermaid/constants';
 import { createErrorSvg } from '../mermaid/error-handler';
-import { tableHtmlThemeForMode, type TableRowData } from '../parser/tables-html';
+import type { TableHtmlTheme, TableRowData } from '../parser/tables-html';
 import { logWarn } from '../logging';
 import { renderTableSvgHost } from './table-svg-host';
+import { getTableThemeColors } from './table-theme-colors';
 
 export type TableRenderOptions = {
-  theme: 'default' | 'dark';
+  theme: TableHtmlTheme;
   fontFamily?: string;
   numLines: number;
 };
@@ -31,13 +32,16 @@ export async function renderTableSvg(
   rows: TableRowData[],
   options: TableRenderOptions
 ): Promise<string> {
-  const darkMode = options.theme === 'dark';
+  const theme = options.theme;
   const editorConfig = vscode.workspace.getConfiguration('editor');
   const fontSize = editorConfig.get<number>('fontSize', 14);
   const lineHeight = getEditorLineHeight(fontSize);
   const fallbackHeight = (options.numLines + 2) * lineHeight;
+  const isDarkFallback = theme.cellBackground.toLowerCase() !== '#ffffff';
 
-  const cacheKey = `${JSON.stringify(rows)}|${darkMode}|${fontSize}|${lineHeight}|${options.fontFamily ?? ''}`;
+  const cacheKey =
+    `${JSON.stringify(rows)}|${theme.foreground}|${theme.border}|${theme.headerBackground}|` +
+    `${theme.cellBackground}|${fontSize}|${lineHeight}|${options.fontFamily ?? ''}`;
   const cached = tableSvgCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -46,12 +50,11 @@ export async function renderTableSvg(
   const promise = Promise.resolve().then(() => {
     try {
       return renderTableSvgHost(rows, {
-        theme: options.theme,
         fontSize,
         lineHeight,
         fontFamily: options.fontFamily,
         numLines: options.numLines,
-      }, tableHtmlThemeForMode(darkMode));
+      }, theme);
     } catch (error) {
       logWarn('Table render failed', error);
       const message = error instanceof Error
@@ -61,7 +64,7 @@ export async function renderTableSvg(
         message.trim().length > 0 ? message : 'Table rendering failed',
         200,
         fallbackHeight,
-        darkMode,
+        isDarkFallback,
         'Table Rendering Error'
       );
     }
@@ -77,3 +80,5 @@ export async function renderTableSvg(
 export function clearTableSvgCache(): void {
   tableSvgCache.clear();
 }
+
+export { getTableThemeColors, clearTableThemeCache } from './table-theme-colors';
