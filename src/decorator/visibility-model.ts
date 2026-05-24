@@ -1,4 +1,5 @@
 import { Range, ThemeColor, type DecorationOptions, type Position, type TextEditor } from 'vscode';
+import { config } from '../config';
 import type { DecorationRange, DecorationType } from '../parser';
 import { isMarkerDecorationType } from './decoration-categories';
 
@@ -73,6 +74,7 @@ export function filterDecorationsForEditor(
   // reveal the entire table (show raw markdown, not decorations).
   const tableScopes = scopes.filter(s => s.kind === 'table');
   const rawTableRanges: Range[] = [];
+  const rawTableScopeStarts = new Set<number>();
   for (const tableScope of tableScopes) {
     let tableIsActive = false;
     for (let line = tableScope.range.start.line; line <= tableScope.range.end.line; line++) {
@@ -83,6 +85,7 @@ export function filterDecorationsForEditor(
     }
     if (tableIsActive) {
       rawTableRanges.push(tableScope.range);
+      rawTableScopeStarts.add(tableScope.startPos);
     }
   }
 
@@ -101,10 +104,22 @@ export function filterDecorationsForEditor(
     return cursorPositions.some((position) => range.contains(position));
   };
 
+  const customTableOverlayActive = config.tables.renderingMode() === 'custom' && tableScopes.length > 0;
+
   for (const decoration of decorations) {
     const range = rangeFactory(decoration.startPos, decoration.endPos, originalText);
     if (!range) continue;
     const isActiveLine = activeLines.size > 0 && activeLines.has(range.start.line);
+
+    // Custom table SVG overlays replace cell content. Inline decorations (code, links, etc.)
+    // would stack on transparent source text and overlap the overlay.
+    if (
+      customTableOverlayActive &&
+      !tableTypes.has(decoration.type) &&
+      isInsideCustomTableOverlay(range, tableScopes, rawTableScopeStarts)
+    ) {
+      continue;
+    }
 
     // Code blocks and frontmatter use opaque, whole-line backgrounds.
     // On some themes, VS Code's native selection highlight is drawn "under" those
@@ -349,4 +364,21 @@ function rangeIntersectsAny(range: Range, ranges: Range[]): boolean {
     const intersection = range.intersection(candidate);
     return intersection !== undefined;
   });
+}
+
+/** True when range lies in a custom-table scope that is covered by the SVG overlay (not raw-reveal). */
+function isInsideCustomTableOverlay(
+  range: Range,
+  tableScopes: ScopeEntry[],
+  rawTableScopeStarts: Set<number>,
+): boolean {
+  for (const scope of tableScopes) {
+    if (range.intersection(scope.range) === undefined) {
+      continue;
+    }
+    if (!rawTableScopeStarts.has(scope.startPos)) {
+      return true;
+    }
+  }
+  return false;
 }

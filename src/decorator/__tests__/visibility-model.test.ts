@@ -4,6 +4,15 @@ vi.mock('../../parser', () => ({
   },
 }));
 
+vi.mock('../../config', () => ({
+  config: {
+    tables: {
+      renderingMode: vi.fn(() => 'decorated'),
+    },
+  },
+}));
+
+import { config } from '../../config';
 import { filterDecorationsForEditor } from '../visibility-model';
 import type { ScopeEntry } from '../visibility-model';
 import type { DecorationRange } from '../../parser';
@@ -312,6 +321,85 @@ describe('ordered list auto-numbering decoration', () => {
     const items = result.get('orderedListItem') as any[];
     expect(items[0].renderOptions?.before?.color).toBeUndefined();
     expect(items[1].renderOptions?.before?.color?.id).toBe('editorWarning.foreground');
+  });
+});
+
+describe('custom table overlay', () => {
+  afterEach(() => {
+    vi.mocked(config.tables.renderingMode).mockReturnValue('decorated');
+  });
+
+  it('suppresses inline decorations inside table when cursor is outside', () => {
+    vi.mocked(config.tables.renderingMode).mockReturnValue('custom');
+    const text = '| `code` |\n| --- |\n| x |\nother';
+    const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
+    const tableScope: ScopeEntry = {
+      startPos: 0,
+      endPos: text.indexOf('other'),
+      range: new Range(new Position(0, 0), new Position(2, 3)) as any,
+      kind: 'table',
+    };
+    const decs: DecorationRange[] = [
+      { startPos: 2, endPos: 8, type: 'code' } as any,
+      { startPos: 2, endPos: 3, type: 'hide' } as any,
+    ];
+    const editor = makeEditor(text, 3, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [tableScope],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('code')).toBe(false);
+    expect(result.has('hide')).toBe(false);
+  });
+
+  it('keeps inline decorations when cursor is on the table (raw reveal)', () => {
+    vi.mocked(config.tables.renderingMode).mockReturnValue('custom');
+    const text = '| `code` |\n| --- |\nother';
+    const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
+    const tableScope: ScopeEntry = {
+      startPos: 0,
+      endPos: text.indexOf('other'),
+      range: new Range(new Position(0, 0), new Position(1, 5)) as any,
+      kind: 'table',
+    };
+    const decs: DecorationRange[] = [
+      { startPos: 2, endPos: 8, type: 'code' } as any,
+    ];
+    const editor = makeEditor(text, 0, 3);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [tableScope],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('code')).toBe(true);
+  });
+
+  it('does not suppress inline decorations outside custom mode', () => {
+    const text = '| `code` |\nother';
+    const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
+    const tableScope: ScopeEntry = {
+      startPos: 0,
+      endPos: text.length,
+      range: new Range(new Position(0, 0), new Position(0, 10)) as any,
+      kind: 'table',
+    };
+    const decs: DecorationRange[] = [
+      { startPos: 2, endPos: 8, type: 'code' } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [tableScope],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('code')).toBe(true);
   });
 });
 
