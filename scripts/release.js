@@ -3,7 +3,7 @@ const { execSync } = require("child_process");
 
 /**
  * Release helper script for markdown-inline-editor-vscode.
- * - Runs validation checks (lint:docs, test, build)
+ * - Runs validation checks (lint, test, crlf, build)
  * - Gets next version with git-cliff
  * - Generates CHANGELOG.md
  * - Bumps package.json version
@@ -43,15 +43,9 @@ try {
     );
   }
 
-  // Run validation checks
-  log("🔍 Running validation checks...");
-  log("  📝 Validating feature file structure...");
-  run("npm run lint:docs");
-  log("  🧪 Running tests...");
-  run("npm test");
-  log("  🔨 Building extension...");
-  run("npm run build");
-  log("✅ All validation checks passed");
+  log("Running validation checks...");
+  run("npm run validate");
+  log("All validation checks passed");
 
   // Check if git-cliff is available
   log("🔍 Checking git-cliff availability...");

@@ -10,11 +10,11 @@
   "icon": "assets/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SeardnaSchmid/markdown-inline-editor-vscode.git"
+    "url": "https://github.com/IrishBruse/markdown-inline-editor-vscode.git"
   },
-  "homepage": "https://github.com/SeardnaSchmid/markdown-inline-editor-vscode",
+  "homepage": "https://github.com/IrishBruse/markdown-inline-editor-vscode",
   "bugs": {
-    "url": "https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues"
+    "url": "https://github.com/IrishBruse/markdown-inline-editor-vscode/issues"
   },
   "keywords": [
     "markdown",
@@ -26,7 +26,7 @@
     "clean"
   ],
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.105.0"
   },
   "categories": [
     "Formatters",
@@ -270,7 +270,6 @@
   ],
   "scripts": {
     "lint": "eslint .",
-    "lint:docs": "node scripts/validate-feature-outline.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -283,10 +282,12 @@
     "compile": "tsc --project tsconfig.build.json",
     "bundle": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --outfile=dist/extension.js --sourcemap",
     "bundle:prod": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --outfile=dist/extension.js",
+    "dev": "npm run compile && npm run bundle",
+    "watch": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --outfile=dist/extension.js --sourcemap --watch",
     "package": "vsce package --out dist/extension.vsix",
     "build": "npm run copy:mermaid && npm run compile && npm run bundle:prod && npm run package",
     "build:dev": "npm run compile && npm run bundle && npm run package",
-    "validate": "npm run lint:docs && npm test && npm run build",
+    "validate": "npm run lint && npm test && npm run test:crlf && npm run build",
     "compile:e2e": "tsc -p tsconfig.e2e.json",
     "release": "node scripts/release.js",
     "prepublishOnly": "npm run clean && npm run build"
@@ -300,7 +301,7 @@
   },
   "dependencies": {
     "cheerio": "1.2.0",
-    "katex": "^0.16.45",
+    "katex": "^0.17.0",
     "mathjax-full": "^3.2.2",
     "mermaid": "11.15.0",
     "remark-gfm": "4.0.1",
@@ -311,21 +312,21 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tsconfig/node-lts": "^24.0.0",
-    "@vitest/coverage-v8": "^4.1.6",
+    "@vitest/coverage-v8": "^4.1.7",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.6.2",
+    "@types/node": "^25.9.1",
     "@types/unist": "^3.0.3",
-    "@types/vscode": "1.100.0",
+    "@types/vscode": "1.105.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
     "esbuild": "^0.28.0",
-    "eslint": "^10.3.0",
+    "eslint": "^10.4.0",
     "git-cliff": "^2.13.1",
     "ovsx": "^0.10.12",
     "rimraf": "^6.1.3",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.3",
-    "vitest": "^4.1.6"
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^4.1.7"
   }
 }
