@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing! This guide covers the workflow and conventions specific to this project.
 
-**Quick Start:** See the [README](README.md#getting-started-developers) for setup instructions.
+**Quick Start:** See the [README](README.md#development) for setup instructions.
 
 ## Development Workflow
 
