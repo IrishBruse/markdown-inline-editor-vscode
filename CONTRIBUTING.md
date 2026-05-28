@@ -60,7 +60,7 @@ extractDecorations(text: string): DecorationRange[] {
 
 ### 4. Testing
 
-**All changes must include tests.** The project uses Vitest for testing with **770+ passing tests** across 60+ test files.
+**All changes must include tests.** The project uses Vitest for testing with **800+ passing tests** across 60+ test files.
 
 **Run tests:**
 ```bash
@@ -262,7 +262,7 @@ When contributing, please update relevant documentation:
 - **README.md** - User-facing features, installation, usage
 - **AGENTS.md** - Architecture and development guidelines
 - **CONTRIBUTING.md** - This file (if workflow changes)
-- **FAQ.md** - Common issues and solutions (if user-facing changes)
+- **docs/FAQ.md** - Common issues and solutions (if user-facing changes)
 - **Code comments** - JSDoc for public APIs
 
 ### Feature File Structure
