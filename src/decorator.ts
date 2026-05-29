@@ -1,5 +1,5 @@
 import { DecorationOptions, Range, TextEditor, TextDocument, TextDocumentChangeEvent, window, TextEditorSelectionChangeKind, Memento } from 'vscode';
-import { DecorationRange, DecorationType, MermaidBlock, MathRegion, ScopeRange } from './parser';
+import { DecorationRange, DecorationType, MermaidBlock, MathRegion, ScopeRange, TableBlock } from './parser';
 import { config } from './config';
 import { isDiffLikeUri, isDiffViewVisible } from './diff-context';
 import { MarkdownParseCache } from './markdown-parse-cache';
@@ -11,10 +11,11 @@ import {
 } from './decorator/editor-decoration-applier';
 import { FileDecorationStateStore } from './decorator/file-decoration-state';
 import { MermaidUpdateCoordinator } from './decorator/mermaid-update-coordinator';
+import { CustomTableUpdateCoordinator } from './decorator/custom-table-update-coordinator';
 import { DecorationTypeRegistry } from './decorator/decoration-type-registry';
 import { filterDecorationsForEditor, ScopeEntry } from './decorator/visibility-model';
 import { handleCheckboxClick } from './decorator/checkbox-toggle';
-import { MermaidDiagramDecorations } from './decorator/mermaid-diagram-decorations';
+import { MermaidDiagramDecorations, SvgOverlayDecorations } from './decorator/mermaid-diagram-decorations';
 import { DecoratorUpdateScheduler } from './decorator/update-scheduler';
 import { MathDecorations } from './math/math-decorations';
 import { MermaidHoverIndicatorDecorationType } from './decorations';
@@ -67,6 +68,10 @@ export class Decorator {
   private readonly mermaidCoordinator = new MermaidUpdateCoordinator(
     this.mermaidDecorations,
     PERFORMANCE_CONSTANTS.MERMAID_MAX_CONCURRENCY
+  );
+  private customTableDecorations = new SvgOverlayDecorations();
+  private readonly customTableCoordinator = new CustomTableUpdateCoordinator(
+    this.customTableDecorations
   );
   private mathDecorations = new MathDecorations();
   private mermaidHoverIndicatorDecorationType = MermaidHoverIndicatorDecorationType();
@@ -268,6 +273,7 @@ export class Decorator {
     // Also clear ghost faint decoration (not in decorationTypeMap)
     this.activeEditor.setDecorations(this.decorationTypes.getGhostFaintDecorationType(), []);
     this.mermaidDecorations.clear(this.activeEditor);
+    this.customTableDecorations.clear(this.activeEditor);
     this.mathDecorations.clear(this.activeEditor);
     this.activeEditor.setDecorations(this.mermaidHoverIndicatorDecorationType, []);
   }
@@ -304,7 +310,7 @@ export class Decorator {
     // Parse document (uses cache if version unchanged)
     const cycleStart = Date.now();
     const version = document.version;
-    const { decorations, scopes, text, mermaidBlocks, mathRegions } = this.parseDocument(document);
+    const { decorations, scopes, text, mermaidBlocks, tableBlocks, mathRegions } = this.parseDocument(document);
     const parseDurationMs = Date.now() - cycleStart;
 
     // Re-validate version before applying (race condition protection)
@@ -332,6 +338,7 @@ export class Decorator {
       }
     }
     void this.updateMermaidDiagrams(mermaidBlocks, text, document.version);
+    this.updateCustomTables(tableBlocks, text, document.version);
     if (config.debug.performanceEnabled()) {
       logPerformanceMetric('decorator.update', {
         uri: document.uri.toString(),
@@ -342,6 +349,7 @@ export class Decorator {
         decorations: decorations.length,
         scopes: scopes.length,
         mermaidBlocks: mermaidBlocks.length,
+        tableBlocks: tableBlocks.length,
         mathRegions: mathRegions.length,
         filteredDecorationTypes: filtered.size,
       });
@@ -418,6 +426,7 @@ export class Decorator {
     scopes: ScopeEntry[];
     text: string;
     mermaidBlocks: MermaidBlock[];
+    tableBlocks: TableBlock[];
     mathRegions: MathRegion[];
   } {
     const entry = this.parseCache.get(document);
@@ -427,8 +436,31 @@ export class Decorator {
       scopes: scopeEntries,
       text: entry.text,
       mermaidBlocks: entry.mermaidBlocks,
+      tableBlocks: entry.tableBlocks,
       mathRegions: entry.mathRegions,
     };
+  }
+
+  private updateCustomTables(
+    tableBlocks: TableBlock[],
+    text: string,
+    documentVersion: number,
+  ): void {
+    if (!this.activeEditor) {
+      return;
+    }
+
+    if (config.tables.renderingMode() !== 'custom') {
+      this.customTableDecorations.clear(this.activeEditor);
+      return;
+    }
+
+    this.customTableCoordinator.update(
+      this.activeEditor,
+      tableBlocks,
+      text,
+      documentVersion,
+    );
   }
 
   private async updateMermaidDiagrams(

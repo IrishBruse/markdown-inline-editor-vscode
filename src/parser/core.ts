@@ -42,6 +42,7 @@ import {
   measureTextWidth as measureTextWidthHelper,
   normalizePipePositions as normalizePipePositionsHelper,
   trimLineEnd as trimLineEndHelper,
+  buildTableBlock as buildTableBlockHelper,
 } from "./tables";
 import {
   processEmphasis as processEmphasisHelper,
@@ -73,6 +74,7 @@ import {
   MermaidBlock,
   ParseResult,
   ScopeRange,
+  TableBlock,
 } from "./types";
 
 /**
@@ -160,6 +162,7 @@ export class MarkdownParser {
         decorations: [],
         scopes: [],
         mermaidBlocks: [],
+        tableBlocks: [],
         mathRegions: [],
       };
     }
@@ -171,6 +174,7 @@ export class MarkdownParser {
     const decorations: DecorationRange[] = [];
     const scopes: ScopeRange[] = [];
     const mermaidBlocks: MermaidBlock[] = [];
+    const tableBlocks: TableBlock[] = [];
 
     // Process frontmatter before remark parsing to avoid conflicts with thematic break detection
     this.processFrontmatter(normalizedText, decorations, scopes);
@@ -180,7 +184,7 @@ export class MarkdownParser {
       const ast = this.processor.parse(normalizedText) as Root;
 
       // Process AST nodes and extract decorations + scopes
-      this.processAST(ast, normalizedText, decorations, scopes, mermaidBlocks);
+      this.processAST(ast, normalizedText, decorations, scopes, mermaidBlocks, tableBlocks);
 
       // Handle edge cases: empty image alt text that remark doesn't parse as Image node
       this.handleEmptyImageAlt(normalizedText, decorations);
@@ -205,6 +209,7 @@ export class MarkdownParser {
       decorations,
       scopes: this.dedupeScopes(scopes),
       mermaidBlocks,
+      tableBlocks,
       mathRegions: scanMathRegions(normalizedText),
     };
   }
@@ -225,6 +230,7 @@ export class MarkdownParser {
     decorations: DecorationRange[],
     scopes: ScopeRange[],
     mermaidBlocks: MermaidBlock[],
+    tableBlocks: TableBlock[],
   ): void {
     // Track processed blockquote positions to avoid duplicates from nested blockquotes
     const processedBlockquotePositions = new Set<number>();
@@ -380,6 +386,7 @@ export class MarkdownParser {
                 text,
                 decorations,
                 scopes,
+                tableBlocks,
                 currentAncestors,
               );
               break;
@@ -1384,6 +1391,7 @@ export class MarkdownParser {
     text: string,
     decorations: DecorationRange[],
     scopes: ScopeRange[],
+    tableBlocks: TableBlock[],
     ancestors: Node[],
   ): void {
     if (!this.hasValidPosition(node)) return;
@@ -1395,6 +1403,12 @@ export class MarkdownParser {
 
     const tableStart = node.position!.start.offset!;
     const tableEnd = node.position!.end.offset!;
+
+    const tableBlock = buildTableBlockHelper(node, text);
+    if (tableBlock) {
+      tableBlocks.push(tableBlock);
+    }
+
     const colWidths = this.computeColumnWidths(node, text);
     const colAligns = node.align ?? [];
 

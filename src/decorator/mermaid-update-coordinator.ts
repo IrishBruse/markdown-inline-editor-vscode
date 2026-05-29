@@ -3,7 +3,7 @@ import { ColorThemeKind, Position, Range, TextEditor, window, workspace } from '
 import type { MermaidBlock } from '../parser';
 import { mapNormalizedToOriginal } from '../position-mapping';
 import { renderMermaidSvg, svgToDataUri, createErrorSvg } from '../mermaid/mermaid-renderer';
-import { MermaidDiagramDecorations } from './mermaid-diagram-decorations';
+import { SvgOverlayDecorations } from './mermaid-diagram-decorations';
 import { createRange, isSelectionOrCursorInsideOffsets } from './editor-decoration-applier';
 import { logWarn } from '../logging';
 
@@ -64,7 +64,7 @@ export class MermaidUpdateCoordinator {
   private mermaidUpdateToken = 0;
 
   constructor(
-    private readonly mermaidDecorations: MermaidDiagramDecorations,
+    private readonly mermaidDecorations: SvgOverlayDecorations,
     private readonly maxConcurrency: number
   ) {}
 

@@ -314,9 +314,9 @@ GFM treats every unescaped `|` on a table line as a column boundary. The header 
 | d   | e   | f   |
 | g   | h   | i   |
 
-## Custom mode: long cell wrapping
+## Custom mode: long cell text
 
-Set `markdownInlineEditor.tables.renderingMode` to `custom` for preview-style HTML tables rendered as SVG overlays (same technique as Mermaid diagrams).
+Set `markdownInlineEditor.tables.renderingMode` to `custom` for bordered tables rendered as SVG overlays (same technique as Mermaid diagrams).
 
 | Section Header | Detailed Placeholder Content                                                                                                                                                                                                                                                                                                                                                                   |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -331,7 +331,7 @@ Set `markdownInlineEditor.tables.renderingMode` to `custom` for preview-style HT
 | Row 9          | Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.                                                                                            |
 | Row 10         | Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur. At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.                |
 
-Expected with `custom`: the table renders as a bordered grid with wrapped cells (like Markdown preview). Source GFM is hidden while the overlay is shown. Click inside the table to edit raw markdown (same as `selection-reveal`).
+Expected with `custom`: the table renders as a bordered grid with **single-line cells** (no text wrapping yet). Column width follows cell content, so long paragraphs produce wide columns and a wide overlay. Source GFM is hidden while the overlay is shown. Click inside the table to edit raw markdown (same as `selection-reveal`). Cell wrapping may be added later.
 
 ## Tables near other blocks
 
@@ -360,4 +360,4 @@ Paragraph immediately above a table (blank line separates them).
 - Rendered: pipe grid, aligned columns, markers hidden.
 - Cursor anywhere in table: **entire table** goes raw (all rows).
 - Mixed heavy formatting in one cell may fall back to raw (known limitation).
-- `custom` rendering mode: SVG overlay with wrapped cells; click table to edit source.
+- `custom` rendering mode: SVG table overlay with single-line cells and content-sized columns; click table to edit source.

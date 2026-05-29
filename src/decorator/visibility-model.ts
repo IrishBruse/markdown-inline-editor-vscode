@@ -77,21 +77,19 @@ export function filterDecorationsForEditor(
   // For table blocks in inline mode, if cursor/selection is on ANY line
   // in the table, reveal the entire table (show raw markdown, not decorations).
   const tableScopes = scopes.filter(s => s.kind === 'table');
+  const inactiveTableScopes = collectInactiveTableScopes(tableScopes, activeLines);
+  const inactiveTableSet = new Set(inactiveTableScopes);
   const rawTableRanges: Range[] = [];
   if (!tablesAlwaysRaw) {
     for (const tableScope of tableScopes) {
-      let tableIsActive = false;
-      for (let line = tableScope.range.start.line; line <= tableScope.range.end.line; line++) {
-        if (activeLines.has(line)) {
-          tableIsActive = true;
-          break;
-        }
-      }
-      if (tableIsActive) {
+      if (!inactiveTableSet.has(tableScope)) {
         rawTableRanges.push(tableScope.range);
       }
     }
   }
+  // Custom overlay: hide inline decorations (links, bold, etc.) under the SVG.
+  const customTableOverlayScopes =
+    tableRenderingMode === 'custom' ? inactiveTableScopes : [];
 
   const filtered = new Map<DecorationType, FilteredDecoration[]>();
   const ghostFaintRanges: Range[] = [];
@@ -112,6 +110,13 @@ export function filterDecorationsForEditor(
     const range = rangeFactory(decoration.startPos, decoration.endPos, originalText);
     if (!range) continue;
     const isActiveLine = activeLines.size > 0 && activeLines.has(range.start.line);
+
+    if (
+      customTableOverlayScopes.length > 0 &&
+      offsetIntersectsScope(decoration.startPos, decoration.endPos, customTableOverlayScopes)
+    ) {
+      continue;
+    }
 
     // Code blocks and frontmatter use opaque, whole-line backgrounds.
     // On some themes, VS Code's native selection highlight is drawn "under" those
@@ -262,6 +267,34 @@ export function filterDecorationsForEditor(
   }
 
   return filtered;
+}
+
+function collectInactiveTableScopes(
+  tableScopes: ScopeEntry[],
+  activeLines: Set<number>,
+): ScopeEntry[] {
+  const inactive: ScopeEntry[] = [];
+  for (const tableScope of tableScopes) {
+    let tableIsActive = false;
+    for (let line = tableScope.range.start.line; line <= tableScope.range.end.line; line++) {
+      if (activeLines.has(line)) {
+        tableIsActive = true;
+        break;
+      }
+    }
+    if (!tableIsActive) {
+      inactive.push(tableScope);
+    }
+  }
+  return inactive;
+}
+
+function offsetIntersectsScope(
+  startPos: number,
+  endPos: number,
+  scopes: ScopeEntry[],
+): boolean {
+  return scopes.some((scope) => startPos < scope.endPos && endPos > scope.startPos);
 }
 
 function collectRawRanges(selectedRanges: Range[], scopes: ScopeEntry[]): Range[] {

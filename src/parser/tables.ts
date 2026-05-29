@@ -3,12 +3,13 @@ import type {
   Emphasis,
   InlineCode,
   Node,
+  TableRow,
   Strong,
   Table,
   TableCell,
   Text,
 } from 'mdast';
-import type { ScopeRange } from './types';
+import type { ScopeRange, TableBlock } from './types';
 import { addScope } from './common';
 
 export function extractCellPlainText(cell: TableCell): string {
@@ -203,4 +204,54 @@ export function computeColumnWidths(tableNode: Table, source: string): number[] 
 
 export function addTableScope(scopes: ScopeRange[], tableStart: number, tableEnd: number): void {
   addScope(scopes, tableStart, tableEnd, 'table');
+}
+
+function extractRowCells(row: TableRow): string[] {
+  return row.children.map((cell) => extractCellPlainText(cell as TableCell));
+}
+
+/**
+ * Build a plain-text table block for custom SVG rendering.
+ */
+export function buildTableBlock(node: Table, source: string): TableBlock | null {
+  if (
+    !node.position ||
+    node.position.start.offset === undefined ||
+    node.position.end.offset === undefined
+  ) {
+    return null;
+  }
+
+  if (node.children.length === 0) {
+    return null;
+  }
+
+  const startPos = node.position.start.offset;
+  const endPos = node.position.end.offset;
+  const tableText = source.slice(startPos, endPos);
+  const numLines = tableText.length === 0 ? 0 : (tableText.match(/\n/g)?.length ?? 0) + 1;
+
+  const header = extractRowCells(node.children[0]);
+  if (header.length === 0) {
+    return null;
+  }
+
+  const colCount = header.length;
+  const rows: string[][] = [];
+  for (let i = 1; i < node.children.length; i++) {
+    const rowCells = extractRowCells(node.children[i]);
+    if (rowCells.length !== colCount) {
+      return null;
+    }
+    rows.push(rowCells);
+  }
+
+  return {
+    startPos,
+    endPos,
+    numLines,
+    header,
+    rows,
+    align: node.align ?? [],
+  };
 }

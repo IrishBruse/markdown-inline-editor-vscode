@@ -105,3 +105,6 @@ export class MermaidDiagramDecorations {
     }
   }
 }
+
+/** Shared SVG data-URI overlay decoration cache (Mermaid diagrams, custom tables, etc.). */
+export { MermaidDiagramDecorations as SvgOverlayDecorations };

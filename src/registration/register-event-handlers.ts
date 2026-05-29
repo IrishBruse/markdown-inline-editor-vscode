@@ -59,7 +59,11 @@ export function registerEventHandlers(
         decorator.recreateColorDependentTypes();
       }
 
-      if (event.affectsConfiguration('editor.fontSize') || event.affectsConfiguration('editor.lineHeight')) {
+      if (
+        event.affectsConfiguration('editor.fontSize') ||
+        event.affectsConfiguration('editor.lineHeight') ||
+        event.affectsConfiguration('editor.fontFamily')
+      ) {
         decorator.clearMathDecorationCache();
       }
     }),

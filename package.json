@@ -152,10 +152,10 @@
           "enumDescriptions": [
             "Always show tables as plain GFM source (pipes, padding, and cell text).",
             "Render aligned columns in the editor; reveal raw markdown for the whole table while the cursor or selection is inside it.",
-            "Render tables as preview-style SVG overlays (like Mermaid). Reveal raw GFM while editing inside the table."
+            "Render tables as an SVG table overlay (like Mermaid). Reveal raw GFM while editing inside the table."
           ],
           "description": "How tables are rendered in the editor",
-          "markdownDescription": "Controls table rendering.\n\n- `raw` — always plain markdown\n- `inline` — aligned columns until you edit inside the table (default)\n- `custom` — preview-style HTML table as an SVG overlay"
+          "markdownDescription": "Controls table rendering.\n\n- `raw` — always plain markdown\n- `inline` — aligned columns until you edit inside the table (default)\n- `custom` — SVG table overlay with single-line, content-sized cells"
         },
         "markdownInlineEditor.orderedLists.autoNumber": {
           "type": "boolean",

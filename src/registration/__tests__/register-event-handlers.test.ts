@@ -142,6 +142,7 @@ describe('registerEventHandlers', () => {
       'markdownInlineEditor.colors',
       'editor.fontSize',
       'editor.lineHeight',
+      'editor.fontFamily',
     ]);
 
     configurationListener?.({

@@ -170,7 +170,7 @@ describe('table decoration rendering', () => {
     expect(result.has('tablePipe')).toBe(false);
   });
 
-  it('skips table decorations when rendering mode is custom (stub)', () => {
+  it('skips table decorations when rendering mode is custom', () => {
     vi.spyOn(config.tables, 'renderingMode').mockReturnValue('custom');
     const text = '| A |\n| - |\nother';
     const decs: DecorationRange[] = [
@@ -185,6 +185,58 @@ describe('table decoration rendering', () => {
       (s, e, t) => simpleRangeFactory(s, e, t),
     );
     expect(result.has('tablePipe')).toBe(false);
+  });
+
+  it('skips link decorations inside custom overlay tables when cursor is outside', () => {
+    vi.spyOn(config.tables, 'renderingMode').mockReturnValue('custom');
+    const text = '| Col | Note |\n| --- | ---- |\n| https://example.com | link |\n\nafter';
+    const urlStart = text.indexOf('https://');
+    const urlEnd = text.indexOf(' | link');
+    const tableEnd = text.indexOf('\n\nafter');
+    const tableScope: ScopeEntry = {
+      startPos: 0,
+      endPos: tableEnd,
+      range: new Range(new Position(0, 0), new Position(3, 0)),
+      kind: 'table',
+    };
+    const decs: DecorationRange[] = [
+      { startPos: urlStart, endPos: urlEnd, type: 'link', url: 'https://example.com' } as any,
+    ];
+    const afterLine = text.split('\n').length - 1;
+    const editor = makeEditor(text, afterLine, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [tableScope],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('link')).toBe(false);
+  });
+
+  it('keeps link decorations inside custom tables while cursor is in the table', () => {
+    vi.spyOn(config.tables, 'renderingMode').mockReturnValue('custom');
+    const text = '| Col | Note |\n| --- | ---- |\n| https://example.com | link |\n';
+    const urlStart = text.indexOf('https://');
+    const urlEnd = text.indexOf(' | link');
+    const tableScope: ScopeEntry = {
+      startPos: 0,
+      endPos: text.length - 1,
+      range: new Range(new Position(0, 0), new Position(3, 0)),
+      kind: 'table',
+    };
+    const decs: DecorationRange[] = [
+      { startPos: urlStart, endPos: urlEnd, type: 'link', url: 'https://example.com' } as any,
+    ];
+    const editor = makeEditor(text, 2, 5);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [tableScope],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('link')).toBe(true);
   });
 });
 

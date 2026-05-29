@@ -30,6 +30,16 @@ export interface MermaidBlock {
   numLines: number;
 }
 
+/** Plain-text GFM table for custom SVG overlay rendering. */
+export interface TableBlock {
+  startPos: number;
+  endPos: number;
+  numLines: number;
+  header: string[];
+  rows: string[][];
+  align: (null | 'left' | 'center' | 'right')[];
+}
+
 export interface MathRegion {
   startPos: number;
   endPos: number;
@@ -42,6 +52,7 @@ export interface ParseResult {
   decorations: DecorationRange[];
   scopes: ScopeRange[];
   mermaidBlocks: MermaidBlock[];
+  tableBlocks: TableBlock[];
   mathRegions: MathRegion[];
 }
 
