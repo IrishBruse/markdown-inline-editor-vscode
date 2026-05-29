@@ -1,4 +1,5 @@
 import { Range, ThemeColor, type DecorationOptions, type Position, type TextEditor } from 'vscode';
+import { config } from '../config';
 import type { DecorationRange, DecorationType } from '../parser';
 import { isMarkerDecorationType } from './decoration-categories';
 
@@ -69,20 +70,26 @@ export function filterDecorationsForEditor(
     'tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell',
   ]);
 
-  // For table blocks, if cursor/selection is on ANY line in the table,
-  // reveal the entire table (show raw markdown, not decorations).
+  const tableRenderingMode = config.tables.renderingMode();
+  const tablesAlwaysRaw =
+    tableRenderingMode === 'raw' || tableRenderingMode === 'custom';
+
+  // For table blocks in inline mode, if cursor/selection is on ANY line
+  // in the table, reveal the entire table (show raw markdown, not decorations).
   const tableScopes = scopes.filter(s => s.kind === 'table');
   const rawTableRanges: Range[] = [];
-  for (const tableScope of tableScopes) {
-    let tableIsActive = false;
-    for (let line = tableScope.range.start.line; line <= tableScope.range.end.line; line++) {
-      if (activeLines.has(line)) {
-        tableIsActive = true;
-        break;
+  if (!tablesAlwaysRaw) {
+    for (const tableScope of tableScopes) {
+      let tableIsActive = false;
+      for (let line = tableScope.range.start.line; line <= tableScope.range.end.line; line++) {
+        if (activeLines.has(line)) {
+          tableIsActive = true;
+          break;
+        }
       }
-    }
-    if (tableIsActive) {
-      rawTableRanges.push(tableScope.range);
+      if (tableIsActive) {
+        rawTableRanges.push(tableScope.range);
+      }
     }
   }
 
@@ -198,10 +205,10 @@ export function filterDecorationsForEditor(
       continue;
     }
 
-    // Table decorations: whole-block reveal when cursor is inside the table
+    // Table decorations: raw/custom modes skip rendering; inline mode
+    // shows raw markdown for the whole table while the cursor is inside it.
     if (tableTypes.has(decoration.type)) {
-      if (rangeIntersectsAny(range, rawTableRanges)) {
-        // Whole-block raw reveal: skip decoration so raw markdown shows
+      if (tablesAlwaysRaw || rangeIntersectsAny(range, rawTableRanges)) {
         continue;
       }
       if (decoration.replacement !== undefined) {

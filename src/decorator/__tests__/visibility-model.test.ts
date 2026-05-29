@@ -4,6 +4,7 @@ vi.mock('../../parser', () => ({
   },
 }));
 
+import { config } from '../../config';
 import { filterDecorationsForEditor } from '../visibility-model';
 import type { ScopeEntry } from '../visibility-model';
 import type { DecorationRange } from '../../parser';
@@ -150,6 +151,40 @@ describe('table decoration rendering', () => {
     expect(cells).toBeDefined();
     expect(cells[0].renderOptions?.before?.contentText).toBe(' bold ');
     expect(cells[0].renderOptions?.before?.fontWeight).toBe('bold');
+  });
+
+  it('skips table decorations when rendering mode is raw', () => {
+    vi.spyOn(config.tables, 'renderingMode').mockReturnValue('raw');
+    const text = '| A |\n| - |\nother';
+    const decs: DecorationRange[] = [
+      { startPos: 0, endPos: 1, type: 'tablePipe', replacement: '│' } as any,
+    ];
+    const editor = makeEditor(text, 2, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('tablePipe')).toBe(false);
+  });
+
+  it('skips table decorations when rendering mode is custom (stub)', () => {
+    vi.spyOn(config.tables, 'renderingMode').mockReturnValue('custom');
+    const text = '| A |\n| - |\nother';
+    const decs: DecorationRange[] = [
+      { startPos: 0, endPos: 1, type: 'tablePipe', replacement: '│' } as any,
+    ];
+    const editor = makeEditor(text, 2, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('tablePipe')).toBe(false);
   });
 });
 

@@ -51,6 +51,10 @@ export function registerEventHandlers(
         decorator.recreateLinkDecorationType();
       }
 
+      if (event.affectsConfiguration('markdownInlineEditor.tables.renderingMode')) {
+        decorator.updateDecorationsForSelection();
+      }
+
       if (event.affectsConfiguration('markdownInlineEditor.colors')) {
         decorator.recreateColorDependentTypes();
       }
