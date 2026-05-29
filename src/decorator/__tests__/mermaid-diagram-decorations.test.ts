@@ -184,46 +184,44 @@ describe('MermaidDiagramDecorations', () => {
   });
 
   describe('LRU eviction', () => {
-    // evictIfNeeded fires inside getOrCreateEntry when the cache exceeds
-    // maxEntries. The entry with the lowest lastUsed counter (first inserted
-    // in the current apply call) is the LRU and gets evicted.
-    it('evicts the first-inserted entry when a single apply call exceeds maxEntries', () => {
-      const mdd = new MermaidDiagramDecorations(2); // maxEntries = 2
-      const editor = makeEditor();
-
-      // One apply with 3 keys: k1(lastUsed=1), k2(lastUsed=2), k3(lastUsed=3).
-      // After k3 is inserted evictIfNeeded runs: k1 is LRU (lastUsed=1) → evicted.
-      mdd.apply(
-        editor as any,
-        new Map([['k1', makeRanges()], ['k2', makeRanges()], ['k3', makeRanges()]]),
-        new Map([['k1', 'data:1'], ['k2', 'data:2'], ['k3', 'data:3']])
-      );
-
-      // setDecorations was called for all three keys (eviction happens after insertion)
-      const k1Type = editor.setDecorations.mock.calls[0][0];
-      const k2Type = editor.setDecorations.mock.calls[1][0];
-
-      expect(k1Type.dispose).toHaveBeenCalled(); // evicted (lowest lastUsed)
-      expect(k2Type.dispose).not.toHaveBeenCalled(); // survives
-    });
-
-    it('evicts whichever key has the lowest lastUsed at eviction time', () => {
+    it('does not evict keys in the current apply batch when over maxEntries', () => {
       const mdd = new MermaidDiagramDecorations(2);
       const editor = makeEditor();
 
-      // k2 is first in the map → lastUsed=1 (LRU); k1 is second → lastUsed=2.
-      // k2 is evicted when k3 pushes the cache over the limit.
       mdd.apply(
         editor as any,
-        new Map([['k2', makeRanges()], ['k1', makeRanges()], ['k3', makeRanges()]]),
-        new Map([['k2', 'data:2'], ['k1', 'data:1'], ['k3', 'data:3']])
+        new Map([['k1', makeRanges()], ['k2', makeRanges()], ['k3', makeRanges()]]),
+        new Map([['k1', 'data:1'], ['k2', 'data:2'], ['k3', 'data:3']]),
       );
 
-      const k2Type = editor.setDecorations.mock.calls[0][0]; // k2 processed first
-      const k1Type = editor.setDecorations.mock.calls[1][0]; // k1 processed second
+      const k1Type = editor.setDecorations.mock.calls[0][0];
+      const k2Type = editor.setDecorations.mock.calls[1][0];
+      const k3Type = editor.setDecorations.mock.calls[2][0];
 
-      expect(k2Type.dispose).toHaveBeenCalled(); // k2 is LRU
-      expect(k1Type.dispose).not.toHaveBeenCalled(); // k1 survives
+      expect(k1Type.dispose).not.toHaveBeenCalled();
+      expect(k2Type.dispose).not.toHaveBeenCalled();
+      expect(k3Type.dispose).not.toHaveBeenCalled();
+    });
+
+    it('evicts stale cache entries during apply when a new batch exceeds maxEntries', () => {
+      const mdd = new MermaidDiagramDecorations(2);
+      const editor = makeEditor();
+
+      mdd.apply(
+        editor as any,
+        new Map([['k1', makeRanges()], ['k2', makeRanges()]]),
+        new Map([['k1', 'data:1'], ['k2', 'data:2']]),
+      );
+      const k1Type = editor.setDecorations.mock.calls[0][0];
+      editor.setDecorations.mockClear();
+
+      mdd.apply(
+        editor as any,
+        new Map([['k2', makeRanges()], ['k3', makeRanges()]]),
+        new Map([['k2', 'data:2'], ['k3', 'data:3']]),
+      );
+
+      expect(k1Type.dispose).toHaveBeenCalled();
     });
   });
 });

@@ -14,6 +14,7 @@ export class MermaidDiagramDecorations {
 
   apply(editor: TextEditor, rangesByKey: Map<string, Range[]>, dataUrisByKey: Map<string, string>): void {
     const usedKeys = new Set<string>();
+    const batchKeys = new Set(rangesByKey.keys());
     const isDarkTheme = window.activeColorTheme.kind === ColorThemeKind.Dark ||
       window.activeColorTheme.kind === ColorThemeKind.HighContrast;
 
@@ -22,7 +23,7 @@ export class MermaidDiagramDecorations {
       if (!dataUri || ranges.length === 0) {
         continue;
       }
-      const entry = this.getOrCreateEntry(key, dataUri, isDarkTheme);
+      const entry = this.getOrCreateEntry(key, dataUri, isDarkTheme, batchKeys);
       usedKeys.add(key);
       editor.setDecorations(entry.decorationType, ranges);
     }
@@ -38,7 +39,12 @@ export class MermaidDiagramDecorations {
     this.cache.clear();
   }
 
-  private getOrCreateEntry(key: string, dataUri: string, isDarkTheme: boolean): MermaidDecorationEntry {
+  private getOrCreateEntry(
+    key: string,
+    dataUri: string,
+    isDarkTheme: boolean,
+    protectedKeys: ReadonlySet<string>,
+  ): MermaidDecorationEntry {
     const existing = this.cache.get(key);
     // Invalidate cache if theme changed
     if (existing && existing.isDarkTheme === isDarkTheme) {
@@ -69,7 +75,7 @@ export class MermaidDiagramDecorations {
       isDarkTheme,
     };
     this.cache.set(key, entry);
-    this.evictIfNeeded();
+    this.evictIfNeeded(protectedKeys);
     return entry;
   }
 
@@ -84,21 +90,24 @@ export class MermaidDiagramDecorations {
     }
   }
 
-  private evictIfNeeded(): void {
-    if (this.cache.size <= this.maxEntries) {
-      return;
-    }
-
-    let lruKey: string | undefined;
-    let lruAccess = Infinity;
-    for (const [key, entry] of this.cache.entries()) {
-      if (entry.lastUsed < lruAccess) {
-        lruAccess = entry.lastUsed;
-        lruKey = key;
+  private evictIfNeeded(protectedKeys: ReadonlySet<string>): void {
+    while (this.cache.size > this.maxEntries) {
+      let lruKey: string | undefined;
+      let lruAccess = Infinity;
+      for (const [key, entry] of this.cache.entries()) {
+        if (protectedKeys.has(key)) {
+          continue;
+        }
+        if (entry.lastUsed < lruAccess) {
+          lruAccess = entry.lastUsed;
+          lruKey = key;
+        }
       }
-    }
 
-    if (lruKey) {
+      if (!lruKey) {
+        return;
+      }
+
       const entry = this.cache.get(lruKey);
       entry?.decorationType.dispose();
       this.cache.delete(lruKey);

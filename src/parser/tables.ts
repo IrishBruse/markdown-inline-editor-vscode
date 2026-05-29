@@ -72,17 +72,28 @@ export function detectCellStyle(
   return undefined;
 }
 
+/** True when a code point is typically rendered at double ASCII width in monospace. */
+export function isWideMonospaceChar(code: number): boolean {
+  return (
+    (code >= 0x2e80 && code <= 0x9fff) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xfe30 && code <= 0xfe4f) ||
+    (code >= 0x20000 && code <= 0x2fa1f) ||
+    (code >= 0x3040 && code <= 0x309f) ||
+    (code >= 0x30a0 && code <= 0x30ff) ||
+    (code >= 0xac00 && code <= 0xd7af) ||
+    (code >= 0x1100 && code <= 0x11ff) ||
+    (code >= 0x2600 && code <= 0x27bf) ||
+    (code >= 0x1f300 && code <= 0x1faff)
+  );
+}
+
 export function measureTextWidth(plain: string): number {
   let width = 0;
   let cjkCount = 0;
   for (const char of plain) {
     const code = char.codePointAt(0)!;
-    if (
-      (code >= 0x2e80 && code <= 0x9fff) ||
-      (code >= 0xf900 && code <= 0xfaff) ||
-      (code >= 0xfe30 && code <= 0xfe4f) ||
-      (code >= 0x20000 && code <= 0x2fa1f)
-    ) {
+    if (isWideMonospaceChar(code)) {
       width += 2;
       cjkCount++;
     } else {

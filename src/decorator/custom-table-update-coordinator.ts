@@ -5,10 +5,6 @@ import { svgToDataUri } from '../mermaid/svg-processor';
 import { getEditorLineMetrics, renderTableSvg } from '../tables/table-renderer';
 import { SvgOverlayDecorations } from './mermaid-diagram-decorations';
 import { createRange, isSelectionOrCursorInsideOffsets } from './editor-decoration-applier';
-import { logDebug } from '../logging';
-
-/** Limit synchronous SVG renders per update to avoid UI jank on large documents. */
-const MAX_SYNC_TABLE_RENDERS = 20;
 
 type TableBlockKeyCacheEntry = {
   isDark: boolean;
@@ -86,8 +82,6 @@ export class CustomTableUpdateCoordinator {
     const dataUrisByKey = new Map<string, string>();
     const { lineHeight, fontSize } = getEditorLineMetrics();
     const fontFamily = workspace.getConfiguration('editor').get<string>('fontFamily');
-    let syncRenderCount = 0;
-    let syncRenderCapLogged = false;
 
     for (const block of tableBlocks) {
       if (token !== this.updateToken || editor.document.version !== documentVersion) {
@@ -111,17 +105,6 @@ export class CustomTableUpdateCoordinator {
 
       const key = getTableBlockCacheKey(block, isDark, lineHeight, fontSize, fontFamily);
       if (!dataUrisByKey.has(key)) {
-        if (syncRenderCount >= MAX_SYNC_TABLE_RENDERS) {
-          if (!syncRenderCapLogged) {
-            logDebug('custom table overlay sync render cap reached', {
-              max: MAX_SYNC_TABLE_RENDERS,
-              total: tableBlocks.length,
-            });
-            syncRenderCapLogged = true;
-          }
-          continue;
-        }
-        syncRenderCount++;
         const svg = renderTableSvg(block, { isDark, lineHeight, fontSize, fontFamily });
         dataUrisByKey.set(key, svgToDataUri(svg));
       }
