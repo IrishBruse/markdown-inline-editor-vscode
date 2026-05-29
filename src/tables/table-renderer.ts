@@ -144,7 +144,6 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
   const bg = options.isDark ? '#1e1e1e' : '#ffffff';
   const border = options.isDark ? '#454545' : '#c8c8c8';
   const headerBg = options.isDark ? '#2d2d2d' : '#f3f3f3';
-  const headerRule = options.isDark ? '#6e6e6e' : '#a8a8a8';
   const textColor = options.isDark ? '#cccccc' : '#333333';
   const fontFamily = options.fontFamily
     ? `${escapeXml(options.fontFamily)}, sans-serif`
@@ -191,13 +190,6 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
       );
 
       x += colWidth + BORDER_WIDTH;
-    }
-
-    if (isHeader) {
-      const ruleY = y + rowHeight - 1;
-      parts.push(
-        `<line x1="0" y1="${ruleY}" x2="${totalWidth}" y2="${ruleY}" stroke="${headerRule}" stroke-width="1"/>`,
-      );
     }
 
     y += rowHeight;
