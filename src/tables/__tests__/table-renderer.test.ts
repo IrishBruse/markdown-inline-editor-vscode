@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TableBlock } from '../../parser';
-import { renderTableSvg } from '../table-renderer';
+import { renderTableSvg, wrapText } from '../table-renderer';
 
 function basicBlock(): TableBlock {
   return {
@@ -17,6 +17,24 @@ function basicBlock(): TableBlock {
 }
 
 const metrics = { lineHeight: 18, fontSize: 13 };
+
+describe('wrapText', () => {
+  it('returns a single line when text fits', () => {
+    expect(wrapText('hello world', 20)).toEqual(['hello world']);
+  });
+
+  it('wraps at word boundaries', () => {
+    const lines = wrapText('one two three four', 8);
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join(' ')).toBe('one two three four');
+  });
+
+  it('breaks words longer than the max width', () => {
+    const lines = wrapText('abcdefghij', 4);
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join('')).toBe('abcdefghij');
+  });
+});
 
 describe('renderTableSvg', () => {
   it('renders header and data rows with borders', () => {
@@ -54,9 +72,13 @@ describe('renderTableSvg', () => {
   });
 
   it('spans header cells across header and separator source lines', () => {
-    const svg = renderTableSvg(basicBlock(), { isDark: false, ...metrics });
+    const block = basicBlock();
+    const svg = renderTableSvg(block, { isDark: false, ...metrics });
     const headerBandHeight = metrics.lineHeight * 2;
-    expect(svg).toContain(`height="${headerBandHeight}"`);
+    const headerRectMatch = svg.match(
+      new RegExp(`<rect[^>]*height="${headerBandHeight}"[^>]*fill="#f3f3f3"`),
+    );
+    expect(headerRectMatch).not.toBeNull();
   });
 
   it('does not draw a separate header rule line (cell strokes only)', () => {
@@ -66,7 +88,33 @@ describe('renderTableSvg', () => {
     expect(svg).not.toContain('#6e6e6e');
   });
 
-  it('caps column width and truncates long cell text with ellipsis', () => {
+  it('wraps long cell text with tspans instead of truncating', () => {
+    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
+    const block: TableBlock = {
+      startPos: 0,
+      endPos: 100,
+      numLines: 3,
+      header: ['Section', 'Content'],
+      rows: [[longText, longText]],
+      align: [null, null],
+    };
+    const svg = renderTableSvg(block, { isDark: false, ...metrics });
+    expect(svg).toContain('<tspan');
+    expect(svg).toContain('Lorem ipsum');
+    expect(svg).toContain('adipiscing');
+    expect(svg).toContain('dy="');
+    expect(svg).not.toContain('...');
+    const widthMatch = svg.match(/width="(\d+)"/);
+    expect(widthMatch).not.toBeNull();
+    const totalWidth = Number(widthMatch![1]);
+    expect(totalWidth).toBeLessThanOrEqual(800 + 4);
+    const heightMatch = svg.match(/height="(\d+)"/);
+    expect(heightMatch).not.toBeNull();
+    const renderedHeight = Number(heightMatch![1]);
+    expect(renderedHeight).toBeGreaterThan(block.numLines * metrics.lineHeight);
+  });
+
+  it('caps column width for very long unbroken text', () => {
     const longText = 'A'.repeat(500);
     const block: TableBlock = {
       startPos: 0,
@@ -77,8 +125,7 @@ describe('renderTableSvg', () => {
       align: [null],
     };
     const svg = renderTableSvg(block, { isDark: false, ...metrics });
-    expect(svg).not.toContain(longText);
-    expect(svg).toContain('...');
+    expect(svg).toContain('<tspan');
     const widthMatch = svg.match(/width="(\d+)"/);
     expect(widthMatch).not.toBeNull();
     const totalWidth = Number(widthMatch![1]);

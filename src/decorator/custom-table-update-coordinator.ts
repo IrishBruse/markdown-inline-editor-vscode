@@ -18,6 +18,13 @@ type TableBlockKeyCacheEntry = {
   key: string;
 };
 
+type CoordinatorState = {
+  uri: string;
+  documentVersion: number;
+  visibilitySignature: string;
+  renderThemeKey: string;
+};
+
 const tableBlockKeyCache = new WeakMap<TableBlock, TableBlockKeyCacheEntry>();
 
 function getTableBlockCacheKey(
@@ -61,12 +68,35 @@ function getTableBlockCacheKey(
   return key;
 }
 
+/** Which tables are hidden vs shown given the current selection. */
+export function buildTableVisibilitySignature(
+  tableBlocks: TableBlock[],
+  normalizedText: string,
+  editor: TextEditor,
+): string {
+  const parts: string[] = [];
+  for (const block of tableBlocks) {
+    const hidden = isSelectionOrCursorInsideOffsets(
+      block.startPos,
+      block.endPos,
+      normalizedText,
+      editor.selections,
+      editor.document,
+    );
+    parts.push(hidden ? `h:${block.startPos}` : `v:${block.startPos}`);
+  }
+  return parts.join('|');
+}
+
 function defaultYieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
 export class CustomTableUpdateCoordinator {
   private updateToken = 0;
+  private appliedState: CoordinatorState | null = null;
+  private inFlightSignature: string | null = null;
+  private readonly svgDataUriCache = new Map<string, string>();
 
   constructor(
     private readonly overlayDecorations: SvgOverlayDecorations,
@@ -83,30 +113,76 @@ export class CustomTableUpdateCoordinator {
     void this.updateAsync(editor, tableBlocks, normalizedText, documentVersion);
   }
 
+  private resetCoordinatorState(): void {
+    this.appliedState = null;
+    this.inFlightSignature = null;
+    this.svgDataUriCache.clear();
+  }
+
+  private matchesAppliedState(
+    uri: string,
+    documentVersion: number,
+    visibilitySignature: string,
+    renderThemeKey: string,
+  ): boolean {
+    return (
+      this.appliedState !== null &&
+      this.appliedState.uri === uri &&
+      this.appliedState.documentVersion === documentVersion &&
+      this.appliedState.visibilitySignature === visibilitySignature &&
+      this.appliedState.renderThemeKey === renderThemeKey
+    );
+  }
+
   async updateAsync(
     editor: TextEditor,
     tableBlocks: TableBlock[],
     normalizedText: string,
     documentVersion: number,
   ): Promise<void> {
+    const editorUri = editor.document.uri.toString();
+
     if (tableBlocks.length === 0) {
+      this.updateToken++;
+      this.resetCoordinatorState();
       this.overlayDecorations.clear(editor);
       return;
     }
 
-    const token = ++this.updateToken;
     const isDark = window.activeColorTheme.kind === ColorThemeKind.Dark ||
       window.activeColorTheme.kind === ColorThemeKind.HighContrast;
+    const { lineHeight, fontSize } = getEditorLineMetrics();
+    const fontFamily = workspace.getConfiguration('editor').get<string>('fontFamily');
+    const renderThemeKey = `${isDark}:${lineHeight}:${fontSize}:${fontFamily ?? ''}`;
+    const visibilitySignature = buildTableVisibilitySignature(
+      tableBlocks,
+      normalizedText,
+      editor,
+    );
+
+    if (this.inFlightSignature === visibilitySignature) {
+      return;
+    }
+
+    if (this.matchesAppliedState(editorUri, documentVersion, visibilitySignature, renderThemeKey)) {
+      return;
+    }
+
+    if (this.appliedState?.documentVersion !== documentVersion) {
+      this.svgDataUriCache.clear();
+    }
+
+    const token = ++this.updateToken;
+    this.inFlightSignature = visibilitySignature;
 
     const rangesByKey = new Map<string, Range[]>();
     const dataUrisByKey = new Map<string, string>();
     const keysToRender: string[] = [];
     const blockByKey = new Map<string, TableBlock>();
-    const { lineHeight, fontSize } = getEditorLineMetrics();
-    const fontFamily = workspace.getConfiguration('editor').get<string>('fontFamily');
 
     for (const block of tableBlocks) {
       if (token !== this.updateToken || editor.document.version !== documentVersion) {
+        this.inFlightSignature = null;
         return;
       }
 
@@ -128,7 +204,9 @@ export class CustomTableUpdateCoordinator {
       const key = getTableBlockCacheKey(block, isDark, lineHeight, fontSize, fontFamily);
       if (!blockByKey.has(key)) {
         blockByKey.set(key, block);
-        keysToRender.push(key);
+        if (!this.svgDataUriCache.has(key)) {
+          keysToRender.push(key);
+        }
       }
 
       const ranges = rangesByKey.get(key) || [];
@@ -137,6 +215,7 @@ export class CustomTableUpdateCoordinator {
     }
 
     if (token !== this.updateToken || editor.document.version !== documentVersion) {
+      this.inFlightSignature = null;
       return;
     }
 
@@ -144,6 +223,7 @@ export class CustomTableUpdateCoordinator {
 
     for (let offset = 0; offset < keysToRender.length; offset += this.renderBatchSize) {
       if (token !== this.updateToken || editor.document.version !== documentVersion) {
+        this.inFlightSignature = null;
         return;
       }
 
@@ -154,10 +234,8 @@ export class CustomTableUpdateCoordinator {
           continue;
         }
         const svg = renderTableSvg(block, renderOptions);
-        dataUrisByKey.set(key, svgToDataUri(svg));
+        this.svgDataUriCache.set(key, svgToDataUri(svg));
       }
-
-      this.overlayDecorations.apply(editor, rangesByKey, dataUrisByKey);
 
       const hasMore = offset + batch.length < keysToRender.length;
       if (hasMore) {
@@ -165,11 +243,31 @@ export class CustomTableUpdateCoordinator {
       }
     }
 
-    if (keysToRender.length === 0) {
-      if (token !== this.updateToken || editor.document.version !== documentVersion) {
-        return;
+    for (const key of rangesByKey.keys()) {
+      const cached = this.svgDataUriCache.get(key);
+      if (cached) {
+        dataUrisByKey.set(key, cached);
       }
-      this.overlayDecorations.apply(editor, rangesByKey, dataUrisByKey);
     }
+
+    if (token !== this.updateToken || editor.document.version !== documentVersion) {
+      this.inFlightSignature = null;
+      return;
+    }
+
+    this.overlayDecorations.apply(editor, rangesByKey, dataUrisByKey);
+
+    if (token !== this.updateToken || editor.document.version !== documentVersion) {
+      this.inFlightSignature = null;
+      return;
+    }
+
+    this.appliedState = {
+      uri: editorUri,
+      documentVersion,
+      visibilitySignature,
+      renderThemeKey,
+    };
+    this.inFlightSignature = null;
   }
 }

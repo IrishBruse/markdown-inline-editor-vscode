@@ -71,7 +71,7 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(rangesByKey.size).toBe(tableBlocks.length);
   });
 
-  it('yields between SVG render batches', async () => {
+  it('yields between SVG render batches and applies once', async () => {
     const tables = Array.from({ length: 25 }, (_, i) => (
       `| Col${i} | Val |\n| --- | --- |\n| ${i} | x |`
     )).join('\n\n');
@@ -93,9 +93,49 @@ describe('CustomTableUpdateCoordinator', () => {
     await coordinator.updateAsync(editor, tableBlocks, md, document.version);
 
     expect(yieldToEventLoop).toHaveBeenCalledTimes(2);
-    expect(apply).toHaveBeenCalledTimes(3);
-    const lastDataUris = apply.mock.calls.at(-1)![2] as Map<string, string>;
-    expect(lastDataUris.size).toBe(tableBlocks.length);
+    expect(apply).toHaveBeenCalledTimes(1);
+    const dataUris = apply.mock.calls[0]![2] as Map<string, string>;
+    expect(dataUris.size).toBe(tableBlocks.length);
+  });
+
+  it('skips re-apply when selection changes outside all tables', async () => {
+    const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
+    const outside = document.positionAt(md.indexOf('After'));
+    const editor = new TextEditor(document, [new Selection(outside, outside)]);
+
+    const apply = vi.fn();
+    const coordinator = makeCoordinator(apply);
+
+    await coordinator.updateAsync(editor, tableBlocks, md, document.version);
+    apply.mockClear();
+
+    const moved = document.positionAt(md.indexOf('After') + 1);
+    editor.selections = [new Selection(moved, moved)];
+    await coordinator.updateAsync(editor, tableBlocks, md, document.version);
+
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('re-applies when selection enters a table', async () => {
+    const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
+    const outside = document.positionAt(md.indexOf('After'));
+    const inside = document.positionAt(0);
+    const editor = new TextEditor(document, [new Selection(outside, outside)]);
+
+    const apply = vi.fn();
+    const coordinator = makeCoordinator(apply);
+
+    await coordinator.updateAsync(editor, tableBlocks, md, document.version);
+    apply.mockClear();
+
+    editor.selections = [new Selection(inside, inside)];
+    await coordinator.updateAsync(editor, tableBlocks, md, document.version);
+
+    expect(apply).toHaveBeenCalledTimes(1);
   });
 
   it('exports a default batch size aligned with progressive rendering', () => {
