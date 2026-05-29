@@ -59,6 +59,13 @@ describe('renderTableSvg', () => {
     expect(svg).toContain(`height="${headerBandHeight}"`);
   });
 
+  it('does not draw a separate header rule line (cell strokes only)', () => {
+    const svg = renderTableSvg(basicBlock(), { isDark: false, ...metrics });
+    expect(svg).not.toContain('<line');
+    expect(svg).not.toContain('#a8a8a8');
+    expect(svg).not.toContain('#6e6e6e');
+  });
+
   it('caps column width and truncates long cell text with ellipsis', () => {
     const longText = 'A'.repeat(500);
     const block: TableBlock = {

@@ -6,6 +6,9 @@ import { getEditorLineMetrics, renderTableSvg } from '../tables/table-renderer';
 import { SvgOverlayDecorations } from './mermaid-diagram-decorations';
 import { createRange, isSelectionOrCursorInsideOffsets } from './editor-decoration-applier';
 
+/** Unique table SVG renders per event-loop turn before yielding (avoids UI jank). */
+export const TABLE_SVG_RENDER_BATCH_SIZE = 20;
+
 type TableBlockKeyCacheEntry = {
   isDark: boolean;
   numLines: number;
@@ -58,10 +61,18 @@ function getTableBlockCacheKey(
   return key;
 }
 
+function defaultYieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 export class CustomTableUpdateCoordinator {
   private updateToken = 0;
 
-  constructor(private readonly overlayDecorations: SvgOverlayDecorations) {}
+  constructor(
+    private readonly overlayDecorations: SvgOverlayDecorations,
+    private readonly renderBatchSize: number = TABLE_SVG_RENDER_BATCH_SIZE,
+    private readonly yieldToEventLoop: () => Promise<void> = defaultYieldToEventLoop,
+  ) {}
 
   update(
     editor: TextEditor,
@@ -69,6 +80,15 @@ export class CustomTableUpdateCoordinator {
     normalizedText: string,
     documentVersion: number,
   ): void {
+    void this.updateAsync(editor, tableBlocks, normalizedText, documentVersion);
+  }
+
+  async updateAsync(
+    editor: TextEditor,
+    tableBlocks: TableBlock[],
+    normalizedText: string,
+    documentVersion: number,
+  ): Promise<void> {
     if (tableBlocks.length === 0) {
       this.overlayDecorations.clear(editor);
       return;
@@ -80,6 +100,8 @@ export class CustomTableUpdateCoordinator {
 
     const rangesByKey = new Map<string, Range[]>();
     const dataUrisByKey = new Map<string, string>();
+    const keysToRender: string[] = [];
+    const blockByKey = new Map<string, TableBlock>();
     const { lineHeight, fontSize } = getEditorLineMetrics();
     const fontFamily = workspace.getConfiguration('editor').get<string>('fontFamily');
 
@@ -104,9 +126,9 @@ export class CustomTableUpdateCoordinator {
       }
 
       const key = getTableBlockCacheKey(block, isDark, lineHeight, fontSize, fontFamily);
-      if (!dataUrisByKey.has(key)) {
-        const svg = renderTableSvg(block, { isDark, lineHeight, fontSize, fontFamily });
-        dataUrisByKey.set(key, svgToDataUri(svg));
+      if (!blockByKey.has(key)) {
+        blockByKey.set(key, block);
+        keysToRender.push(key);
       }
 
       const ranges = rangesByKey.get(key) || [];
@@ -118,6 +140,36 @@ export class CustomTableUpdateCoordinator {
       return;
     }
 
-    this.overlayDecorations.apply(editor, rangesByKey, dataUrisByKey);
+    const renderOptions = { isDark, lineHeight, fontSize, fontFamily };
+
+    for (let offset = 0; offset < keysToRender.length; offset += this.renderBatchSize) {
+      if (token !== this.updateToken || editor.document.version !== documentVersion) {
+        return;
+      }
+
+      const batch = keysToRender.slice(offset, offset + this.renderBatchSize);
+      for (const key of batch) {
+        const block = blockByKey.get(key);
+        if (!block) {
+          continue;
+        }
+        const svg = renderTableSvg(block, renderOptions);
+        dataUrisByKey.set(key, svgToDataUri(svg));
+      }
+
+      this.overlayDecorations.apply(editor, rangesByKey, dataUrisByKey);
+
+      const hasMore = offset + batch.length < keysToRender.length;
+      if (hasMore) {
+        await this.yieldToEventLoop();
+      }
+    }
+
+    if (keysToRender.length === 0) {
+      if (token !== this.updateToken || editor.document.version !== documentVersion) {
+        return;
+      }
+      this.overlayDecorations.apply(editor, rangesByKey, dataUrisByKey);
+    }
   }
 }

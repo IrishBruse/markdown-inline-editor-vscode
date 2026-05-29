@@ -338,7 +338,7 @@ export class Decorator {
       }
     }
     void this.updateMermaidDiagrams(mermaidBlocks, text, document.version);
-    this.updateCustomTables(tableBlocks, text, document.version);
+    void this.updateCustomTables(tableBlocks, text, document.version);
     if (config.debug.performanceEnabled()) {
       logPerformanceMetric('decorator.update', {
         uri: document.uri.toString(),
@@ -441,11 +441,11 @@ export class Decorator {
     };
   }
 
-  private updateCustomTables(
+  private async updateCustomTables(
     tableBlocks: TableBlock[],
     text: string,
     documentVersion: number,
-  ): void {
+  ): Promise<void> {
     if (!this.activeEditor) {
       return;
     }
@@ -455,7 +455,7 @@ export class Decorator {
       return;
     }
 
-    this.customTableCoordinator.update(
+    await this.customTableCoordinator.updateAsync(
       this.activeEditor,
       tableBlocks,
       text,

@@ -201,6 +201,7 @@ describe('MermaidDiagramDecorations', () => {
       expect(k1Type.dispose).not.toHaveBeenCalled();
       expect(k2Type.dispose).not.toHaveBeenCalled();
       expect(k3Type.dispose).not.toHaveBeenCalled();
+      expect((mdd as unknown as { cache: Map<string, unknown> }).cache.size).toBe(3);
     });
 
     it('evicts stale cache entries during apply when a new batch exceeds maxEntries', () => {

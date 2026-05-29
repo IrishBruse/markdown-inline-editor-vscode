@@ -28,7 +28,7 @@ describe('Decorator - custom tables', () => {
     vi.spyOn(config.tables, 'renderingMode').mockReturnValue('custom');
   });
 
-  it('applies SVG overlay when cursor is outside the table', () => {
+  it('applies SVG overlay when cursor is outside the table', async () => {
     const document = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
     const outsideOffset = text.indexOf('After') + 1;
     const outsidePosition = document.positionAt(outsideOffset);
@@ -43,14 +43,14 @@ describe('Decorator - custom tables', () => {
       clear: vi.fn(),
     };
 
-    (decorator as any).updateCustomTables(tableBlocks, text, document.version);
+    await (decorator as any).updateCustomTables(tableBlocks, text, document.version);
 
     expect(applyMock).toHaveBeenCalledTimes(1);
     const dataUris = applyMock.mock.calls[0][2] as Map<string, string>;
     expect([...dataUris.values()][0]).toMatch(/^data:image\/svg\+xml/);
   });
 
-  it('skips overlay when cursor is inside the table', () => {
+  it('skips overlay when cursor is inside the table', async () => {
     const document = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
     const selection = new Selection(
       document.positionAt(0),
@@ -66,14 +66,14 @@ describe('Decorator - custom tables', () => {
       clear: vi.fn(),
     };
 
-    (decorator as any).updateCustomTables(tableBlocks, text, document.version);
+    await (decorator as any).updateCustomTables(tableBlocks, text, document.version);
 
     expect(applyMock).toHaveBeenCalledTimes(1);
     const rangesByKey = applyMock.mock.calls[0][1] as Map<string, unknown[]>;
     expect(rangesByKey.size).toBe(0);
   });
 
-  it('clears overlays when rendering mode is not custom', () => {
+  it('clears overlays when rendering mode is not custom', async () => {
     vi.spyOn(config.tables, 'renderingMode').mockReturnValue('inline');
     const document = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
     const editor = new TextEditor(document, []);
@@ -86,7 +86,7 @@ describe('Decorator - custom tables', () => {
       apply: vi.fn(),
     };
 
-    (decorator as any).updateCustomTables(tableBlocks, text, document.version);
+    await (decorator as any).updateCustomTables(tableBlocks, text, document.version);
 
     expect(clearMock).toHaveBeenCalledTimes(1);
   });

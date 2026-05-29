@@ -90,17 +90,17 @@ export function isWideMonospaceChar(code: number): boolean {
 
 export function measureTextWidth(plain: string): number {
   let width = 0;
-  let cjkCount = 0;
+  let wideCount = 0;
   for (const char of plain) {
     const code = char.codePointAt(0)!;
     if (isWideMonospaceChar(code)) {
       width += 2;
-      cjkCount++;
+      wideCount++;
     } else {
       width += 1;
     }
   }
-  return width + Math.ceil(cjkCount * 0.25);
+  return width + Math.ceil(wideCount * 0.25);
 }
 
 export function findPipePositions(

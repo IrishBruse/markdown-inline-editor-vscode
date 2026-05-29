@@ -90,6 +90,11 @@ export class MermaidDiagramDecorations {
     }
   }
 
+  /**
+   * Evicts LRU entries not in {@link protectedKeys} (the current apply batch).
+   * When the batch alone exceeds {@link maxEntries}, eviction stops and the cache
+   * may temporarily grow so every key in the batch keeps its decoration type.
+   */
   private evictIfNeeded(protectedKeys: ReadonlySet<string>): void {
     while (this.cache.size > this.maxEntries) {
       let lruKey: string | undefined;
