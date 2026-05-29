@@ -44,7 +44,7 @@ describe('renderTableSvg', () => {
     expect(svg).toContain('Role');
     expect(svg).toContain('Ada');
     expect(svg).toContain('Bob');
-    expect(svg).toContain('font-weight="600"');
+    expect(svg).not.toContain('font-weight');
   });
 
   it('escapes XML in cell text', () => {

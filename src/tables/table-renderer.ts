@@ -288,15 +288,13 @@ function appendWrappedCellText(
   fontSize: number,
   charWidth: number,
   cellPadX: number,
-  isHeader: boolean,
 ): void {
   if (lines.length === 0) {
     return;
   }
 
-  const weight = isHeader ? ' font-weight="600"' : '';
   parts.push(
-    `<text fill="${textColor}" font-family="${fontFamily}" font-size="${fontSize}"${weight}>`,
+    `<text fill="${textColor}" font-family="${fontFamily}" font-size="${fontSize}">`,
   );
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
@@ -377,7 +375,6 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
         fontSize,
         charWidth,
         cellPadX,
-        layout.isHeader,
       );
 
       x += colWidth + BORDER_WIDTH;
