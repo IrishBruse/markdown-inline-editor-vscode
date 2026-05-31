@@ -341,28 +341,49 @@ function computeRowHeight(
   return Math.max(minHeight, Math.ceil(contentHeight));
 }
 
+/** Split a row's pixel height across GFM source lines (header uses two lines). */
+export function sliceHeightForSubLine(
+  rowHeight: number,
+  subLine: number,
+  subLineCount: number,
+): number {
+  const base = Math.floor(rowHeight / subLineCount);
+  const remainder = rowHeight % subLineCount;
+  return base + (subLine < remainder ? 1 : 0);
+}
+
 /** Maps a source line index within the table block to a row band slice. */
 export function sourceLineToSliceSpec(
   sourceLineIndex: number,
-  lineHeight: number,
+  layout: TableLayout,
 ): TableLineSliceSpec | null {
   if (sourceLineIndex < 0) {
     return null;
   }
+
+  const { lineHeight } = layout.metrics;
+
   if (sourceLineIndex < HEADER_SOURCE_LINES) {
+    const rowHeight = layout.rowHeights[0] ?? HEADER_SOURCE_LINES * lineHeight;
     return {
       rowLayoutIndex: 0,
       subLine: sourceLineIndex,
       subLineCount: HEADER_SOURCE_LINES,
-      sliceHeight: lineHeight,
+      sliceHeight: sliceHeightForSubLine(rowHeight, sourceLineIndex, HEADER_SOURCE_LINES),
     };
   }
-  const dataLineIndex = sourceLineIndex - HEADER_SOURCE_LINES;
+
+  const rowLayoutIndex = sourceLineIndex - HEADER_SOURCE_LINES + 1;
+  if (rowLayoutIndex >= layout.rowLayouts.length) {
+    return null;
+  }
+
+  const sliceHeight = layout.rowHeights[rowLayoutIndex] ?? lineHeight;
   return {
-    rowLayoutIndex: dataLineIndex + 1,
+    rowLayoutIndex,
     subLine: 0,
     subLineCount: 1,
-    sliceHeight: lineHeight,
+    sliceHeight,
   };
 }
 
@@ -451,12 +472,10 @@ function renderRowBand(
   const rowHeight = slice.sliceHeight;
   const maxLinesPerSubLine = maxWrapLinesForBandHeight(rowHeight, metrics);
   const lineStep = wrappedLineStep(lineHeight, fontSize);
-  const firstLineY = firstLineBaselineY(0, rowHeight, fontSize, rowLayout.maxWrapLines, cellPadY);
 
-  let x = BORDER_WIDTH;
+  const cellLines: string[][] = [];
+  let visibleWrapLines = 1;
   for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
-    const colWidth = colWidths[colIdx];
-    const align = colIdx < block.align.length ? block.align[colIdx] : null;
     const allLines = rowLayout.wrappedCells[colIdx] ?? [''];
     const lines = sliceWrappedLinesForSubLine(
       allLines,
@@ -464,6 +483,19 @@ function renderRowBand(
       slice.subLineCount,
       maxLinesPerSubLine,
     );
+    cellLines.push(lines);
+    if (lines.length > visibleWrapLines) {
+      visibleWrapLines = lines.length;
+    }
+  }
+
+  const firstLineY = firstLineBaselineY(0, rowHeight, fontSize, visibleWrapLines, cellPadY);
+
+  let x = BORDER_WIDTH;
+  for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
+    const colWidth = colWidths[colIdx];
+    const align = colIdx < block.align.length ? block.align[colIdx] : null;
+    const lines = cellLines[colIdx] ?? [''];
 
     parts.push(
       `<rect x="${x}" y="0" width="${colWidth}" height="${rowHeight}" fill="${rowLayout.isHeader ? headerBg : bg}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
@@ -532,7 +564,7 @@ export function renderTableSvgLineSlice(
   layout: TableLayout,
   sourceLineIndex: number,
 ): string | null {
-  const slice = sourceLineToSliceSpec(sourceLineIndex, layout.metrics.lineHeight);
+  const slice = sourceLineToSliceSpec(sourceLineIndex, layout);
   if (!slice || slice.rowLayoutIndex >= layout.rowLayouts.length) {
     return null;
   }

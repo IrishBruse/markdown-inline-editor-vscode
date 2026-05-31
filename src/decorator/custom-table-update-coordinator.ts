@@ -289,7 +289,7 @@ export class CustomTableUpdateCoordinator {
       lineHeight,
       fontSize,
       fontFamily,
-      capToSourceLines: true,
+      capToSourceLines: false,
     };
 
     for (let offset = 0; offset < jobsToRender.length; offset += this.renderBatchSize) {

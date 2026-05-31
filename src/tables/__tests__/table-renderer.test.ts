@@ -5,6 +5,7 @@ import {
   maxWrapLinesForBandHeight,
   renderTableSvg,
   renderTableSvgLineSlice,
+  sliceHeightForSubLine,
   sourceLineToSliceSpec,
   wrapText,
 } from '../table-renderer';
@@ -45,30 +46,31 @@ describe('wrapText', () => {
 
 describe('sourceLineToSliceSpec', () => {
   it('maps header and data source lines', () => {
-    expect(sourceLineToSliceSpec(0, metrics.lineHeight)).toEqual({
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
+    expect(sourceLineToSliceSpec(0, layout)).toEqual({
       rowLayoutIndex: 0,
       subLine: 0,
       subLineCount: 2,
-      sliceHeight: 18,
+      sliceHeight: sliceHeightForSubLine(layout.rowHeights[0], 0, 2),
     });
-    expect(sourceLineToSliceSpec(1, metrics.lineHeight)).toEqual({
+    expect(sourceLineToSliceSpec(1, layout)).toEqual({
       rowLayoutIndex: 0,
       subLine: 1,
       subLineCount: 2,
-      sliceHeight: 18,
+      sliceHeight: sliceHeightForSubLine(layout.rowHeights[0], 1, 2),
     });
-    expect(sourceLineToSliceSpec(2, metrics.lineHeight)).toEqual({
+    expect(sourceLineToSliceSpec(2, layout)).toEqual({
       rowLayoutIndex: 1,
       subLine: 0,
       subLineCount: 1,
-      sliceHeight: 18,
+      sliceHeight: layout.rowHeights[1],
     });
   });
 });
 
 describe('renderTableSvgLineSlice', () => {
-  it('renders one band per source line at line height', () => {
-    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics, capToSourceLines: true });
+  it('renders one band per source line matching row layout heights', () => {
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     let totalSliceHeight = 0;
     for (let line = 0; line < basicBlock().numLines; line++) {
       const svg = renderTableSvgLineSlice(layout, line);
@@ -77,11 +79,30 @@ describe('renderTableSvgLineSlice', () => {
       expect(heightMatch).not.toBeNull();
       totalSliceHeight += Number(heightMatch![1]);
     }
-    expect(totalSliceHeight).toBe(basicBlock().numLines * metrics.lineHeight);
+    expect(totalSliceHeight).toBe(layout.totalHeight);
+  });
+
+  it('uses full wrapped height for a long cell on one source line', () => {
+    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
+    const block: TableBlock = {
+      startPos: 0,
+      endPos: 100,
+      numLines: 3,
+      header: ['Section', 'Content'],
+      rows: [[longText, 'short']],
+      align: [null, null],
+    };
+    const layout = buildTableLayout(block, { isDark: false, ...metrics });
+    const dataSlice = renderTableSvgLineSlice(layout, 2);
+    const heightMatch = dataSlice!.match(/height="(\d+)px"/);
+    expect(heightMatch).not.toBeNull();
+    expect(Number(heightMatch![1])).toBeGreaterThan(metrics.lineHeight);
+    expect(dataSlice).toContain('<tspan');
+    expect(dataSlice).toContain('adipiscing');
   });
 
   it('includes row content on the matching slice', () => {
-    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics, capToSourceLines: true });
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSlice = renderTableSvgLineSlice(layout, 0);
     const dataSlice = renderTableSvgLineSlice(layout, 2);
     expect(headerSlice).toContain('Name');
