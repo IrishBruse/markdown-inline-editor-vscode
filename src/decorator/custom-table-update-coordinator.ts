@@ -14,8 +14,11 @@ import { svgToDataUri } from '../mermaid/svg-processor';
 import { resolveTableColors, tableColorsCacheKey } from '../tables/table-colors';
 import {
   buildTableLayout,
+  computeBandHeightForSlice,
   getEditorLineMetrics,
   renderTableSvgLineSlice,
+  sourceLineToSliceSpec,
+  type TableRenderOptions,
 } from '../tables/table-renderer';
 import { SvgOverlayDecorations } from './mermaid-diagram-decorations';
 import { createRange, isSelectionOrCursorInsideOffsets } from './editor-decoration-applier';
@@ -162,6 +165,36 @@ export class CustomTableUpdateCoordinator {
     void this.updateAsync(editor, tableBlocks, normalizedText, documentVersion);
   }
 
+  private buildTableSliceDecorationOptions(
+    range: Range,
+    dataUri: string,
+    bandHeight: number,
+  ): DecorationOptions {
+    return {
+      range,
+      renderOptions: {
+        before: {
+          contentIconPath: Uri.parse(dataUri),
+          height: `${bandHeight}px`,
+          textDecoration: `none; display: inline-block; vertical-align: top; overflow: hidden; max-height: ${bandHeight}px;`,
+        },
+      },
+    };
+  }
+
+  private bandHeightForSlice(
+    block: TableBlock,
+    sourceLineIndex: number,
+    renderOptions: TableRenderOptions,
+  ): number {
+    const layout = buildTableLayout(block, renderOptions);
+    const slice = sourceLineToSliceSpec(sourceLineIndex, layout);
+    if (!slice) {
+      return renderOptions.lineHeight ?? getEditorLineMetrics().lineHeight;
+    }
+    return computeBandHeightForSlice(layout, slice);
+  }
+
   private resetCoordinatorState(): void {
     this.appliedState = null;
     this.inFlightSignature = null;
@@ -226,6 +259,15 @@ export class CustomTableUpdateCoordinator {
     const token = ++this.updateToken;
     this.inFlightSignature = visibilitySignature;
 
+    const renderOptions: TableRenderOptions = {
+      isDark,
+      colors: tableColors,
+      lineHeight,
+      fontSize,
+      fontFamily,
+      capToSourceLines: false,
+    };
+
     const decorationsByKey = new Map<string, DecorationOptions[]>();
     const jobsToRender: SliceRenderJob[] = [];
 
@@ -257,15 +299,12 @@ export class CustomTableUpdateCoordinator {
 
         const cachedUri = this.svgDataUriCache.get(key);
         if (cachedUri) {
-          const options: DecorationOptions = {
-            range: lineRange,
-            renderOptions: {
-              before: {
-                contentIconPath: Uri.parse(cachedUri),
-                textDecoration: 'none;',
-              },
-            },
-          };
+          const bandHeight = this.bandHeightForSlice(block, sourceLineIndex, renderOptions);
+          const options = this.buildTableSliceDecorationOptions(
+            lineRange,
+            cachedUri,
+            bandHeight,
+          );
           const existing = decorationsByKey.get(key) || [];
           existing.push(options);
           decorationsByKey.set(key, existing);
@@ -282,15 +321,6 @@ export class CustomTableUpdateCoordinator {
       this.inFlightSignature = null;
       return;
     }
-
-    const renderOptions = {
-      isDark,
-      colors: tableColors,
-      lineHeight,
-      fontSize,
-      fontFamily,
-      capToSourceLines: false,
-    };
 
     for (let offset = 0; offset < jobsToRender.length; offset += this.renderBatchSize) {
       if (token !== this.updateToken || editor.document.version !== documentVersion) {
@@ -318,15 +348,16 @@ export class CustomTableUpdateCoordinator {
         }
 
         const dataUri = this.svgDataUriCache.get(job.sliceKey)!;
-        const options: DecorationOptions = {
-          range: lineRange,
-          renderOptions: {
-            before: {
-              contentIconPath: Uri.parse(dataUri),
-              textDecoration: 'none;',
-            },
-          },
-        };
+        const bandHeight = this.bandHeightForSlice(
+          job.block,
+          job.sourceLineIndex,
+          renderOptions,
+        );
+        const options = this.buildTableSliceDecorationOptions(
+          lineRange,
+          dataUri,
+          bandHeight,
+        );
         const existing = decorationsByKey.get(job.sliceKey) || [];
         existing.push(options);
         decorationsByKey.set(job.sliceKey, existing);

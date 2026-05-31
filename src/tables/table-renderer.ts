@@ -25,6 +25,9 @@ export const HEADER_SOURCE_LINES = 2;
 /** Cap column width so very wide cells do not produce oversized overlays. */
 const MAX_COL_WIDTH = 400;
 
+/** Max wrapped lines shown per overlay band (limits overlap on following source lines). */
+export const MAX_BAND_LINES = 5;
+
 type RowLayout = {
   isHeader: boolean;
   row: string[];
@@ -252,8 +255,51 @@ function wrapRowCells(
 }
 
 /** Vertical distance between baselines for wrapped lines. */
-function wrappedLineStep(lineHeight: number, fontSize: number): number {
+export function wrappedLineStep(lineHeight: number, fontSize: number): number {
   return Math.max(lineHeight * 0.92, fontSize * 1.15);
+}
+
+/** Minimum vertical spacing between wrapped baselines (readable). */
+function readableLineStep(fontSize: number): number {
+  return fontSize * 1.15;
+}
+
+/** Pixel height cap for a single overlay band at readable line spacing. */
+export function maxBandHeightPx(metrics: Pick<TableLayoutMetrics, 'fontSize' | 'cellPadY'>): number {
+  const { fontSize, cellPadY } = metrics;
+  if (MAX_BAND_LINES <= 1) {
+    return cellPadY * 2 + fontSize;
+  }
+  return Math.ceil(
+    cellPadY * 2 + fontSize + (MAX_BAND_LINES - 1) * readableLineStep(fontSize),
+  );
+}
+
+/** Overlay band height for a slice (row wrap height capped for safety). */
+export function computeBandHeightForSlice(
+  layout: TableLayout,
+  slice: TableLineSliceSpec,
+): number {
+  return Math.min(slice.sliceHeight, maxBandHeightPx(layout.metrics));
+}
+
+/** Keep at most {@link maxLines}; mark overflow with an ellipsis on the last line. */
+export function truncateLinesForBandDisplay(lines: string[], maxLines: number): string[] {
+  if (maxLines <= 0 || lines.length === 0) {
+    return [''];
+  }
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+  const capped = lines.slice(0, maxLines);
+  const lastIdx = capped.length - 1;
+  const last = capped[lastIdx] ?? '';
+  if (last.length <= 1) {
+    capped[lastIdx] = '…';
+    return capped;
+  }
+  capped[lastIdx] = `${last.slice(0, Math.max(0, last.length - 1)).trimEnd()}…`;
+  return capped;
 }
 
 /** Max wrapped text lines that fit in a band of the given pixel height. */
@@ -270,14 +316,18 @@ export function maxWrapLinesForBandHeight(
   return Math.max(1, Math.floor((inner - fontSize) / lineStep) + 1);
 }
 
+/** Split wrapped lines across GFM source lines (header) or return all lines (data row). */
 function sliceWrappedLinesForSubLine(
   lines: string[],
   subLine: number,
   subLineCount: number,
-  maxLinesPerSubLine: number,
 ): string[] {
-  const start = subLine * maxLinesPerSubLine;
-  return lines.slice(start, start + maxLinesPerSubLine);
+  if (subLineCount <= 1) {
+    return lines;
+  }
+  const linesPerSub = Math.max(1, Math.ceil(lines.length / subLineCount));
+  const start = subLine * linesPerSub;
+  return lines.slice(start, start + linesPerSub);
 }
 
 function buildRowLayouts(
@@ -469,20 +519,20 @@ function renderRowBand(
   const { metrics, colWidths, block } = layout;
   const { lineHeight, fontSize, charWidth, cellPadX, cellPadY, fontFamily, colors } = metrics;
   const { background: bg, headerBackground: headerBg, border, text: textColor } = colors;
-  const rowHeight = slice.sliceHeight;
-  const maxLinesPerSubLine = maxWrapLinesForBandHeight(rowHeight, metrics);
+  const rowHeight = computeBandHeightForSlice(layout, slice);
+  const maxShow = maxWrapLinesForBandHeight(rowHeight, metrics);
   const lineStep = wrappedLineStep(lineHeight, fontSize);
 
   const cellLines: string[][] = [];
   let visibleWrapLines = 1;
   for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
     const allLines = rowLayout.wrappedCells[colIdx] ?? [''];
-    const lines = sliceWrappedLinesForSubLine(
+    const subLines = sliceWrappedLinesForSubLine(
       allLines,
       slice.subLine,
       slice.subLineCount,
-      maxLinesPerSubLine,
     );
+    const lines = truncateLinesForBandDisplay(subLines, maxShow);
     cellLines.push(lines);
     if (lines.length > visibleWrapLines) {
       visibleWrapLines = lines.length;
@@ -569,10 +619,11 @@ export function renderTableSvgLineSlice(
     return null;
   }
 
+  const bandHeight = computeBandHeightForSlice(layout, slice);
   const parts: string[] = [];
-  parts.push(`<rect width="${layout.totalWidth}" height="${slice.sliceHeight}" fill="${layout.metrics.colors.background}"/>`);
+  parts.push(`<rect width="${layout.totalWidth}" height="${bandHeight}" fill="${layout.metrics.colors.background}"/>`);
   renderRowBand(parts, layout, slice.rowLayoutIndex, slice);
-  return renderSvgFromParts(parts, layout.totalWidth, slice.sliceHeight);
+  return renderSvgFromParts(parts, layout.totalWidth, bandHeight);
 }
 
 /**

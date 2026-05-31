@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import type { TableBlock } from '../../parser';
 import {
   buildTableLayout,
+  computeBandHeightForSlice,
+  MAX_BAND_LINES,
+  maxBandHeightPx,
   maxWrapLinesForBandHeight,
   renderTableSvg,
   renderTableSvgLineSlice,
   sliceHeightForSubLine,
   sourceLineToSliceSpec,
   wrapText,
+  wrappedLineStep,
 } from '../table-renderer';
 
 function basicBlock(): TableBlock {
@@ -69,17 +73,20 @@ describe('sourceLineToSliceSpec', () => {
 });
 
 describe('renderTableSvgLineSlice', () => {
-  it('renders one band per source line matching row layout heights', () => {
+  it('renders one band per source line at capped band height', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     let totalSliceHeight = 0;
     for (let line = 0; line < basicBlock().numLines; line++) {
+      const slice = sourceLineToSliceSpec(line, layout)!;
+      const bandHeight = computeBandHeightForSlice(layout, slice);
       const svg = renderTableSvgLineSlice(layout, line);
       expect(svg).toContain('<svg');
       const heightMatch = svg!.match(/height="(\d+)px"/);
       expect(heightMatch).not.toBeNull();
-      totalSliceHeight += Number(heightMatch![1]);
+      expect(Number(heightMatch![1])).toBe(bandHeight);
+      totalSliceHeight += bandHeight;
     }
-    expect(totalSliceHeight).toBe(layout.totalHeight);
+    expect(totalSliceHeight).toBeLessThanOrEqual(layout.totalHeight);
   });
 
   it('uses full wrapped height for a long cell on one source line', () => {
@@ -93,12 +100,40 @@ describe('renderTableSvgLineSlice', () => {
       align: [null, null],
     };
     const layout = buildTableLayout(block, { isDark: false, ...metrics });
-    const dataSlice = renderTableSvgLineSlice(layout, 2);
-    const heightMatch = dataSlice!.match(/height="(\d+)px"/);
+    const dataSlice = renderTableSvgLineSlice(layout, 2)!;
+    const heightMatch = dataSlice.match(/height="(\d+)px"/);
     expect(heightMatch).not.toBeNull();
     expect(Number(heightMatch![1])).toBeGreaterThan(metrics.lineHeight);
+    expect(Number(heightMatch![1])).toBeLessThanOrEqual(maxBandHeightPx(layout.metrics));
     expect(dataSlice).toContain('<tspan');
     expect(dataSlice).toContain('adipiscing');
+    const dyMatches = dataSlice.match(/dy="([^"]+)"/g) ?? [];
+    for (const dy of dyMatches) {
+      const value = Number(dy.match(/[\d.]+/)?.[0]);
+      expect(value).toBeGreaterThanOrEqual(wrappedLineStep(metrics.lineHeight, metrics.fontSize) * 0.9);
+    }
+  });
+
+  it('ellipsis when wrapped lines exceed MAX_BAND_LINES', () => {
+    const longText =
+      'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.';
+    const block: TableBlock = {
+      startPos: 0,
+      endPos: 200,
+      numLines: 3,
+      header: ['Section', 'Content'],
+      rows: [[longText, 'x']],
+      align: [null, null],
+    };
+    const layout = buildTableLayout(block, { isDark: false, ...metrics });
+    expect(layout.rowLayouts[1].maxWrapLines).toBeGreaterThan(MAX_BAND_LINES);
+    const svg = renderTableSvgLineSlice(layout, 2)!;
+    const heightMatch = svg.match(/height="(\d+)px"/);
+    expect(heightMatch).not.toBeNull();
+    expect(Number(heightMatch![1])).toBe(maxBandHeightPx(layout.metrics));
+    expect(svg).toMatch(/&#x2026;|…/);
+    const tspanCount = (svg.match(/<tspan/g) ?? []).length;
+    expect(tspanCount).toBeLessThanOrEqual(MAX_BAND_LINES);
   });
 
   it('includes row content on the matching slice', () => {

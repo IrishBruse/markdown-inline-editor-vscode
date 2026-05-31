@@ -1,6 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { ColorThemeKind, window, workspace } from 'vscode';
+import { ColorThemeKind, type DecorationOptions, window, workspace } from 'vscode';
 import { MarkdownParser } from '../../parser/core';
+import {
+  buildTableLayout,
+  computeBandHeightForSlice,
+  getEditorLineMetrics,
+  sourceLineToSliceSpec,
+} from '../../tables/table-renderer';
 import {
   CustomTableUpdateCoordinator,
   TABLE_SVG_RENDER_BATCH_SIZE,
@@ -23,7 +29,15 @@ describe('CustomTableUpdateCoordinator', () => {
       kind: ColorThemeKind.Dark,
     } as never);
     vi.spyOn(workspace, 'getConfiguration').mockReturnValue({
-      get: vi.fn(() => undefined),
+      get: vi.fn((key: string, defaultValue?: unknown) => {
+        if (key === 'fontSize') {
+          return 13;
+        }
+        if (key === 'lineHeight') {
+          return 0;
+        }
+        return defaultValue;
+      }),
     } as never);
   });
 
@@ -144,5 +158,38 @@ describe('CustomTableUpdateCoordinator', () => {
 
   it('exports a default batch size aligned with progressive rendering', () => {
     expect(TABLE_SVG_RENDER_BATCH_SIZE).toBe(20);
+  });
+
+  it('sets before.height to band height for long-cell rows', async () => {
+    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
+    const md = `| A | B |\n| --- | --- |\n| ${longText} | x |\n\nAfter.`;
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
+    const outside = document.positionAt(md.indexOf('After'));
+    const editor = new TextEditor(document, [new Selection(outside, outside)]);
+
+    const apply = vi.fn();
+    const coordinator = makeCoordinator(apply);
+
+    await coordinator.updateAsync(editor, tableBlocks, md, document.version);
+
+    const { lineHeight, fontSize } = getEditorLineMetrics();
+    const layout = buildTableLayout(tableBlocks[0], {
+      isDark: true,
+      lineHeight,
+      fontSize,
+      capToSourceLines: false,
+    });
+    const dataSlice = sourceLineToSliceSpec(2, layout)!;
+    const expectedBandHeight = computeBandHeightForSlice(layout, dataSlice);
+    expect(expectedBandHeight).toBeGreaterThan(lineHeight);
+
+    const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>;
+    const dataRowOptions = [...decorationsByKey.values()].flat().find(
+      (opt) => opt.range.start.line === 2,
+    );
+    expect(dataRowOptions).toBeDefined();
+    expect(dataRowOptions!.renderOptions?.before?.height).toBe(`${expectedBandHeight}px`);
+    expect(dataRowOptions!.renderOptions?.before?.textDecoration).toContain('max-height');
   });
 });
