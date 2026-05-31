@@ -172,9 +172,6 @@ export class CustomTableUpdateCoordinator {
   ): DecorationOptions {
     return {
       range,
-      // Hide underlying GFM on this source line (same approach as Mermaid diagram overlays).
-      color: 'transparent',
-      textDecoration: 'none; display: inline-block; width: 0;',
       renderOptions: {
         before: {
           contentIconPath: Uri.parse(dataUri),

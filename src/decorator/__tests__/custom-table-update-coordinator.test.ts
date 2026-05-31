@@ -202,4 +202,23 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(dataRowOptions!.renderOptions?.before?.height).toBe(`${expectedBandHeight}px`);
     expect(dataRowOptions!.renderOptions?.before?.textDecoration).toContain('max-height');
   });
+
+  it('renders an overlay on the separator source line to cover GFM dashes', async () => {
+    const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
+    const outside = document.positionAt(md.indexOf('After'));
+    const editor = new TextEditor(document, [new Selection(outside, outside)]);
+
+    const apply = vi.fn();
+    const coordinator = makeCoordinator(apply);
+    await coordinator.updateAsync(editor, tableBlocks, md, document.version);
+
+    const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>;
+    const separatorOptions = [...decorationsByKey.values()].flat().find(
+      (opt) => opt.range.start.line === 1,
+    );
+    expect(separatorOptions).toBeDefined();
+    expect(separatorOptions!.renderOptions?.before?.contentIconPath).toBeDefined();
+  });
 });

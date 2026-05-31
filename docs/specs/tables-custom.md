@@ -22,13 +22,13 @@ For a GFM table block with `numLines` source lines (header title, separator, dat
 
 | Source line index | Overlay | Slice flags |
 |-------------------|---------|-------------|
-| `0` | Merged **thead** (title + separator source lines) | `mergedHeader: true` |
-| `1` | *(none - covered by line `0` overlay)* | `sourceLineToSliceSpec(1)` returns `null` |
+| `0` | Merged **thead** labels (tall band) | `mergedHeader: true` |
+| `1` | **Separator hide** (no text) | `hideSeparatorRow: true` |
 | `2+` | One **data** band per line | (default slice) |
 
-`countTableOverlaySourceLines(numLines)` MUST equal `numLines - 1`.
+`countTableOverlaySourceLines(numLines)` MUST equal `numLines`.
 
-`sourceLineToSliceSpec(1)` MUST return `null` (no second overlay that paints over centered header text).
+Each overlay decoration MUST set `color: transparent` on the source line range so GFM (`|`, `---`) is not visible under the SVG.
 
 ## Merged header (title line)
 
@@ -36,15 +36,18 @@ The GFM header is **two source lines** (title row + `|---|---|` separator) but *
 
 ### MUST
 
-- Render thead **labels** on source line `0` in one overlay band at least `HEADER_SOURCE_LINES * editorLineHeight` tall, covering both the title and GFM separator source lines.
-- **Vertically center** header cell text in that band so labels sit between the table top border and the thead/tbody rule (not top-aligned). When labels wrap, the band may grow taller; center the text block in the full band.
-- Draw the table **top**, **vertical**, and thead **bottom** grid lines on that single title-line overlay (thead/tbody divider at the bottom of the two-line band).
+- Render thead **labels** on source line `0` in a band at least `HEADER_SOURCE_LINES * editorLineHeight` tall.
+- **Vertically center** single-line header labels in the two-line thead (`HEADER_SOURCE_LINES * editorLineHeight`). Multi-line wrapped labels center in the full title band when it grows taller.
+- Render the separator hide band on line `1` with **grid lines only** (no opaque fill) so it does not cover centered labels; hide `|---|---|` via transparent source-line decorations.
+- Draw the table **top** and **vertical** grid lines on the title band; draw the thead **bottom** on the separator hide band only.
 - Clip overlay content to the band (`clipPath`) so tall SVG does not paint outside the decoration box.
 
 ### MUST NOT (regression guards)
 
 - Top-align header labels in the title-line band (short headers like `| Col | Note |` must not hug the top border).
-- Render a **second overlay** on source line `1` (separator hide band). It paints over the bottom half of the centered header and the first line of wrapped body cells.
+- Draw an opaque fill on the separator hide band (covers centered header glyphs).
+- Leave raw GFM visible on any overlaid source line (missing `color: transparent` on decorations).
+- Render header label glyphs on the separator hide band (labels must stay on the title line overlay only).
 - **Split the thead** across two overlay bands by slicing header layout with `subLineCount: 2` on lines `0` and `1`. That draws a cell bottom border on the title line, which looks like `---` bleeding under the header labels.
 - Render header **text** on the separator source line (line `1`).
 
@@ -67,7 +70,7 @@ The GFM header is **two source lines** (title row + `|---|---|` separator) but *
 - Use fill-only cell rects plus explicit `<line>` strokes (not four-sided `<rect stroke>` per cell).
 - **Vertical** borders: span the full band height and extend 1px into the next band so adjacent row overlays meet.
 - **Horizontal** borders: each row band draws its **bottom** edge only; the merged title band draws the **top** edge of the table. Do not draw both bottom (title) and top (separator/data) on the same seam (avoids a thick bar).
-- The merged title-line band draws the thead/tbody divider as its bottom edge.
+- The separator hide band draws the thead/tbody divider as its bottom edge.
 
 ## Decoration alignment
 

@@ -79,13 +79,13 @@ describe('sourceLineToSliceSpec', () => {
 });
 
 describe('multiline header band', () => {
-  it('renders one thead overlay on the title line covering the separator source line', () => {
+  it('renders title and separator hide overlays for the thead', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    const separatorSvg = renderTableSvgLineSlice(layout, 1)!;
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
-    expect(headerSvg).toContain('#f3f3f3');
+    expect(separatorSvg).not.toContain('<text');
     const titleHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
     expect(titleHeight).toBeGreaterThanOrEqual(HEADER_SOURCE_LINES * metrics.lineHeight);
   });
@@ -95,29 +95,20 @@ describe('multiline header band', () => {
     const slice = sourceLineToSliceSpec(0, layout)!;
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     const bandHeight = resolveOverlayBandHeight(layout, slice);
-    expect(bandHeight).toBeGreaterThanOrEqual(HEADER_SOURCE_LINES * metrics.lineHeight);
-
-    for (const label of ['Name', 'Role']) {
-      const yMatch = headerSvg.match(new RegExp(`<tspan x="[^"]*" y="([\\d.]+)">${label}`));
-      expect(yMatch).not.toBeNull();
-      const baseline = Number(yMatch![1]);
-      const topAlignedMax = layout.metrics.cellPadY + layout.metrics.fontSize * 0.9;
-      expect(baseline).toBeGreaterThan(topAlignedMax);
-      expect(baseline).toBeGreaterThan(bandHeight * 0.3);
-      expect(baseline).toBeLessThan(bandHeight * 0.65 + layout.metrics.fontSize);
-    }
-  });
-
-  it('does not top-align header labels when the band spans two source lines', () => {
-    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
-    const slice = sourceLineToSliceSpec(0, layout)!;
-    const bandHeight = resolveOverlayBandHeight(layout, slice);
-    const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     const yMatch = headerSvg.match(/<tspan x="[^"]*" y="([\d.]+)">Name/);
     expect(yMatch).not.toBeNull();
     const baseline = Number(yMatch![1]);
+    const { fontSize } = layout.metrics;
     const topAlignedMax = bandHeight * 0.28;
     expect(baseline).toBeGreaterThan(topAlignedMax);
+    expect(baseline).toBeLessThan(bandHeight * 0.65 + fontSize);
+  });
+
+  it('does not fill the separator hide band over centered header text', () => {
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
+    const separatorSvg = renderTableSvgLineSlice(layout, 1)!;
+    expect(separatorSvg).not.toContain('fill="#f3f3f3"');
+    expect(separatorSvg).not.toContain('fill="#ffffff"');
   });
 
   it('uses header background for the merged title overlay', () => {
@@ -127,11 +118,14 @@ describe('multiline header band', () => {
     expect(headerSvg).not.toMatch(/fill="#ffffff"/);
   });
 
-  it('draws thead bottom border at the end of the two-line title overlay', () => {
+  it('draws thead bottom border on the separator hide band only', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
-    const bandHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
-    expect(headerSvg).toMatch(new RegExp(`y1="${bandHeight}"`));
+    const separatorSvg = renderTableSvgLineSlice(layout, 1)!;
+    const titleHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
+    expect(headerSvg).not.toMatch(new RegExp(`y1="${titleHeight}"`));
+    const sepHeight = Number(separatorSvg.match(/height="(\d+)px"/)![1]);
+    expect(separatorSvg).toMatch(new RegExp(`y1="${sepHeight}"`));
   });
 
   it('vertically centers multiline wrapped header text', () => {

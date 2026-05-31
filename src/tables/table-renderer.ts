@@ -485,10 +485,7 @@ export function sourceLineToSliceSpec(
   };
 }
 
-/**
- * Baseline for merged-header labels: centered in the two-line thead, but kept inside
- * the title source line so the separator hide band does not paint over the glyphs.
- */
+/** Vertically center merged-header labels in the two-line thead band. */
 function mergedHeaderLabelBaselineY(
   bandHeight: number,
   fontSize: number,
@@ -497,13 +494,10 @@ function mergedHeaderLabelBaselineY(
   wrapLines: number,
   lineStep: number,
 ): number {
-  if (wrapLines > 1) {
-    return firstLineBaselineY(0, bandHeight, fontSize, wrapLines, cellPadY, lineStep, true);
-  }
-  const theadHeight = HEADER_SOURCE_LINES * lineHeight;
-  const idealCenter = (theadHeight + fontSize) / 2 - fontSize * 0.15;
-  const maxInTitleLine = lineHeight - cellPadY - fontSize * 0.2;
-  return Math.min(idealCenter, Math.max(cellPadY, maxInTitleLine));
+  const centerHeight = wrapLines > 1
+    ? bandHeight
+    : Math.max(bandHeight, HEADER_SOURCE_LINES * lineHeight);
+  return firstLineBaselineY(0, centerHeight, fontSize, wrapLines, cellPadY, lineStep, true);
 }
 
 /** SVG text y is the baseline; optionally center the text block vertically in the row. */
@@ -796,11 +790,13 @@ function renderSvgFromParts(parts: string[], width: number, height: number): str
   return processSvg(svg, height);
 }
 
-/** Opaque band over the GFM separator source line (merged header renders on the title line). */
+/**
+ * Grid lines on the GFM separator source line only (no fill).
+ * Header fill and labels live on the title-line overlay; source text is hidden via transparent decorations.
+ */
 function renderSeparatorHideBand(layout: TableLayout, bandHeight: number): string {
   const w = layout.totalWidth;
-  const { headerBackground: headerBg } = layout.metrics.colors;
-  const parts: string[] = [`<rect width="${w}" height="${bandHeight}" fill="${headerBg}"/>`];
+  const parts: string[] = [];
   appendBandBorderLines(parts, layout, bandHeight, { top: false, bottom: true });
   return renderSvgFromParts(parts, w, bandHeight);
 }
