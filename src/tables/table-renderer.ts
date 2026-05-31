@@ -578,6 +578,8 @@ function appendWrappedCellText(
   parts.push('</text>');
 }
 
+const BORDER_INSET = BORDER_WIDTH / 2;
+
 function appendHorizontalBorder(
   parts: string[],
   x1: number,
@@ -586,7 +588,7 @@ function appendHorizontalBorder(
   border: string,
 ): void {
   parts.push(
-    `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
+    `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${border}" stroke-width="${BORDER_WIDTH}" shape-rendering="crispEdges"/>`,
   );
 }
 
@@ -596,9 +598,8 @@ function appendVerticalBorder(
   height: number,
   border: string,
 ): void {
-  const y2 = height + BORDER_WIDTH;
   parts.push(
-    `<line x1="${x}" y1="0" x2="${x}" y2="${y2}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
+    `<line x1="${x}" y1="${BORDER_INSET}" x2="${x}" y2="${height - BORDER_INSET}" stroke="${border}" stroke-width="${BORDER_WIDTH}" shape-rendering="crispEdges"/>`,
   );
 }
 
@@ -613,19 +614,20 @@ function appendBandBorderLines(
   const tableWidth = layout.totalWidth;
 
   if (edges.top) {
-    appendHorizontalBorder(parts, 0, tableWidth, 0, border);
+    appendHorizontalBorder(parts, 0, tableWidth, BORDER_INSET, border);
   }
   if (edges.bottom) {
-    appendHorizontalBorder(parts, 0, tableWidth, bandHeight, border);
+    appendHorizontalBorder(parts, 0, tableWidth, bandHeight - BORDER_INSET, border);
   }
 
-  appendVerticalBorder(parts, 0, bandHeight, border);
+  appendVerticalBorder(parts, BORDER_INSET, bandHeight, border);
   let x = BORDER_WIDTH;
   for (let colIdx = 0; colIdx < colWidths.length; colIdx++) {
     x += colWidths[colIdx];
-    appendVerticalBorder(parts, x, bandHeight, border);
+    appendVerticalBorder(parts, x - BORDER_INSET, bandHeight, border);
     x += BORDER_WIDTH;
   }
+  appendVerticalBorder(parts, tableWidth - BORDER_INSET, bandHeight, border);
 }
 
 type PreparedRowBand = {
@@ -727,9 +729,16 @@ function renderRowBand(
         false,
       );
 
-    parts.push(
-      `<rect x="${x}" y="0" width="${colWidth}" height="${rowHeight}" fill="${rowLayout.isHeader ? headerBg : bg}"/>`,
-    );
+    const fill = rowLayout.isHeader ? headerBg : bg;
+    if (rowLayout.isHeader) {
+      parts.push(
+        `<rect x="${x}" y="0" width="${colWidth}" height="${rowHeight}" fill="${fill}"/>`,
+      );
+    } else {
+      parts.push(
+        `<rect x="${x}" y="0" width="${colWidth}" height="${rowHeight}" fill="${fill}" stroke="${metrics.colors.border}" stroke-width="${BORDER_WIDTH}"/>`,
+      );
+    }
 
     appendWrappedCellText(
       parts,
@@ -749,8 +758,10 @@ function renderRowBand(
     x += colWidth + BORDER_WIDTH;
   }
 
-  const edges = slice.bandBorders ?? { top: false, bottom: true };
-  appendBandBorderLines(parts, layout, rowHeight, edges);
+  if (rowLayout.isHeader) {
+    const edges = slice.bandBorders ?? { top: false, bottom: true };
+    appendBandBorderLines(parts, layout, rowHeight, edges);
+  }
 }
 
 /**
@@ -830,8 +841,9 @@ export function renderTableSvgLineSlice(
     : layout.metrics.colors.background;
   const parts: string[] = [];
   const w = layout.totalWidth;
+  const clipHeight = bandHeight + BORDER_WIDTH;
   parts.push(
-    `<defs><clipPath id="band"><rect width="${w}" height="${bandHeight}"/></clipPath></defs>`,
+    `<defs><clipPath id="band"><rect width="${w}" height="${clipHeight}"/></clipPath></defs>`,
   );
   parts.push(`<g clip-path="url(#band)">`);
   parts.push(`<rect width="${w}" height="${bandHeight}" fill="${bandFill}"/>`);

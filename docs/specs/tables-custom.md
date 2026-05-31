@@ -67,10 +67,9 @@ The GFM header is **two source lines** (title row + `|---|---|` separator) but *
 
 ## Grid lines (per-line overlays)
 
-- Use fill-only cell rects plus explicit `<line>` strokes (not four-sided `<rect stroke>` per cell).
-- **Vertical** borders: span the full band height and extend 1px into the next band so adjacent row overlays meet.
-- **Horizontal** borders: each row band draws its **bottom** edge only; the merged title band draws the **top** edge of the table. Do not draw both bottom (title) and top (separator/data) on the same seam (avoids a thick bar).
-- The separator hide band draws the thead/tbody divider as its bottom edge.
+- **Header / separator:** fill-only cell rects plus explicit `<line>` strokes (`appendBandBorderLines`). Inset strokes so clip paths do not clip them away.
+- **Data rows:** each cell is a `<rect>` with `fill` and `stroke` so column and row dividers are always visible.
+- **Horizontal** header rules: merged title band draws the table **top**; separator hide band draws the thead/tbody **bottom** (lines only, no fill).
 
 ## Decoration alignment
 
