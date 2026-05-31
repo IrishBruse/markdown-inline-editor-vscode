@@ -1,13 +1,26 @@
 import { createHash } from 'crypto';
-import { ColorThemeKind, Range, TextEditor, window, workspace } from 'vscode';
+import {
+  ColorThemeKind,
+  DecorationOptions,
+  Position,
+  Range,
+  TextEditor,
+  Uri,
+  window,
+  workspace,
+} from 'vscode';
 import type { TableBlock } from '../parser';
 import { svgToDataUri } from '../mermaid/svg-processor';
 import { resolveTableColors, tableColorsCacheKey } from '../tables/table-colors';
-import { getEditorLineMetrics, renderTableSvg } from '../tables/table-renderer';
+import {
+  buildTableLayout,
+  getEditorLineMetrics,
+  renderTableSvgLineSlice,
+} from '../tables/table-renderer';
 import { SvgOverlayDecorations } from './mermaid-diagram-decorations';
 import { createRange, isSelectionOrCursorInsideOffsets } from './editor-decoration-applier';
 
-/** Unique table SVG renders per event-loop turn before yielding (avoids UI jank). */
+/** Unique table SVG slice renders per event-loop turn before yielding (avoids UI jank). */
 export const TABLE_SVG_RENDER_BATCH_SIZE = 20;
 
 type TableBlockKeyCacheEntry = {
@@ -25,6 +38,12 @@ type CoordinatorState = {
   documentVersion: number;
   visibilitySignature: string;
   renderThemeKey: string;
+};
+
+type SliceRenderJob = {
+  sliceKey: string;
+  block: TableBlock;
+  sourceLineIndex: number;
 };
 
 const tableBlockKeyCache = new WeakMap<TableBlock, TableBlockKeyCacheEntry>();
@@ -72,6 +91,30 @@ function getTableBlockCacheKey(
     key,
   });
   return key;
+}
+
+function sliceCacheKey(blockKey: string, sourceLineIndex: number): string {
+  return `${blockKey}:${sourceLineIndex}`;
+}
+
+function createTableLineRange(
+  editor: TextEditor,
+  block: TableBlock,
+  sourceLineIndex: number,
+  normalizedText: string,
+): Range | null {
+  const tableRange = createRange(editor, block.startPos, block.endPos, normalizedText);
+  if (!tableRange) {
+    return null;
+  }
+
+  const line = tableRange.start.line + sourceLineIndex;
+  if (line > tableRange.end.line) {
+    return null;
+  }
+
+  const lineText = editor.document.lineAt(line);
+  return new Range(new Position(line, 0), new Position(line, lineText.text.length));
 }
 
 /** Which tables are hidden vs shown given the current selection. */
@@ -183,10 +226,8 @@ export class CustomTableUpdateCoordinator {
     const token = ++this.updateToken;
     this.inFlightSignature = visibilitySignature;
 
-    const rangesByKey = new Map<string, Range[]>();
-    const dataUrisByKey = new Map<string, string>();
-    const keysToRender: string[] = [];
-    const blockByKey = new Map<string, TableBlock>();
+    const decorationsByKey = new Map<string, DecorationOptions[]>();
+    const jobsToRender: SliceRenderJob[] = [];
 
     for (const block of tableBlocks) {
       if (token !== this.updateToken || editor.document.version !== documentVersion) {
@@ -204,22 +245,37 @@ export class CustomTableUpdateCoordinator {
         continue;
       }
 
-      const range = createRange(editor, block.startPos, block.endPos, normalizedText);
-      if (!range) {
-        continue;
-      }
+      const blockKey = getTableBlockCacheKey(block, isDark, colorsKey, lineHeight, fontSize, fontFamily);
 
-      const key = getTableBlockCacheKey(block, isDark, colorsKey, lineHeight, fontSize, fontFamily);
-      if (!blockByKey.has(key)) {
-        blockByKey.set(key, block);
-        if (!this.svgDataUriCache.has(key)) {
-          keysToRender.push(key);
+      for (let sourceLineIndex = 0; sourceLineIndex < block.numLines; sourceLineIndex++) {
+        const lineRange = createTableLineRange(editor, block, sourceLineIndex, normalizedText);
+        if (!lineRange) {
+          continue;
+        }
+
+        const key = sliceCacheKey(blockKey, sourceLineIndex);
+
+        const cachedUri = this.svgDataUriCache.get(key);
+        if (cachedUri) {
+          const options: DecorationOptions = {
+            range: lineRange,
+            renderOptions: {
+              before: {
+                contentIconPath: Uri.parse(cachedUri),
+                textDecoration: 'none;',
+              },
+            },
+          };
+          const existing = decorationsByKey.get(key) || [];
+          existing.push(options);
+          decorationsByKey.set(key, existing);
+          continue;
+        }
+
+        if (!jobsToRender.some((job) => job.sliceKey === key)) {
+          jobsToRender.push({ sliceKey: key, block, sourceLineIndex });
         }
       }
-
-      const ranges = rangesByKey.get(key) || [];
-      ranges.push(range);
-      rangesByKey.set(key, ranges);
     }
 
     if (token !== this.updateToken || editor.document.version !== documentVersion) {
@@ -227,34 +283,58 @@ export class CustomTableUpdateCoordinator {
       return;
     }
 
-    const renderOptions = { isDark, colors: tableColors, lineHeight, fontSize, fontFamily };
+    const renderOptions = {
+      isDark,
+      colors: tableColors,
+      lineHeight,
+      fontSize,
+      fontFamily,
+      capToSourceLines: true,
+    };
 
-    for (let offset = 0; offset < keysToRender.length; offset += this.renderBatchSize) {
+    for (let offset = 0; offset < jobsToRender.length; offset += this.renderBatchSize) {
       if (token !== this.updateToken || editor.document.version !== documentVersion) {
         this.inFlightSignature = null;
         return;
       }
 
-      const batch = keysToRender.slice(offset, offset + this.renderBatchSize);
-      for (const key of batch) {
-        const block = blockByKey.get(key);
-        if (!block) {
+      const batch = jobsToRender.slice(offset, offset + this.renderBatchSize);
+      for (const job of batch) {
+        const layout = buildTableLayout(job.block, renderOptions);
+        const svg = renderTableSvgLineSlice(layout, job.sourceLineIndex);
+        if (!svg) {
           continue;
         }
-        const svg = renderTableSvg(block, renderOptions);
-        this.svgDataUriCache.set(key, svgToDataUri(svg));
+        this.svgDataUriCache.set(job.sliceKey, svgToDataUri(svg));
+
+        const lineRange = createTableLineRange(
+          editor,
+          job.block,
+          job.sourceLineIndex,
+          normalizedText,
+        );
+        if (!lineRange) {
+          continue;
+        }
+
+        const dataUri = this.svgDataUriCache.get(job.sliceKey)!;
+        const options: DecorationOptions = {
+          range: lineRange,
+          renderOptions: {
+            before: {
+              contentIconPath: Uri.parse(dataUri),
+              textDecoration: 'none;',
+            },
+          },
+        };
+        const existing = decorationsByKey.get(job.sliceKey) || [];
+        existing.push(options);
+        decorationsByKey.set(job.sliceKey, existing);
       }
 
-      const hasMore = offset + batch.length < keysToRender.length;
+      const hasMore = offset + batch.length < jobsToRender.length;
       if (hasMore) {
         await this.yieldToEventLoop();
-      }
-    }
-
-    for (const key of rangesByKey.keys()) {
-      const cached = this.svgDataUriCache.get(key);
-      if (cached) {
-        dataUrisByKey.set(key, cached);
       }
     }
 
@@ -263,7 +343,7 @@ export class CustomTableUpdateCoordinator {
       return;
     }
 
-    this.overlayDecorations.apply(editor, rangesByKey, dataUrisByKey);
+    this.overlayDecorations.apply(editor, decorationsByKey);
 
     if (token !== this.updateToken || editor.document.version !== documentVersion) {
       this.inFlightSignature = null;

@@ -127,6 +127,26 @@ describe('MermaidDiagramDecorations', () => {
       expect(clearCall).toBeDefined();
     });
 
+    it('applies DecorationOptions with per-range contentIconPath', () => {
+      const mdd = new MermaidDiagramDecorations();
+      const editor = makeEditor();
+      const options = [{
+        range: new Range({ line: 0, character: 0 }, { line: 0, character: 3 }),
+        renderOptions: {
+          before: {
+            contentIconPath: { path: 'data:image/svg+xml,slice' } as never,
+            textDecoration: 'none;',
+          },
+        },
+      }];
+      const byKey = new Map([['slice0', options]]);
+
+      mdd.apply(editor as any, byKey);
+
+      expect(editor.setDecorations).toHaveBeenCalledTimes(1);
+      expect(editor.setDecorations.mock.calls[0][1]).toBe(options);
+    });
+
     it('handles HighContrast theme as dark', () => {
       const mdd = new MermaidDiagramDecorations();
       const editor = makeEditor();

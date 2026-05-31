@@ -46,8 +46,10 @@ describe('Decorator - custom tables', () => {
     await (decorator as any).updateCustomTables(tableBlocks, text, document.version);
 
     expect(applyMock).toHaveBeenCalledTimes(1);
-    const dataUris = applyMock.mock.calls[0][2] as Map<string, string>;
-    expect([...dataUris.values()][0]).toMatch(/^data:image\/svg\+xml/);
+    const decorationsByKey = applyMock.mock.calls[0][1] as Map<string, { renderOptions?: { before?: { contentIconPath?: { path?: string } } } }[]>;
+    const firstEntry = [...decorationsByKey.values()][0][0];
+    const iconPath = firstEntry.renderOptions?.before?.contentIconPath;
+    expect(String(iconPath)).toMatch(/data:image\/svg\+xml/);
   });
 
   it('skips overlay when cursor is inside the table', async () => {
@@ -69,8 +71,8 @@ describe('Decorator - custom tables', () => {
     await (decorator as any).updateCustomTables(tableBlocks, text, document.version);
 
     expect(applyMock).toHaveBeenCalledTimes(1);
-    const rangesByKey = applyMock.mock.calls[0][1] as Map<string, unknown[]>;
-    expect(rangesByKey.size).toBe(0);
+    const decorationsByKey = applyMock.mock.calls[0][1] as Map<string, unknown[]>;
+    expect(decorationsByKey.size).toBe(0);
   });
 
   it('clears overlays when rendering mode is not custom', async () => {

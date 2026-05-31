@@ -45,9 +45,10 @@ describe('CustomTableUpdateCoordinator', () => {
     await coordinator.updateAsync(editor, tableBlocks, md, document.version);
 
     expect(apply).toHaveBeenCalled();
-    const rangesByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
-    const totalRanges = [...rangesByKey.values()].reduce((sum, ranges) => sum + ranges.length, 0);
-    expect(totalRanges).toBe(tableBlocks.length);
+    const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
+    const totalDecorations = [...decorationsByKey.values()].reduce((sum, entries) => sum + entries.length, 0);
+    const expectedLines = tableBlocks.reduce((sum, block) => sum + block.numLines, 0);
+    expect(totalDecorations).toBe(expectedLines);
   });
 
   it('keeps early table overlays when the document has many unique tables', async () => {
@@ -67,8 +68,9 @@ describe('CustomTableUpdateCoordinator', () => {
 
     await coordinator.updateAsync(editor, tableBlocks, md, document.version);
 
-    const rangesByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
-    expect(rangesByKey.size).toBe(tableBlocks.length);
+    const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
+    const expectedSliceKeys = tableBlocks.reduce((sum, block) => sum + block.numLines, 0);
+    expect(decorationsByKey.size).toBe(expectedSliceKeys);
   });
 
   it('yields between SVG render batches and applies once', async () => {
@@ -92,10 +94,12 @@ describe('CustomTableUpdateCoordinator', () => {
 
     await coordinator.updateAsync(editor, tableBlocks, md, document.version);
 
-    expect(yieldToEventLoop).toHaveBeenCalledTimes(2);
+    const expectedSliceKeys = tableBlocks.reduce((sum, block) => sum + block.numLines, 0);
+    const expectedYields = Math.max(0, Math.ceil(expectedSliceKeys / 10) - 1);
+    expect(yieldToEventLoop).toHaveBeenCalledTimes(expectedYields);
     expect(apply).toHaveBeenCalledTimes(1);
-    const dataUris = apply.mock.calls[0]![2] as Map<string, string>;
-    expect(dataUris.size).toBe(tableBlocks.length);
+    const decorationsByKey = apply.mock.calls[0]![1] as Map<string, unknown[]>;
+    expect(decorationsByKey.size).toBe(expectedSliceKeys);
   });
 
   it('skips re-apply when selection changes outside all tables', async () => {

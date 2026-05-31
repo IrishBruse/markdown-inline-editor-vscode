@@ -14,11 +14,14 @@ export type TableRenderOptions = {
   lineHeight?: number;
   /** Editor font size in px; defaults from workspace settings. */
   fontSize?: number;
+  /** When true, row bands fit source line count (per-line overlay mode). */
+  capToSourceLines?: boolean;
 };
 
 const BORDER_WIDTH = 1;
 /** GFM header row plus `|---|---|` separator line rendered as one thead band. */
-const HEADER_SOURCE_LINES = 2;
+export const HEADER_SOURCE_LINES = 2;
+
 /** Cap column width so very wide cells do not produce oversized overlays. */
 const MAX_COL_WIDTH = 400;
 
@@ -28,6 +31,35 @@ type RowLayout = {
   sourceWeight: number;
   maxWrapLines: number;
   wrappedCells: string[][];
+};
+
+export type TableLayoutMetrics = {
+  lineHeight: number;
+  fontSize: number;
+  charWidth: number;
+  cellPadX: number;
+  cellPadY: number;
+  minColWidth: number;
+  fontFamily: string;
+  colors: TableColors;
+};
+
+export type TableLayout = {
+  block: TableBlock;
+  metrics: TableLayoutMetrics;
+  colWidths: number[];
+  rowLayouts: RowLayout[];
+  rowHeights: number[];
+  totalWidth: number;
+  totalHeight: number;
+  capToSourceLines: boolean;
+};
+
+export type TableLineSliceSpec = {
+  rowLayoutIndex: number;
+  subLine: number;
+  subLineCount: number;
+  sliceHeight: number;
 };
 
 function escapeXml(text: string): string {
@@ -59,6 +91,31 @@ export function getEditorLineMetrics(): { lineHeight: number; fontSize: number }
   }
 
   return { lineHeight, fontSize };
+}
+
+function resolveTableMetrics(options: TableRenderOptions): TableLayoutMetrics {
+  const editorMetrics = getEditorLineMetrics();
+  const lineHeight = options.lineHeight ?? editorMetrics.lineHeight;
+  const fontSize = Math.min(options.fontSize ?? editorMetrics.fontSize, lineHeight - 2);
+  const charWidth = fontSize * 0.6;
+  const cellPadX = Math.max(4, Math.round(fontSize * 0.35));
+  const cellPadY = Math.max(2, Math.round(fontSize * 0.25));
+  const minColWidth = Math.max(24, Math.round(fontSize * 3.5));
+  const colors = options.colors ?? resolveTableColors(options.isDark);
+  const fontFamily = options.fontFamily
+    ? `${escapeXml(options.fontFamily)}, sans-serif`
+    : 'var(--vscode-editor-font-family, monospace), monospace';
+
+  return {
+    lineHeight,
+    fontSize,
+    charWidth,
+    cellPadX,
+    cellPadY,
+    minColWidth,
+    fontFamily,
+    colors,
+  };
 }
 
 function maxTextUnits(colWidth: number, charWidth: number, cellPadX: number): number {
@@ -174,29 +231,68 @@ function wrapRowCells(
   colWidths: number[],
   charWidth: number,
   cellPadX: number,
+  maxWrapLines?: number,
 ): { wrappedCells: string[][]; maxWrapLines: number } {
   const wrappedCells: string[][] = [];
-  let maxWrapLines = 1;
+  let maxLines = 1;
 
   for (let colIdx = 0; colIdx < row.length; colIdx++) {
     const maxUnits = maxTextUnits(colWidths[colIdx], charWidth, cellPadX);
-    const lines = wrapText(row[colIdx] ?? '', maxUnits);
+    let lines = wrapText(row[colIdx] ?? '', maxUnits);
+    if (maxWrapLines !== undefined && lines.length > maxWrapLines) {
+      lines = lines.slice(0, maxWrapLines);
+    }
     wrappedCells.push(lines);
-    if (lines.length > maxWrapLines) {
-      maxWrapLines = lines.length;
+    if (lines.length > maxLines) {
+      maxLines = lines.length;
     }
   }
 
-  return { wrappedCells, maxWrapLines };
+  return { wrappedCells, maxWrapLines: maxLines };
+}
+
+/** Vertical distance between baselines for wrapped lines. */
+function wrappedLineStep(lineHeight: number, fontSize: number): number {
+  return Math.max(lineHeight * 0.92, fontSize * 1.15);
+}
+
+/** Max wrapped text lines that fit in a band of the given pixel height. */
+export function maxWrapLinesForBandHeight(
+  bandHeight: number,
+  metrics: Pick<TableLayoutMetrics, 'fontSize' | 'cellPadY' | 'lineHeight'>,
+): number {
+  const { fontSize, cellPadY, lineHeight } = metrics;
+  const inner = bandHeight - cellPadY * 2;
+  if (inner <= fontSize) {
+    return 1;
+  }
+  const lineStep = wrappedLineStep(lineHeight, fontSize);
+  return Math.max(1, Math.floor((inner - fontSize) / lineStep) + 1);
+}
+
+function sliceWrappedLinesForSubLine(
+  lines: string[],
+  subLine: number,
+  subLineCount: number,
+  maxLinesPerSubLine: number,
+): string[] {
+  const start = subLine * maxLinesPerSubLine;
+  return lines.slice(start, start + maxLinesPerSubLine);
 }
 
 function buildRowLayouts(
   block: TableBlock,
   colWidths: number[],
-  charWidth: number,
-  cellPadX: number,
+  metrics: TableLayoutMetrics,
+  capToSourceLines: boolean,
 ): RowLayout[] {
-  const headerWrap = wrapRowCells(block.header, colWidths, charWidth, cellPadX);
+  const { charWidth, cellPadX, lineHeight } = metrics;
+
+  const headerBandHeight = HEADER_SOURCE_LINES * lineHeight;
+  const headerMaxWrap = capToSourceLines
+    ? maxWrapLinesForBandHeight(headerBandHeight, metrics)
+    : undefined;
+  const headerWrap = wrapRowCells(block.header, colWidths, charWidth, cellPadX, headerMaxWrap);
   const layouts: RowLayout[] = [{
     isHeader: true,
     row: block.header,
@@ -206,7 +302,10 @@ function buildRowLayouts(
   }];
 
   for (const row of block.rows) {
-    const wrap = wrapRowCells(row, colWidths, charWidth, cellPadX);
+    const rowMaxWrap = capToSourceLines
+      ? maxWrapLinesForBandHeight(lineHeight, metrics)
+      : undefined;
+    const wrap = wrapRowCells(row, colWidths, charWidth, cellPadX, rowMaxWrap);
     layouts.push({
       isHeader: false,
       row,
@@ -219,22 +318,19 @@ function buildRowLayouts(
   return layouts;
 }
 
-/** Vertical distance between baselines for wrapped lines. */
-function wrappedLineStep(lineHeight: number, fontSize: number): number {
-  return Math.max(lineHeight * 0.92, fontSize * 1.15);
-}
-
 /**
- * Row height from wrapped line count (not squeezed into source line count).
- * Unwrapped rows keep one editor line per source line (header spans two).
+ * Row height from wrapped line count. When capped, always uses source line budget.
  */
 function computeRowHeight(
   layout: RowLayout,
-  lineHeight: number,
-  fontSize: number,
-  cellPadY: number,
+  metrics: TableLayoutMetrics,
+  capToSourceLines: boolean,
 ): number {
+  const { lineHeight, fontSize, cellPadY } = metrics;
   const minHeight = layout.sourceWeight * lineHeight;
+  if (capToSourceLines) {
+    return minHeight;
+  }
   if (layout.maxWrapLines <= 1) {
     return minHeight;
   }
@@ -243,6 +339,31 @@ function computeRowHeight(
   const textBlockHeight = fontSize + (layout.maxWrapLines - 1) * lineStep;
   const contentHeight = cellPadY * 2 + textBlockHeight;
   return Math.max(minHeight, Math.ceil(contentHeight));
+}
+
+/** Maps a source line index within the table block to a row band slice. */
+export function sourceLineToSliceSpec(
+  sourceLineIndex: number,
+  lineHeight: number,
+): TableLineSliceSpec | null {
+  if (sourceLineIndex < 0) {
+    return null;
+  }
+  if (sourceLineIndex < HEADER_SOURCE_LINES) {
+    return {
+      rowLayoutIndex: 0,
+      subLine: sourceLineIndex,
+      subLineCount: HEADER_SOURCE_LINES,
+      sliceHeight: lineHeight,
+    };
+  }
+  const dataLineIndex = sourceLineIndex - HEADER_SOURCE_LINES;
+  return {
+    rowLayoutIndex: dataLineIndex + 1,
+    subLine: 0,
+    subLineCount: 1,
+    sliceHeight: lineHeight,
+  };
 }
 
 /** SVG text y is the baseline; center single-line cells like the pre-wrap renderer. */
@@ -313,54 +434,142 @@ function appendWrappedCellText(
   parts.push('</text>');
 }
 
-/**
- * Render a bordered table as SVG. The header spans the title row and GFM separator row.
- * Long cell text wraps within column bounds; row heights grow with wrapped line count.
- */
-export function renderTableSvg(block: TableBlock, options: TableRenderOptions): string {
-  const metrics = getEditorLineMetrics();
-  const lineHeight = options.lineHeight ?? metrics.lineHeight;
-  const fontSize = Math.min(options.fontSize ?? metrics.fontSize, lineHeight - 2);
-  const charWidth = fontSize * 0.6;
-  const cellPadX = Math.max(4, Math.round(fontSize * 0.35));
-  const cellPadY = Math.max(2, Math.round(fontSize * 0.25));
-  const minColWidth = Math.max(24, Math.round(fontSize * 3.5));
+function renderRowBand(
+  parts: string[],
+  layout: TableLayout,
+  rowLayoutIndex: number,
+  slice: TableLineSliceSpec,
+): void {
+  const rowLayout = layout.rowLayouts[rowLayoutIndex];
+  if (!rowLayout) {
+    return;
+  }
 
-  const colWidths = computeColumnWidths(block, charWidth, cellPadX, minColWidth);
-  const rowLayouts = buildRowLayouts(block, colWidths, charWidth, cellPadX);
+  const { metrics, colWidths, block } = layout;
+  const { lineHeight, fontSize, charWidth, cellPadX, cellPadY, fontFamily, colors } = metrics;
+  const { background: bg, headerBackground: headerBg, border, text: textColor } = colors;
+  const rowHeight = slice.sliceHeight;
+  const maxLinesPerSubLine = maxWrapLinesForBandHeight(rowHeight, metrics);
+  const lineStep = wrappedLineStep(lineHeight, fontSize);
+  const firstLineY = firstLineBaselineY(0, rowHeight, fontSize, rowLayout.maxWrapLines, cellPadY);
+
+  let x = BORDER_WIDTH;
+  for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
+    const colWidth = colWidths[colIdx];
+    const align = colIdx < block.align.length ? block.align[colIdx] : null;
+    const allLines = rowLayout.wrappedCells[colIdx] ?? [''];
+    const lines = sliceWrappedLinesForSubLine(
+      allLines,
+      slice.subLine,
+      slice.subLineCount,
+      maxLinesPerSubLine,
+    );
+
+    parts.push(
+      `<rect x="${x}" y="0" width="${colWidth}" height="${rowHeight}" fill="${rowLayout.isHeader ? headerBg : bg}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
+    );
+
+    appendWrappedCellText(
+      parts,
+      lines,
+      align,
+      x,
+      colWidth,
+      firstLineY,
+      lineStep,
+      textColor,
+      fontFamily,
+      fontSize,
+      charWidth,
+      cellPadX,
+    );
+
+    x += colWidth + BORDER_WIDTH;
+  }
+}
+
+/**
+ * Build column widths, wrapped cells, and row heights for a table block.
+ */
+export function buildTableLayout(block: TableBlock, options: TableRenderOptions): TableLayout {
+  const capToSourceLines = options.capToSourceLines ?? false;
+  const metrics = resolveTableMetrics(options);
+  const colWidths = computeColumnWidths(
+    block,
+    metrics.charWidth,
+    metrics.cellPadX,
+    metrics.minColWidth,
+  );
+  const rowLayouts = buildRowLayouts(block, colWidths, metrics, capToSourceLines);
   const rowHeights = rowLayouts.map((layout) =>
-    computeRowHeight(layout, lineHeight, fontSize, cellPadY),
+    computeRowHeight(layout, metrics, capToSourceLines),
   );
   const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + BORDER_WIDTH * (colWidths.length + 1);
   const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0);
 
-  const { background: bg, headerBackground: headerBg, border, text: textColor } =
-    options.colors ?? resolveTableColors(options.isDark);
-  const fontFamily = options.fontFamily
-    ? `${escapeXml(options.fontFamily)}, sans-serif`
-    : 'var(--vscode-editor-font-family, monospace), monospace';
+  return {
+    block,
+    metrics,
+    colWidths,
+    rowLayouts,
+    rowHeights,
+    totalWidth,
+    totalHeight,
+    capToSourceLines,
+  };
+}
+
+function renderSvgFromParts(parts: string[], width: number, height: number): string {
+  const body = parts.join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${body}</svg>`;
+  return processSvg(svg, height);
+}
+
+/**
+ * Render one source-line band of the table (for per-line editor overlays).
+ */
+export function renderTableSvgLineSlice(
+  layout: TableLayout,
+  sourceLineIndex: number,
+): string | null {
+  const slice = sourceLineToSliceSpec(sourceLineIndex, layout.metrics.lineHeight);
+  if (!slice || slice.rowLayoutIndex >= layout.rowLayouts.length) {
+    return null;
+  }
 
   const parts: string[] = [];
-  parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${totalHeight}" viewBox="0 0 ${totalWidth} ${totalHeight}">`,
-  );
-  parts.push(`<rect width="${totalWidth}" height="${totalHeight}" fill="${bg}"/>`);
+  parts.push(`<rect width="${layout.totalWidth}" height="${slice.sliceHeight}" fill="${layout.metrics.colors.background}"/>`);
+  renderRowBand(parts, layout, slice.rowLayoutIndex, slice);
+  return renderSvgFromParts(parts, layout.totalWidth, slice.sliceHeight);
+}
+
+/**
+ * Render a bordered table as SVG. The header spans the title row and GFM separator row.
+ * Long cell text wraps within column bounds; row heights grow with wrapped line count unless capped.
+ */
+export function renderTableSvg(block: TableBlock, options: TableRenderOptions): string {
+  const layout = buildTableLayout(block, options);
+  const { background: bg, headerBackground: headerBg, border, text: textColor } = layout.metrics.colors;
+  const { lineHeight, fontSize, charWidth, cellPadX, cellPadY, fontFamily } = layout.metrics;
+
+  const parts: string[] = [];
+  parts.push(`<rect width="${layout.totalWidth}" height="${layout.totalHeight}" fill="${bg}"/>`);
 
   let y = 0;
-  for (let rowIdx = 0; rowIdx < rowLayouts.length; rowIdx++) {
-    const layout = rowLayouts[rowIdx];
-    const rowHeight = rowHeights[rowIdx];
+  for (let rowIdx = 0; rowIdx < layout.rowLayouts.length; rowIdx++) {
+    const rowLayout = layout.rowLayouts[rowIdx];
+    const rowHeight = layout.rowHeights[rowIdx];
     const lineStep = wrappedLineStep(lineHeight, fontSize);
-    const firstLineY = firstLineBaselineY(y, rowHeight, fontSize, layout.maxWrapLines, cellPadY);
+    const firstLineY = firstLineBaselineY(y, rowHeight, fontSize, rowLayout.maxWrapLines, cellPadY);
 
     let x = BORDER_WIDTH;
-    for (let colIdx = 0; colIdx < layout.row.length; colIdx++) {
-      const colWidth = colWidths[colIdx];
+    for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
+      const colWidth = layout.colWidths[colIdx];
       const align = colIdx < block.align.length ? block.align[colIdx] : null;
-      const lines = layout.wrappedCells[colIdx] ?? [''];
+      const lines = rowLayout.wrappedCells[colIdx] ?? [''];
 
       parts.push(
-        `<rect x="${x}" y="${y}" width="${colWidth}" height="${rowHeight}" fill="${layout.isHeader ? headerBg : bg}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
+        `<rect x="${x}" y="${y}" width="${colWidth}" height="${rowHeight}" fill="${rowLayout.isHeader ? headerBg : bg}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
       );
 
       appendWrappedCellText(
@@ -384,6 +593,5 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
     y += rowHeight;
   }
 
-  parts.push('</svg>');
-  return processSvg(parts.join(''), totalHeight);
+  return renderSvgFromParts(parts, layout.totalWidth, layout.totalHeight);
 }

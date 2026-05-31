@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { TableBlock } from '../../parser';
-import { renderTableSvg, wrapText } from '../table-renderer';
+import {
+  buildTableLayout,
+  maxWrapLinesForBandHeight,
+  renderTableSvg,
+  renderTableSvgLineSlice,
+  sourceLineToSliceSpec,
+  wrapText,
+} from '../table-renderer';
 
 function basicBlock(): TableBlock {
   return {
@@ -33,6 +40,68 @@ describe('wrapText', () => {
     const lines = wrapText('abcdefghij', 4);
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.join('')).toBe('abcdefghij');
+  });
+});
+
+describe('sourceLineToSliceSpec', () => {
+  it('maps header and data source lines', () => {
+    expect(sourceLineToSliceSpec(0, metrics.lineHeight)).toEqual({
+      rowLayoutIndex: 0,
+      subLine: 0,
+      subLineCount: 2,
+      sliceHeight: 18,
+    });
+    expect(sourceLineToSliceSpec(1, metrics.lineHeight)).toEqual({
+      rowLayoutIndex: 0,
+      subLine: 1,
+      subLineCount: 2,
+      sliceHeight: 18,
+    });
+    expect(sourceLineToSliceSpec(2, metrics.lineHeight)).toEqual({
+      rowLayoutIndex: 1,
+      subLine: 0,
+      subLineCount: 1,
+      sliceHeight: 18,
+    });
+  });
+});
+
+describe('renderTableSvgLineSlice', () => {
+  it('renders one band per source line at line height', () => {
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics, capToSourceLines: true });
+    let totalSliceHeight = 0;
+    for (let line = 0; line < basicBlock().numLines; line++) {
+      const svg = renderTableSvgLineSlice(layout, line);
+      expect(svg).toContain('<svg');
+      const heightMatch = svg!.match(/height="(\d+)px"/);
+      expect(heightMatch).not.toBeNull();
+      totalSliceHeight += Number(heightMatch![1]);
+    }
+    expect(totalSliceHeight).toBe(basicBlock().numLines * metrics.lineHeight);
+  });
+
+  it('includes row content on the matching slice', () => {
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics, capToSourceLines: true });
+    const headerSlice = renderTableSvgLineSlice(layout, 0);
+    const dataSlice = renderTableSvgLineSlice(layout, 2);
+    expect(headerSlice).toContain('Name');
+    expect(dataSlice).toContain('Ada');
+  });
+});
+
+describe('buildTableLayout capped mode', () => {
+  it('limits total height to source line count for wrapped cells', () => {
+    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
+    const block: TableBlock = {
+      startPos: 0,
+      endPos: 100,
+      numLines: 3,
+      header: ['Section', 'Content'],
+      rows: [[longText, longText]],
+      align: [null, null],
+    };
+    const layout = buildTableLayout(block, { isDark: false, ...metrics, capToSourceLines: true });
+    expect(layout.totalHeight).toBe(block.numLines * metrics.lineHeight);
   });
 });
 
@@ -147,5 +216,11 @@ describe('renderTableSvg', () => {
     expect(widthMatch).not.toBeNull();
     const totalWidth = Number(widthMatch![1]);
     expect(totalWidth).toBeLessThanOrEqual(400 + 2);
+  });
+});
+
+describe('maxWrapLinesForBandHeight', () => {
+  it('returns at least one line for narrow bands', () => {
+    expect(maxWrapLinesForBandHeight(18, { ...metrics, cellPadY: 2 })).toBeGreaterThanOrEqual(1);
   });
 });

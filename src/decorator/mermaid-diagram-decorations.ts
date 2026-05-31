@@ -1,4 +1,12 @@
-import { type TextEditor, window, Uri, type TextEditorDecorationType, type Range, ColorThemeKind } from 'vscode';
+import {
+  type TextEditor,
+  window,
+  Uri,
+  type TextEditorDecorationType,
+  type Range,
+  type DecorationOptions,
+  ColorThemeKind,
+} from 'vscode';
 
 type MermaidDecorationEntry = {
   decorationType: TextEditorDecorationType;
@@ -6,26 +14,53 @@ type MermaidDecorationEntry = {
   isDarkTheme: boolean;
 };
 
+function isDecorationOptionsEntry(
+  value: Range | DecorationOptions,
+): value is DecorationOptions {
+  return typeof value === 'object' && value !== null && 'range' in value;
+}
+
 export class MermaidDiagramDecorations {
   private cache = new Map<string, MermaidDecorationEntry>();
+  private optionsCache = new Map<string, MermaidDecorationEntry>();
   private usageCounter = 0;
 
   constructor(private maxEntries: number = 50) {}
 
-  apply(editor: TextEditor, rangesByKey: Map<string, Range[]>, dataUrisByKey: Map<string, string>): void {
+  /**
+   * Apply SVG overlays. Each key is either:
+   * - `Range[]` plus a matching entry in {@link dataUrisByKey} (Mermaid), or
+   * - `DecorationOptions[]` with per-range `renderOptions.before.contentIconPath` (custom tables).
+   */
+  apply(
+    editor: TextEditor,
+    rangesByKey: Map<string, Range[] | DecorationOptions[]>,
+    dataUrisByKey: Map<string, string> = new Map(),
+  ): void {
     const usedKeys = new Set<string>();
     const batchKeys = new Set(rangesByKey.keys());
     const isDarkTheme = window.activeColorTheme.kind === ColorThemeKind.Dark ||
       window.activeColorTheme.kind === ColorThemeKind.HighContrast;
 
-    for (const [key, ranges] of rangesByKey.entries()) {
+    for (const [key, entries] of rangesByKey.entries()) {
+      if (entries.length === 0) {
+        continue;
+      }
+
+      if (isDecorationOptionsEntry(entries[0])) {
+        const entry = this.getOrCreateOptionsEntry(key, isDarkTheme, batchKeys);
+        usedKeys.add(`opt:${key}`);
+        editor.setDecorations(entry.decorationType, entries as DecorationOptions[]);
+        continue;
+      }
+
       const dataUri = dataUrisByKey.get(key);
-      if (!dataUri || ranges.length === 0) {
+      if (!dataUri) {
         continue;
       }
       const entry = this.getOrCreateEntry(key, dataUri, isDarkTheme, batchKeys);
-      usedKeys.add(key);
-      editor.setDecorations(entry.decorationType, ranges);
+      usedKeys.add(`uri:${key}`);
+      editor.setDecorations(entry.decorationType, entries as Range[]);
     }
 
     this.disposeUnused(editor, usedKeys);
@@ -37,6 +72,11 @@ export class MermaidDiagramDecorations {
       entry.decorationType.dispose();
     }
     this.cache.clear();
+    for (const entry of this.optionsCache.values()) {
+      editor.setDecorations(entry.decorationType, []);
+      entry.decorationType.dispose();
+    }
+    this.optionsCache.clear();
   }
 
   private getOrCreateEntry(
@@ -46,20 +86,16 @@ export class MermaidDiagramDecorations {
     protectedKeys: ReadonlySet<string>,
   ): MermaidDecorationEntry {
     const existing = this.cache.get(key);
-    // Invalidate cache if theme changed
     if (existing && existing.isDarkTheme === isDarkTheme) {
       existing.lastUsed = ++this.usageCounter;
       return existing;
     }
 
-    // Dispose old entry if theme changed
     if (existing) {
       existing.decorationType.dispose();
       this.cache.delete(key);
     }
 
-    // Mermaid themes handle colors internally, so we don't need to invert
-    // Match Markless pattern exactly: transparent text, SVG in before pseudo-element
     const decorationType = window.createTextEditorDecorationType({
       color: 'transparent',
       textDecoration: 'none; display: inline-block; width: 0;',
@@ -75,31 +111,72 @@ export class MermaidDiagramDecorations {
       isDarkTheme,
     };
     this.cache.set(key, entry);
-    this.evictIfNeeded(protectedKeys);
+    this.evictIfNeeded(protectedKeys, 'uri');
+    return entry;
+  }
+
+  private getOrCreateOptionsEntry(
+    key: string,
+    isDarkTheme: boolean,
+    protectedKeys: ReadonlySet<string>,
+  ): MermaidDecorationEntry {
+    const existing = this.optionsCache.get(key);
+    if (existing && existing.isDarkTheme === isDarkTheme) {
+      existing.lastUsed = ++this.usageCounter;
+      return existing;
+    }
+
+    if (existing) {
+      existing.decorationType.dispose();
+      this.optionsCache.delete(key);
+    }
+
+    const decorationType = window.createTextEditorDecorationType({
+      color: 'transparent',
+      textDecoration: 'none; display: inline-block; width: 0;',
+      before: {
+        textDecoration: 'none;',
+      },
+    });
+
+    const entry: MermaidDecorationEntry = {
+      decorationType,
+      lastUsed: ++this.usageCounter,
+      isDarkTheme,
+    };
+    this.optionsCache.set(key, entry);
+    this.evictIfNeeded(protectedKeys, 'opt');
     return entry;
   }
 
   private disposeUnused(editor: TextEditor, usedKeys: Set<string>): void {
     for (const [key, entry] of this.cache.entries()) {
-      if (usedKeys.has(key)) {
+      if (usedKeys.has(`uri:${key}`)) {
         continue;
       }
       editor.setDecorations(entry.decorationType, []);
       entry.decorationType.dispose();
       this.cache.delete(key);
     }
+    for (const [key, entry] of this.optionsCache.entries()) {
+      if (usedKeys.has(`opt:${key}`)) {
+        continue;
+      }
+      editor.setDecorations(entry.decorationType, []);
+      entry.decorationType.dispose();
+      this.optionsCache.delete(key);
+    }
   }
 
-  /**
-   * Evicts LRU entries not in {@link protectedKeys} (the current apply batch).
-   * When the batch alone exceeds {@link maxEntries}, eviction stops and the cache
-   * may temporarily grow so every key in the batch keeps its decoration type.
-   */
-  private evictIfNeeded(protectedKeys: ReadonlySet<string>): void {
-    while (this.cache.size > this.maxEntries) {
+  private evictIfNeeded(
+    protectedKeys: ReadonlySet<string>,
+    prefix: 'uri' | 'opt',
+  ): void {
+    const store = prefix === 'uri' ? this.cache : this.optionsCache;
+    while (store.size > this.maxEntries) {
       let lruKey: string | undefined;
       let lruAccess = Infinity;
-      for (const [key, entry] of this.cache.entries()) {
+      for (const [key, entry] of store.entries()) {
         if (protectedKeys.has(key)) {
           continue;
         }
@@ -113,9 +190,9 @@ export class MermaidDiagramDecorations {
         return;
       }
 
-      const entry = this.cache.get(lruKey);
+      const entry = store.get(lruKey);
       entry?.decorationType.dispose();
-      this.cache.delete(lruKey);
+      store.delete(lruKey);
     }
   }
 }
