@@ -333,7 +333,7 @@ Table colors resolve from `markdownInlineEditor.colors.tableBackground` / `table
 | Row 9          | Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.                                                                                            |
 | Row 10         | Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur. At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.                |
 
-Expected with `custom`: the table renders as a bordered grid with **word-wrapped cells** (one SVG band per source line). Each band grows with wrapped content up to a readable cap (~5 lines); extra text is truncated with an ellipsis (…). Column width follows cell content up to a maximum (~400px). Tall bands may visually overlap the following source line (editor overlays do not reserve document height). Each band stays visible when its source line is in the viewport. Source GFM is hidden while overlays are shown. Click inside the table to edit raw markdown (same as `selection-reveal`).
+Expected with `custom`: see the normative spec [docs/specs/tables-custom.md](../specs/tables-custom.md). Quick check: bordered grid, merged thead (no dashes under header labels), vertically centered header text, one band per data line, GFM hidden until you click into the table.
 
 ## Tables near other blocks
 
@@ -362,4 +362,4 @@ Paragraph immediately above a table (blank line separates them).
 - Rendered: pipe grid, aligned columns, markers hidden.
 - Cursor anywhere in table: **entire table** goes raw (all rows).
 - Mixed heavy formatting in one cell may fall back to raw (known limitation).
-- `custom` rendering mode: SVG table overlay with word-wrapped cells and content-sized columns (capped); click table to edit source.
+- `custom` rendering mode: per [tables-custom.md](../specs/tables-custom.md); click table to edit source.

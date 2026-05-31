@@ -14,7 +14,7 @@ import { svgToDataUri } from '../mermaid/svg-processor';
 import { resolveTableColors, tableColorsCacheKey } from '../tables/table-colors';
 import {
   buildTableLayout,
-  computeBandHeightForSlice,
+  resolveOverlayBandHeight,
   getEditorLineMetrics,
   renderTableSvgLineSlice,
   sourceLineToSliceSpec,
@@ -172,6 +172,9 @@ export class CustomTableUpdateCoordinator {
   ): DecorationOptions {
     return {
       range,
+      // Hide underlying GFM on this source line (same approach as Mermaid diagram overlays).
+      color: 'transparent',
+      textDecoration: 'none; display: inline-block; width: 0;',
       renderOptions: {
         before: {
           contentIconPath: Uri.parse(dataUri),
@@ -186,13 +189,14 @@ export class CustomTableUpdateCoordinator {
     block: TableBlock,
     sourceLineIndex: number,
     renderOptions: TableRenderOptions,
+    layout?: ReturnType<typeof buildTableLayout>,
   ): number {
-    const layout = buildTableLayout(block, renderOptions);
-    const slice = sourceLineToSliceSpec(sourceLineIndex, layout);
+    const tableLayout = layout ?? buildTableLayout(block, renderOptions);
+    const slice = sourceLineToSliceSpec(sourceLineIndex, tableLayout);
     if (!slice) {
       return renderOptions.lineHeight ?? getEditorLineMetrics().lineHeight;
     }
-    return computeBandHeightForSlice(layout, slice);
+    return resolveOverlayBandHeight(tableLayout, slice);
   }
 
   private resetCoordinatorState(): void {
@@ -289,7 +293,13 @@ export class CustomTableUpdateCoordinator {
 
       const blockKey = getTableBlockCacheKey(block, isDark, colorsKey, lineHeight, fontSize, fontFamily);
 
+      const blockLayout = buildTableLayout(block, renderOptions);
+
       for (let sourceLineIndex = 0; sourceLineIndex < block.numLines; sourceLineIndex++) {
+        if (!sourceLineToSliceSpec(sourceLineIndex, blockLayout)) {
+          continue;
+        }
+
         const lineRange = createTableLineRange(editor, block, sourceLineIndex, normalizedText);
         if (!lineRange) {
           continue;
@@ -299,7 +309,7 @@ export class CustomTableUpdateCoordinator {
 
         const cachedUri = this.svgDataUriCache.get(key);
         if (cachedUri) {
-          const bandHeight = this.bandHeightForSlice(block, sourceLineIndex, renderOptions);
+          const bandHeight = this.bandHeightForSlice(block, sourceLineIndex, renderOptions, blockLayout);
           const options = this.buildTableSliceDecorationOptions(
             lineRange,
             cachedUri,
@@ -352,6 +362,7 @@ export class CustomTableUpdateCoordinator {
           job.block,
           job.sourceLineIndex,
           renderOptions,
+          layout,
         );
         const options = this.buildTableSliceDecorationOptions(
           lineRange,

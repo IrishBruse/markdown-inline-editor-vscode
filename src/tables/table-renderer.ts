@@ -22,6 +22,11 @@ const BORDER_WIDTH = 1;
 /** GFM header row plus `|---|---|` separator line rendered as one thead band. */
 export const HEADER_SOURCE_LINES = 2;
 
+/** Source lines that receive a per-line SVG overlay (title + separator hide + data rows). */
+export function countTableOverlaySourceLines(numLines: number): number {
+  return Math.max(0, numLines);
+}
+
 /** Cap column width so very wide cells do not produce oversized overlays. */
 const MAX_COL_WIDTH = 400;
 
@@ -63,6 +68,12 @@ export type TableLineSliceSpec = {
   subLine: number;
   subLineCount: number;
   sliceHeight: number;
+  /** Title row: one overlay spans header + separator source lines (no split borders). */
+  mergedHeader?: boolean;
+  /** Separator row: opaque band hiding `|---|---|` source text. */
+  hideSeparatorRow?: boolean;
+  /** Which horizontal edges to stroke on this band (per-line overlays only). */
+  bandBorders?: { top: boolean; bottom: boolean };
 };
 
 function escapeXml(text: string): string {
@@ -283,6 +294,30 @@ export function computeBandHeightForSlice(
   return Math.min(slice.sliceHeight, maxBandHeightPx(layout.metrics));
 }
 
+/** Pixel height for a band showing {@link visibleWrapLines} of wrapped text. */
+export function bandContentHeight(
+  visibleWrapLines: number,
+  metrics: Pick<TableLayoutMetrics, 'fontSize' | 'cellPadY'>,
+  lineStep: number,
+): number {
+  const { fontSize, cellPadY } = metrics;
+  return Math.ceil(
+    cellPadY * 2 + fontSize + Math.max(0, visibleWrapLines - 1) * lineStep,
+  );
+}
+
+/** Band height so cell rects and decoration match visible wrapped content. */
+export function resolveBandRowHeight(
+  layout: TableLayout,
+  slice: TableLineSliceSpec,
+  visibleWrapLines: number,
+  lineStep: number,
+): number {
+  const fromContent = bandContentHeight(visibleWrapLines, layout.metrics, lineStep);
+  const fromSlice = computeBandHeightForSlice(layout, slice);
+  return Math.min(Math.max(fromContent, fromSlice), maxBandHeightPx(layout.metrics));
+}
+
 /** Keep at most {@link maxLines}; mark overflow with an ellipsis on the last line. */
 export function truncateLinesForBandDisplay(lines: string[], maxLines: number): string[] {
   if (maxLines <= 0 || lines.length === 0) {
@@ -414,12 +449,24 @@ export function sourceLineToSliceSpec(
   const { lineHeight } = layout.metrics;
 
   if (sourceLineIndex < HEADER_SOURCE_LINES) {
-    const rowHeight = layout.rowHeights[0] ?? HEADER_SOURCE_LINES * lineHeight;
+    if (sourceLineIndex === 1) {
+      return {
+        rowLayoutIndex: 0,
+        subLine: 0,
+        subLineCount: 1,
+        sliceHeight: lineHeight,
+        hideSeparatorRow: true,
+      };
+    }
+    const theadMinHeight = HEADER_SOURCE_LINES * lineHeight;
+    const headerRowHeight = layout.rowHeights[0] ?? theadMinHeight;
     return {
       rowLayoutIndex: 0,
-      subLine: sourceLineIndex,
-      subLineCount: HEADER_SOURCE_LINES,
-      sliceHeight: sliceHeightForSubLine(rowHeight, sourceLineIndex, HEADER_SOURCE_LINES),
+      subLine: 0,
+      subLineCount: 1,
+      sliceHeight: Math.max(theadMinHeight, headerRowHeight),
+      mergedHeader: true,
+      bandBorders: { top: true, bottom: false },
     };
   }
 
@@ -434,19 +481,51 @@ export function sourceLineToSliceSpec(
     subLine: 0,
     subLineCount: 1,
     sliceHeight,
+    bandBorders: { top: false, bottom: true },
   };
 }
 
-/** SVG text y is the baseline; center single-line cells like the pre-wrap renderer. */
+/**
+ * Baseline for merged-header labels: centered in the two-line thead, but kept inside
+ * the title source line so the separator hide band does not paint over the glyphs.
+ */
+function mergedHeaderLabelBaselineY(
+  bandHeight: number,
+  fontSize: number,
+  cellPadY: number,
+  lineHeight: number,
+  wrapLines: number,
+  lineStep: number,
+): number {
+  if (wrapLines > 1) {
+    return firstLineBaselineY(0, bandHeight, fontSize, wrapLines, cellPadY, lineStep, true);
+  }
+  const theadHeight = HEADER_SOURCE_LINES * lineHeight;
+  const idealCenter = (theadHeight + fontSize) / 2 - fontSize * 0.15;
+  const maxInTitleLine = lineHeight - cellPadY - fontSize * 0.2;
+  return Math.min(idealCenter, Math.max(cellPadY, maxInTitleLine));
+}
+
+/** SVG text y is the baseline; optionally center the text block vertically in the row. */
 function firstLineBaselineY(
   rowY: number,
   rowHeight: number,
   fontSize: number,
-  maxWrapLines: number,
+  wrapLines: number,
   cellPadY: number,
+  lineStep: number,
+  verticalCenter: boolean,
 ): number {
-  if (maxWrapLines <= 1) {
+  if (wrapLines <= 1 && !verticalCenter) {
+    return rowY + cellPadY + fontSize * 0.85;
+  }
+  if (wrapLines <= 1) {
     return rowY + (rowHeight + fontSize) / 2 - fontSize * 0.15;
+  }
+  const textBlockHeight = fontSize + (wrapLines - 1) * lineStep;
+  if (verticalCenter) {
+    const topInset = Math.max(cellPadY, (rowHeight - textBlockHeight) / 2);
+    return rowY + topInset + fontSize * 0.85;
   }
   return rowY + cellPadY + fontSize * 0.85;
 }
@@ -505,33 +584,100 @@ function appendWrappedCellText(
   parts.push('</text>');
 }
 
-function renderRowBand(
+function appendHorizontalBorder(
   parts: string[],
+  x1: number,
+  x2: number,
+  y: number,
+  border: string,
+): void {
+  parts.push(
+    `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
+  );
+}
+
+function appendVerticalBorder(
+  parts: string[],
+  x: number,
+  height: number,
+  border: string,
+): void {
+  const y2 = height + BORDER_WIDTH;
+  parts.push(
+    `<line x1="${x}" y1="0" x2="${x}" y2="${y2}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
+  );
+}
+
+function appendBandBorderLines(
+  parts: string[],
+  layout: TableLayout,
+  bandHeight: number,
+  edges: { top: boolean; bottom: boolean },
+): void {
+  const { colWidths, metrics } = layout;
+  const border = metrics.colors.border;
+  const tableWidth = layout.totalWidth;
+
+  if (edges.top) {
+    appendHorizontalBorder(parts, 0, tableWidth, 0, border);
+  }
+  if (edges.bottom) {
+    appendHorizontalBorder(parts, 0, tableWidth, bandHeight, border);
+  }
+
+  appendVerticalBorder(parts, 0, bandHeight, border);
+  let x = BORDER_WIDTH;
+  for (let colIdx = 0; colIdx < colWidths.length; colIdx++) {
+    x += colWidths[colIdx];
+    appendVerticalBorder(parts, x, bandHeight, border);
+    x += BORDER_WIDTH;
+  }
+}
+
+type PreparedRowBand = {
+  cellLines: string[][];
+  visibleWrapLines: number;
+  rowHeight: number;
+  lineStep: number;
+};
+
+/** Overlay band height including wrapped content (for decorations). */
+export function resolveOverlayBandHeight(
+  layout: TableLayout,
+  slice: TableLineSliceSpec,
+): number {
+  if (slice.hideSeparatorRow === true) {
+    return computeBandHeightForSlice(layout, slice);
+  }
+  const prepared = prepareRowBand(layout, slice.rowLayoutIndex, slice);
+  if (!prepared) {
+    return computeBandHeightForSlice(layout, slice);
+  }
+  return prepared.rowHeight;
+}
+
+function prepareRowBand(
   layout: TableLayout,
   rowLayoutIndex: number,
   slice: TableLineSliceSpec,
-): void {
+): PreparedRowBand | null {
   const rowLayout = layout.rowLayouts[rowLayoutIndex];
   if (!rowLayout) {
-    return;
+    return null;
   }
 
-  const { metrics, colWidths, block } = layout;
-  const { lineHeight, fontSize, charWidth, cellPadX, cellPadY, fontFamily, colors } = metrics;
-  const { background: bg, headerBackground: headerBg, border, text: textColor } = colors;
-  const rowHeight = computeBandHeightForSlice(layout, slice);
-  const maxShow = maxWrapLinesForBandHeight(rowHeight, metrics);
+  const { lineHeight, fontSize } = layout.metrics;
+  const bandBudget = computeBandHeightForSlice(layout, slice);
+  const maxShow = maxWrapLinesForBandHeight(bandBudget, layout.metrics);
   const lineStep = wrappedLineStep(lineHeight, fontSize);
 
   const cellLines: string[][] = [];
   let visibleWrapLines = 1;
   for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
     const allLines = rowLayout.wrappedCells[colIdx] ?? [''];
-    const subLines = sliceWrappedLinesForSubLine(
-      allLines,
-      slice.subLine,
-      slice.subLineCount,
-    );
+    const subLines = slice.mergedHeader === true
+      ? allLines
+      : sliceWrappedLinesForSubLine(allLines, slice.subLine, slice.subLineCount);
     const lines = truncateLinesForBandDisplay(subLines, maxShow);
     cellLines.push(lines);
     if (lines.length > visibleWrapLines) {
@@ -539,16 +685,56 @@ function renderRowBand(
     }
   }
 
-  const firstLineY = firstLineBaselineY(0, rowHeight, fontSize, visibleWrapLines, cellPadY);
+  let rowHeight = resolveBandRowHeight(layout, slice, visibleWrapLines, lineStep);
+  if (slice.mergedHeader === true) {
+    const theadMin = HEADER_SOURCE_LINES * layout.metrics.lineHeight;
+    rowHeight = Math.max(rowHeight, theadMin);
+  }
+  return { cellLines, visibleWrapLines, rowHeight, lineStep };
+}
+
+function renderRowBand(
+  parts: string[],
+  layout: TableLayout,
+  rowLayoutIndex: number,
+  slice: TableLineSliceSpec,
+  prepared: PreparedRowBand,
+): void {
+  const rowLayout = layout.rowLayouts[rowLayoutIndex];
+  if (!rowLayout) {
+    return;
+  }
+
+  const { colWidths, block, metrics } = layout;
+  const { fontSize, charWidth, cellPadX, cellPadY, fontFamily, colors } = metrics;
+  const { background: bg, headerBackground: headerBg, text: textColor } = colors;
+  const { cellLines, rowHeight, lineStep } = prepared;
+
+  if (slice.mergedHeader === true) {
+    parts.push(
+      `<rect width="${layout.totalWidth}" height="${rowHeight}" fill="${headerBg}"/>`,
+    );
+  }
 
   let x = BORDER_WIDTH;
   for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
     const colWidth = colWidths[colIdx];
     const align = colIdx < block.align.length ? block.align[colIdx] : null;
     const lines = cellLines[colIdx] ?? [''];
+    const cellFirstY = slice.mergedHeader === true
+      ? mergedHeaderLabelBaselineY(rowHeight, fontSize, cellPadY, layout.metrics.lineHeight, lines.length, lineStep)
+      : firstLineBaselineY(
+        0,
+        rowHeight,
+        fontSize,
+        lines.length,
+        cellPadY,
+        lineStep,
+        false,
+      );
 
     parts.push(
-      `<rect x="${x}" y="0" width="${colWidth}" height="${rowHeight}" fill="${rowLayout.isHeader ? headerBg : bg}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
+      `<rect x="${x}" y="0" width="${colWidth}" height="${rowHeight}" fill="${rowLayout.isHeader ? headerBg : bg}"/>`,
     );
 
     appendWrappedCellText(
@@ -557,7 +743,7 @@ function renderRowBand(
       align,
       x,
       colWidth,
-      firstLineY,
+      cellFirstY,
       lineStep,
       textColor,
       fontFamily,
@@ -568,6 +754,9 @@ function renderRowBand(
 
     x += colWidth + BORDER_WIDTH;
   }
+
+  const edges = slice.bandBorders ?? { top: false, bottom: true };
+  appendBandBorderLines(parts, layout, rowHeight, edges);
 }
 
 /**
@@ -607,6 +796,15 @@ function renderSvgFromParts(parts: string[], width: number, height: number): str
   return processSvg(svg, height);
 }
 
+/** Opaque band over the GFM separator source line (merged header renders on the title line). */
+function renderSeparatorHideBand(layout: TableLayout, bandHeight: number): string {
+  const w = layout.totalWidth;
+  const { headerBackground: headerBg } = layout.metrics.colors;
+  const parts: string[] = [`<rect width="${w}" height="${bandHeight}" fill="${headerBg}"/>`];
+  appendBandBorderLines(parts, layout, bandHeight, { top: false, bottom: true });
+  return renderSvgFromParts(parts, w, bandHeight);
+}
+
 /**
  * Render one source-line band of the table (for per-line editor overlays).
  */
@@ -619,11 +817,31 @@ export function renderTableSvgLineSlice(
     return null;
   }
 
-  const bandHeight = computeBandHeightForSlice(layout, slice);
+  if (slice.hideSeparatorRow === true) {
+    const bandHeight = computeBandHeightForSlice(layout, slice);
+    return renderSeparatorHideBand(layout, bandHeight);
+  }
+
+  const prepared = prepareRowBand(layout, slice.rowLayoutIndex, slice);
+  if (!prepared) {
+    return null;
+  }
+
+  const { rowHeight: bandHeight } = prepared;
+  const rowLayout = layout.rowLayouts[slice.rowLayoutIndex];
+  const bandFill = slice.mergedHeader === true || rowLayout?.isHeader === true
+    ? layout.metrics.colors.headerBackground
+    : layout.metrics.colors.background;
   const parts: string[] = [];
-  parts.push(`<rect width="${layout.totalWidth}" height="${bandHeight}" fill="${layout.metrics.colors.background}"/>`);
-  renderRowBand(parts, layout, slice.rowLayoutIndex, slice);
-  return renderSvgFromParts(parts, layout.totalWidth, bandHeight);
+  const w = layout.totalWidth;
+  parts.push(
+    `<defs><clipPath id="band"><rect width="${w}" height="${bandHeight}"/></clipPath></defs>`,
+  );
+  parts.push(`<g clip-path="url(#band)">`);
+  parts.push(`<rect width="${w}" height="${bandHeight}" fill="${bandFill}"/>`);
+  renderRowBand(parts, layout, slice.rowLayoutIndex, slice, prepared);
+  parts.push('</g>');
+  return renderSvgFromParts(parts, w, bandHeight);
 }
 
 /**
@@ -643,7 +861,15 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
     const rowLayout = layout.rowLayouts[rowIdx];
     const rowHeight = layout.rowHeights[rowIdx];
     const lineStep = wrappedLineStep(lineHeight, fontSize);
-    const firstLineY = firstLineBaselineY(y, rowHeight, fontSize, rowLayout.maxWrapLines, cellPadY);
+    const firstLineY = firstLineBaselineY(
+      y,
+      rowHeight,
+      fontSize,
+      rowLayout.maxWrapLines,
+      cellPadY,
+      lineStep,
+      rowLayout.isHeader,
+    );
 
     let x = BORDER_WIDTH;
     for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {

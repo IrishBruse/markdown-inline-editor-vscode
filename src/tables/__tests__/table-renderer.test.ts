@@ -3,12 +3,13 @@ import type { TableBlock } from '../../parser';
 import {
   buildTableLayout,
   computeBandHeightForSlice,
+  resolveOverlayBandHeight,
+  HEADER_SOURCE_LINES,
   MAX_BAND_LINES,
   maxBandHeightPx,
   maxWrapLinesForBandHeight,
   renderTableSvg,
   renderTableSvgLineSlice,
-  sliceHeightForSubLine,
   sourceLineToSliceSpec,
   wrapText,
   wrappedLineStep,
@@ -49,26 +50,109 @@ describe('wrapText', () => {
 });
 
 describe('sourceLineToSliceSpec', () => {
-  it('maps header and data source lines', () => {
+  it('maps merged header and data source lines', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
+    const theadMinHeight = HEADER_SOURCE_LINES * metrics.lineHeight;
     expect(sourceLineToSliceSpec(0, layout)).toEqual({
       rowLayoutIndex: 0,
       subLine: 0,
-      subLineCount: 2,
-      sliceHeight: sliceHeightForSubLine(layout.rowHeights[0], 0, 2),
+      subLineCount: 1,
+      sliceHeight: Math.max(theadMinHeight, layout.rowHeights[0]),
+      mergedHeader: true,
+      bandBorders: { top: true, bottom: false },
     });
     expect(sourceLineToSliceSpec(1, layout)).toEqual({
       rowLayoutIndex: 0,
-      subLine: 1,
-      subLineCount: 2,
-      sliceHeight: sliceHeightForSubLine(layout.rowHeights[0], 1, 2),
+      subLine: 0,
+      subLineCount: 1,
+      sliceHeight: metrics.lineHeight,
+      hideSeparatorRow: true,
     });
     expect(sourceLineToSliceSpec(2, layout)).toEqual({
       rowLayoutIndex: 1,
       subLine: 0,
       subLineCount: 1,
       sliceHeight: layout.rowHeights[1],
+      bandBorders: { top: false, bottom: true },
     });
+  });
+});
+
+describe('multiline header band', () => {
+  it('renders one thead overlay on the title line covering the separator source line', () => {
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
+    const headerSvg = renderTableSvgLineSlice(layout, 0)!;
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    expect(headerSvg).toContain('Name');
+    expect(headerSvg).toContain('Role');
+    expect(headerSvg).toContain('#f3f3f3');
+    const titleHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
+    expect(titleHeight).toBeGreaterThanOrEqual(HEADER_SOURCE_LINES * metrics.lineHeight);
+  });
+
+  it('vertically centers simple header labels in the two-line thead band', () => {
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
+    const slice = sourceLineToSliceSpec(0, layout)!;
+    const headerSvg = renderTableSvgLineSlice(layout, 0)!;
+    const bandHeight = resolveOverlayBandHeight(layout, slice);
+    expect(bandHeight).toBeGreaterThanOrEqual(HEADER_SOURCE_LINES * metrics.lineHeight);
+
+    for (const label of ['Name', 'Role']) {
+      const yMatch = headerSvg.match(new RegExp(`<tspan x="[^"]*" y="([\\d.]+)">${label}`));
+      expect(yMatch).not.toBeNull();
+      const baseline = Number(yMatch![1]);
+      const topAlignedMax = layout.metrics.cellPadY + layout.metrics.fontSize * 0.9;
+      expect(baseline).toBeGreaterThan(topAlignedMax);
+      expect(baseline).toBeGreaterThan(bandHeight * 0.3);
+      expect(baseline).toBeLessThan(bandHeight * 0.65 + layout.metrics.fontSize);
+    }
+  });
+
+  it('does not top-align header labels when the band spans two source lines', () => {
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
+    const slice = sourceLineToSliceSpec(0, layout)!;
+    const bandHeight = resolveOverlayBandHeight(layout, slice);
+    const headerSvg = renderTableSvgLineSlice(layout, 0)!;
+    const yMatch = headerSvg.match(/<tspan x="[^"]*" y="([\d.]+)">Name/);
+    expect(yMatch).not.toBeNull();
+    const baseline = Number(yMatch![1]);
+    const topAlignedMax = bandHeight * 0.28;
+    expect(baseline).toBeGreaterThan(topAlignedMax);
+  });
+
+  it('uses header background for the merged title overlay', () => {
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
+    const headerSvg = renderTableSvgLineSlice(layout, 0)!;
+    expect(headerSvg).toContain('#f3f3f3');
+    expect(headerSvg).not.toMatch(/fill="#ffffff"/);
+  });
+
+  it('draws thead bottom border at the end of the two-line title overlay', () => {
+    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
+    const headerSvg = renderTableSvgLineSlice(layout, 0)!;
+    const bandHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
+    expect(headerSvg).toMatch(new RegExp(`y1="${bandHeight}"`));
+  });
+
+  it('vertically centers multiline wrapped header text', () => {
+    const longHeader = 'Section Title With Extra Words For Wrapping';
+    const block: TableBlock = {
+      startPos: 0,
+      endPos: 80,
+      numLines: 3,
+      header: [longHeader, 'Col B'],
+      rows: [['a', 'b']],
+      align: [null, null],
+    };
+    const layout = buildTableLayout(block, { isDark: false, ...metrics });
+    const headerSvg = renderTableSvgLineSlice(layout, 0)!;
+    const yMatch = headerSvg.match(/<tspan x="[^"]*" y="([\d.]+)">Section/);
+    expect(yMatch).not.toBeNull();
+    const firstBaseline = Number(yMatch![1]);
+    const bandHeight = computeBandHeightForSlice(layout, sourceLineToSliceSpec(0, layout)!);
+    const fontSize = layout.metrics.fontSize;
+    expect(firstBaseline).toBeGreaterThan(bandHeight * 0.25);
+    expect(firstBaseline).toBeLessThan(bandHeight * 0.65 + fontSize);
   });
 });
 
@@ -77,16 +161,64 @@ describe('renderTableSvgLineSlice', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     let totalSliceHeight = 0;
     for (let line = 0; line < basicBlock().numLines; line++) {
-      const slice = sourceLineToSliceSpec(line, layout)!;
-      const bandHeight = computeBandHeightForSlice(layout, slice);
+      const slice = sourceLineToSliceSpec(line, layout);
       const svg = renderTableSvgLineSlice(layout, line);
+      if (!slice) {
+        expect(svg).toBeNull();
+        continue;
+      }
+      const bandHeight = resolveOverlayBandHeight(layout, slice);
       expect(svg).toContain('<svg');
       const heightMatch = svg!.match(/height="(\d+)px"/);
       expect(heightMatch).not.toBeNull();
       expect(Number(heightMatch![1])).toBe(bandHeight);
       totalSliceHeight += bandHeight;
     }
-    expect(totalSliceHeight).toBeLessThanOrEqual(layout.totalHeight);
+    const expectedTotal = Array.from({ length: basicBlock().numLines }, (_, line) => {
+      const slice = sourceLineToSliceSpec(line, layout);
+      return slice ? resolveOverlayBandHeight(layout, slice) : 0;
+    }).reduce((sum, h) => sum + h, 0);
+    expect(totalSliceHeight).toBe(expectedTotal);
+  });
+
+  it('top-aligns body cell text beside a taller wrapped cell', () => {
+    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
+    const block: TableBlock = {
+      startPos: 0,
+      endPos: 100,
+      numLines: 3,
+      header: ['Row', 'Content'],
+      rows: [[longText, 'x']],
+      align: [null, null],
+    };
+    const layout = buildTableLayout(block, { isDark: false, ...metrics });
+    const slice = sourceLineToSliceSpec(2, layout)!;
+    const svg = renderTableSvgLineSlice(layout, 2)!;
+    const bandHeight = resolveOverlayBandHeight(layout, slice);
+    const yMatch = svg.match(/<tspan x="[^"]*" y="([\d.]+)">x<\/tspan>/);
+    expect(yMatch).not.toBeNull();
+    expect(Number(yMatch![1])).toBeLessThan(bandHeight * 0.45);
+  });
+
+  it('sizes every cell rect to the full band height', () => {
+    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
+    const block: TableBlock = {
+      startPos: 0,
+      endPos: 100,
+      numLines: 3,
+      header: ['Row', 'Content'],
+      rows: [[longText, 'x']],
+      align: [null, null],
+    };
+    const layout = buildTableLayout(block, { isDark: false, ...metrics });
+    const svg = renderTableSvgLineSlice(layout, 2)!;
+    const bandMatch = svg.match(/<svg[^>]*height="(\d+)px"/);
+    expect(bandMatch).not.toBeNull();
+    const bandHeight = Number(bandMatch![1]);
+    expect(bandHeight).toBeGreaterThan(metrics.lineHeight);
+    const cellHeights = [...svg.matchAll(/<rect[^>]*height="(\d+)"/g)].map((m) => Number(m[1]));
+    const rowRects = cellHeights.filter((h) => h === bandHeight);
+    expect(rowRects.length).toBeGreaterThanOrEqual(2);
   });
 
   it('uses full wrapped height for a long cell on one source line', () => {

@@ -3,7 +3,8 @@ import { ColorThemeKind, type DecorationOptions, window, workspace } from 'vscod
 import { MarkdownParser } from '../../parser/core';
 import {
   buildTableLayout,
-  computeBandHeightForSlice,
+  resolveOverlayBandHeight,
+  countTableOverlaySourceLines,
   getEditorLineMetrics,
   sourceLineToSliceSpec,
 } from '../../tables/table-renderer';
@@ -61,7 +62,10 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(apply).toHaveBeenCalled();
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
     const totalDecorations = [...decorationsByKey.values()].reduce((sum, entries) => sum + entries.length, 0);
-    const expectedLines = tableBlocks.reduce((sum, block) => sum + block.numLines, 0);
+    const expectedLines = tableBlocks.reduce(
+      (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
+      0,
+    );
     expect(totalDecorations).toBe(expectedLines);
   });
 
@@ -83,7 +87,10 @@ describe('CustomTableUpdateCoordinator', () => {
     await coordinator.updateAsync(editor, tableBlocks, md, document.version);
 
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
-    const expectedSliceKeys = tableBlocks.reduce((sum, block) => sum + block.numLines, 0);
+    const expectedSliceKeys = tableBlocks.reduce(
+      (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
+      0,
+    );
     expect(decorationsByKey.size).toBe(expectedSliceKeys);
   });
 
@@ -108,7 +115,10 @@ describe('CustomTableUpdateCoordinator', () => {
 
     await coordinator.updateAsync(editor, tableBlocks, md, document.version);
 
-    const expectedSliceKeys = tableBlocks.reduce((sum, block) => sum + block.numLines, 0);
+    const expectedSliceKeys = tableBlocks.reduce(
+      (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
+      0,
+    );
     const expectedYields = Math.max(0, Math.ceil(expectedSliceKeys / 10) - 1);
     expect(yieldToEventLoop).toHaveBeenCalledTimes(expectedYields);
     expect(apply).toHaveBeenCalledTimes(1);
@@ -181,7 +191,7 @@ describe('CustomTableUpdateCoordinator', () => {
       capToSourceLines: false,
     });
     const dataSlice = sourceLineToSliceSpec(2, layout)!;
-    const expectedBandHeight = computeBandHeightForSlice(layout, dataSlice);
+    const expectedBandHeight = resolveOverlayBandHeight(layout, dataSlice);
     expect(expectedBandHeight).toBeGreaterThan(lineHeight);
 
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>;
