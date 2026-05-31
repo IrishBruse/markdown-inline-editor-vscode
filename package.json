@@ -281,6 +281,30 @@
           "description": "Hex color for checkbox (unchecked and checked)",
           "format": "color",
           "markdownDescription": "Hex color for unchecked and checked checkbox symbols. Leave empty to use theme default."
+        },
+        "markdownInlineEditor.colors.tableBackground": {
+          "type": "string",
+          "description": "Hex color for custom table cell background",
+          "format": "color",
+          "markdownDescription": "Hex color for custom SVG table body cells. Leave empty to use `workbench.colorCustomizations` `editor.background`, then the built-in default."
+        },
+        "markdownInlineEditor.colors.tableHeaderBackground": {
+          "type": "string",
+          "description": "Hex color for custom table header background",
+          "format": "color",
+          "markdownDescription": "Hex color for custom SVG table header cells. Leave empty to use `textCodeBlock.background` from color customizations, then the built-in default."
+        },
+        "markdownInlineEditor.colors.tableBorder": {
+          "type": "string",
+          "description": "Hex color for custom table borders",
+          "format": "color",
+          "markdownDescription": "Hex color for custom SVG table cell borders. Leave empty to use `editorWidget.border` from color customizations, then the built-in default."
+        },
+        "markdownInlineEditor.colors.tableText": {
+          "type": "string",
+          "description": "Hex color for custom table cell text",
+          "format": "color",
+          "markdownDescription": "Hex color for custom SVG table cell text. Leave empty to use `editor.foreground` from color customizations, then the built-in default."
         }
       }
     }

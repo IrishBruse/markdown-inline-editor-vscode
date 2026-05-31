@@ -189,5 +189,17 @@ export const config = {
     checkbox(): string | undefined {
       return getColorConfig('checkbox');
     },
+    tableBackground(): string | undefined {
+      return getColorConfig('tableBackground');
+    },
+    tableHeaderBackground(): string | undefined {
+      return getColorConfig('tableHeaderBackground');
+    },
+    tableBorder(): string | undefined {
+      return getColorConfig('tableBorder');
+    },
+    tableText(): string | undefined {
+      return getColorConfig('tableText');
+    },
   },
 } as const;

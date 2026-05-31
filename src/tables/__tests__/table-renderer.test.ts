@@ -64,6 +64,23 @@ describe('renderTableSvg', () => {
     expect(svg).toContain('#cccccc');
   });
 
+  it('uses explicit table colors when provided', () => {
+    const svg = renderTableSvg(basicBlock(), {
+      isDark: true,
+      ...metrics,
+      colors: {
+        background: '#282c34',
+        headerBackground: '#23282f',
+        border: '#3a3f4b',
+        text: '#abb2bf',
+      },
+    });
+    expect(svg).toContain('#282c34');
+    expect(svg).toContain('#23282f');
+    expect(svg).toContain('#3a3f4b');
+    expect(svg).toContain('#abb2bf');
+  });
+
   it('sizes SVG height to one editor line per source line', () => {
     const block = basicBlock();
     const svg = renderTableSvg(block, { isDark: false, ...metrics });

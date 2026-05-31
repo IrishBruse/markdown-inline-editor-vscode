@@ -70,7 +70,7 @@ Search Settings for **Markdown Inline Editor** (`markdownInlineEditor.*`).
 | Math / emoji | `math.enabled` (`true`), `emojis.enabled` (`true`) |
 | Ordered lists | `orderedLists.autoNumber` (`true`), `orderedLists.warnWhenSourceNumberDiffers` (`true`) |
 | Mentions | `mentions.enabled` (`true`); links infer from `git remote` when unset |
-| Colors | `colors.heading1` … `colors.checkbox` (15 keys) |
+| Colors | `colors.heading1` … `colors.checkbox`, `colors.tableBackground` … `colors.tableText` (19 keys; table colors also read `workbench.colorCustomizations` when unset) |
 
 Example:
 

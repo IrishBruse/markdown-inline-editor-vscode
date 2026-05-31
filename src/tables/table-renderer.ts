@@ -3,9 +3,12 @@ import { workspace } from 'vscode';
 import type { TableBlock } from '../parser';
 import { measureTextWidth } from '../parser/tables';
 import { processSvg } from '../mermaid/svg-processor';
+import { resolveTableColors, type TableColors } from './table-colors';
 
 export type TableRenderOptions = {
   isDark: boolean;
+  /** When omitted, resolved from extension settings and workbench.colorCustomizations. */
+  colors?: TableColors;
   fontFamily?: string;
   /** Editor line height in px; defaults from workspace settings. */
   lineHeight?: number;
@@ -331,10 +334,8 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
   const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + BORDER_WIDTH * (colWidths.length + 1);
   const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0);
 
-  const bg = options.isDark ? '#1e1e1e' : '#ffffff';
-  const border = options.isDark ? '#454545' : '#c8c8c8';
-  const headerBg = options.isDark ? '#2d2d2d' : '#f3f3f3';
-  const textColor = options.isDark ? '#cccccc' : '#333333';
+  const { background: bg, headerBackground: headerBg, border, text: textColor } =
+    options.colors ?? resolveTableColors(options.isDark);
   const fontFamily = options.fontFamily
     ? `${escapeXml(options.fontFamily)}, sans-serif`
     : 'var(--vscode-editor-font-family, monospace), monospace';

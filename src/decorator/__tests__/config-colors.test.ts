@@ -174,11 +174,12 @@ describe('config.colors', () => {
     });
   });
 
-  describe('all 15 color getters', () => {
+  describe('all 19 color getters', () => {
     const keys = [
       'heading1', 'heading2', 'heading3', 'heading4', 'heading5', 'heading6',
       'link', 'listMarker', 'inlineCode', 'inlineCodeBackground', 'emphasis', 'blockquote',
       'image', 'horizontalRule', 'checkbox',
+      'tableBackground', 'tableHeaderBackground', 'tableBorder', 'tableText',
     ] as const;
 
     it('each getter reads correct config key', () => {

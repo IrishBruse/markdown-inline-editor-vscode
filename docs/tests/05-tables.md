@@ -318,6 +318,8 @@ GFM treats every unescaped `|` on a table line as a column boundary. The header 
 
 Set `markdownInlineEditor.tables.renderingMode` to `custom` for bordered tables rendered as SVG overlays (same technique as Mermaid diagrams).
 
+Table colors resolve from `markdownInlineEditor.colors.tableBackground` / `tableHeaderBackground` / `tableBorder` / `tableText` when set; otherwise from `workbench.colorCustomizations` (`editor.background`, `textCodeBlock.background`, `editorWidget.border`, `editor.foreground`).
+
 | Section Header | Detailed Placeholder Content                                                                                                                                                                                                                                                                                                                                                                   |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Row 1          | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.                                                 |

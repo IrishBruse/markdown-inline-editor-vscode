@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import { ColorThemeKind, Range, TextEditor, window, workspace } from 'vscode';
 import type { TableBlock } from '../parser';
 import { svgToDataUri } from '../mermaid/svg-processor';
+import { resolveTableColors, tableColorsCacheKey } from '../tables/table-colors';
 import { getEditorLineMetrics, renderTableSvg } from '../tables/table-renderer';
 import { SvgOverlayDecorations } from './mermaid-diagram-decorations';
 import { createRange, isSelectionOrCursorInsideOffsets } from './editor-decoration-applier';
@@ -11,6 +12,7 @@ export const TABLE_SVG_RENDER_BATCH_SIZE = 20;
 
 type TableBlockKeyCacheEntry = {
   isDark: boolean;
+  colorsKey: string;
   numLines: number;
   lineHeight: number;
   fontSize: number;
@@ -30,6 +32,7 @@ const tableBlockKeyCache = new WeakMap<TableBlock, TableBlockKeyCacheEntry>();
 function getTableBlockCacheKey(
   block: TableBlock,
   isDark: boolean,
+  colorsKey: string,
   lineHeight: number,
   fontSize: number,
   fontFamily: string | undefined,
@@ -38,6 +41,7 @@ function getTableBlockCacheKey(
   if (
     cached &&
     cached.isDark === isDark &&
+    cached.colorsKey === colorsKey &&
     cached.numLines === block.numLines &&
     cached.lineHeight === lineHeight &&
     cached.fontSize === fontSize &&
@@ -51,6 +55,7 @@ function getTableBlockCacheKey(
     rows: block.rows,
     align: block.align,
     isDark,
+    colorsKey,
     numLines: block.numLines,
     lineHeight,
     fontSize,
@@ -59,6 +64,7 @@ function getTableBlockCacheKey(
   const key = createHash('sha256').update(keySource).digest('hex');
   tableBlockKeyCache.set(block, {
     isDark,
+    colorsKey,
     numLines: block.numLines,
     lineHeight,
     fontSize,
@@ -151,9 +157,11 @@ export class CustomTableUpdateCoordinator {
 
     const isDark = window.activeColorTheme.kind === ColorThemeKind.Dark ||
       window.activeColorTheme.kind === ColorThemeKind.HighContrast;
+    const tableColors = resolveTableColors(isDark);
+    const colorsKey = tableColorsCacheKey(tableColors);
     const { lineHeight, fontSize } = getEditorLineMetrics();
     const fontFamily = workspace.getConfiguration('editor').get<string>('fontFamily');
-    const renderThemeKey = `${isDark}:${lineHeight}:${fontSize}:${fontFamily ?? ''}`;
+    const renderThemeKey = `${isDark}:${colorsKey}:${lineHeight}:${fontSize}:${fontFamily ?? ''}`;
     const visibilitySignature = buildTableVisibilitySignature(
       tableBlocks,
       normalizedText,
@@ -201,7 +209,7 @@ export class CustomTableUpdateCoordinator {
         continue;
       }
 
-      const key = getTableBlockCacheKey(block, isDark, lineHeight, fontSize, fontFamily);
+      const key = getTableBlockCacheKey(block, isDark, colorsKey, lineHeight, fontSize, fontFamily);
       if (!blockByKey.has(key)) {
         blockByKey.set(key, block);
         if (!this.svgDataUriCache.has(key)) {
@@ -219,7 +227,7 @@ export class CustomTableUpdateCoordinator {
       return;
     }
 
-    const renderOptions = { isDark, lineHeight, fontSize, fontFamily };
+    const renderOptions = { isDark, colors: tableColors, lineHeight, fontSize, fontFamily };
 
     for (let offset = 0; offset < keysToRender.length; offset += this.renderBatchSize) {
       if (token !== this.updateToken || editor.document.version !== documentVersion) {

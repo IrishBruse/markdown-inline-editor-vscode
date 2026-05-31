@@ -55,7 +55,10 @@ export function registerEventHandlers(
         decorator.updateDecorationsForSelection();
       }
 
-      if (event.affectsConfiguration('markdownInlineEditor.colors')) {
+      if (
+        event.affectsConfiguration('markdownInlineEditor.colors') ||
+        event.affectsConfiguration('workbench.colorCustomizations')
+      ) {
         decorator.recreateColorDependentTypes();
       }
 

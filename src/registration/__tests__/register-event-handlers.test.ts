@@ -140,6 +140,7 @@ describe('registerEventHandlers', () => {
       'markdownInlineEditor.decorations.codeBlockLanguageOpacity',
       'markdownInlineEditor.links.singleClickOpen',
       'markdownInlineEditor.colors',
+      'workbench.colorCustomizations',
       'editor.fontSize',
       'editor.lineHeight',
       'editor.fontFamily',
