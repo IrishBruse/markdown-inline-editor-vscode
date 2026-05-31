@@ -3,7 +3,7 @@
 Normative behavior for `markdownInlineEditor.tables.renderingMode: custom`.
 
 **Implementation:** `src/tables/table-renderer.ts`, `src/decorator/custom-table-update-coordinator.ts`  
-**Tests:** `src/tables/__tests__/table-renderer.test.ts` (`multiline header band`, `sourceLineToSliceSpec`), `src/decorator/__tests__/custom-table-update-coordinator.test.ts`  
+**Tests:** `src/tables/__tests__/table-custom-overlay-regression.test.ts` (header + body regressions), `src/tables/__tests__/table-renderer.test.ts`, `src/decorator/__tests__/custom-table-update-coordinator.test.ts`  
 **Manual QA:** [docs/tests/05-tables.md](../tests/05-tables.md) (sections **Basic**, **Custom mode**)
 
 ## Scope
@@ -98,4 +98,4 @@ SVG output from `renderTableSvgLineSlice` MUST use the same pixel height as `res
 1. Open `docs/tests/05-tables.md` with `renderingMode: custom`, cursor outside tables.
 2. **Basic** section: no `---` or `___` under header labels; separator line not readable as markdown.
 3. Header labels visually centered in the gray thead area spanning two source lines (not stuck to the top border).
-4. `npm test -- src/tables/__tests__/table-renderer.test.ts` passes (`multiline header band`, including `vertically centers simple header`).
+4. `npm test -- src/tables/__tests__/table-custom-overlay-regression.test.ts` passes.
