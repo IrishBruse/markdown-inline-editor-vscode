@@ -38,14 +38,14 @@ The GFM header is **two source lines** (title row + `|---|---|` separator) but *
 
 - Render thead **labels** on source line `0` in a band at least `HEADER_SOURCE_LINES * editorLineHeight` tall.
 - **Vertically center** single-line header labels in the two-line thead (`HEADER_SOURCE_LINES * editorLineHeight`). Multi-line wrapped labels center in the full title band when it grows taller.
-- Render the separator hide band on line `1` with **grid lines only** (no opaque fill) so it does not cover centered labels; hide `|---|---|` via transparent source-line decorations.
+- Render the separator hide band on line `1` with **header background fill** plus grid lines (thead bottom rule). Labels stay on the title-line overlay only; `|---|---|` is hidden by fill and transparent source-line decorations.
 - Draw the table **top** and **vertical** grid lines on the title band; draw the thead **bottom** on the separator hide band only.
 - Clip overlay content to the band (`clipPath`) so tall SVG does not paint outside the decoration box.
 
 ### MUST NOT (regression guards)
 
 - Top-align header labels in the title-line band (short headers like `| Col | Note |` must not hug the top border).
-- Draw an opaque fill on the separator hide band (covers centered header glyphs).
+- Draw separator label glyphs or body background on the separator hide band.
 - Leave raw GFM visible on any overlaid source line (missing `color: transparent` on decorations).
 - Render header label glyphs on the separator hide band (labels must stay on the title line overlay only).
 - **Split the thead** across two overlay bands by slicing header layout with `subLineCount: 2` on lines `0` and `1`. That draws a cell bottom border on the title line, which looks like `---` bleeding under the header labels.
@@ -57,7 +57,8 @@ The GFM header is **two source lines** (title row + `|---|---|` separator) but *
 
 - One overlay band per data source line.
 - Band height (`resolveOverlayBandHeight`) MUST match the SVG `height` and the decoration `before.height`.
-- Cell `<rect>` height MUST equal the band height for every column in that row.
+- For non-header slices, band height MUST NOT exceed the source-line budget (`slice.sliceHeight`, typically `editorLineHeight`). Taller bands overlap the next line and hide the row's bottom border.
+- Cell `<rect>` fills MUST be inset on bordered edges so fill height is `bandHeight - BORDER_WIDTH` when a bottom grid line is drawn (and similarly for a top edge).
 - Word-wrap cell text within column width; truncate with ellipsis after `MAX_BAND_LINES` (~5) visible lines.
 - **Top-align** all body cell text (`cellPadY` inset from the top of the band), including single-line cells beside taller wrapped neighbors.
 
@@ -67,9 +68,10 @@ The GFM header is **two source lines** (title row + `|---|---|` separator) but *
 
 ## Grid lines (per-line overlays)
 
-- **Header / separator:** fill-only cell rects plus explicit `<line>` strokes (`appendBandBorderLines`). Inset strokes so clip paths do not clip them away.
-- **Data rows:** each cell is a `<rect>` with `fill` and `stroke` so column and row dividers are always visible.
-- **Horizontal** header rules: merged title band draws the table **top**; separator hide band draws the thead/tbody **bottom** (lines only, no fill).
+- **All bands:** fill-only cell rects plus explicit `<line>` strokes (`appendBandBorderLines`). Cell and band fills are inset by `BORDER_WIDTH` on edges where a grid line is drawn so fill does not bleed past borders.
+- **Horizontal** header rules: merged title band draws the table **top**; separator hide band draws the thead/tbody **bottom** on thead-colored fill.
+- Table slice SVGs use `ensureSvgDimensions` (not aspect-ratio rescaling) so every band shares the same pixel width.
+- **Vertical** rules: one crisp line per column boundary (no per-cell rect strokes, which double-thicken internal edges and spill past the clip).
 
 ## Decoration alignment
 

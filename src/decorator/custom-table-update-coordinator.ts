@@ -100,12 +100,19 @@ function sliceCacheKey(blockKey: string, sourceLineIndex: number): string {
   return `${blockKey}:${sourceLineIndex}`;
 }
 
-function createTableLineRange(
+type TableSourceLineRanges = {
+  /** Full line: decoration type `color: transparent` hides GFM source text. */
+  hideRange: Range;
+  /** Collapsed at column 0: icon uses explicit width/height, not line pixel width. */
+  overlayRange: Range;
+};
+
+function createTableSourceLineRanges(
   editor: TextEditor,
   block: TableBlock,
   sourceLineIndex: number,
   normalizedText: string,
-): Range | null {
+): TableSourceLineRanges | null {
   const tableRange = createRange(editor, block.startPos, block.endPos, normalizedText);
   if (!tableRange) {
     return null;
@@ -117,7 +124,11 @@ function createTableLineRange(
   }
 
   const lineText = editor.document.lineAt(line);
-  return new Range(new Position(line, 0), new Position(line, lineText.text.length));
+  const lineStart = new Position(line, 0);
+  return {
+    hideRange: new Range(lineStart, new Position(line, lineText.text.length)),
+    overlayRange: new Range(lineStart, lineStart),
+  };
 }
 
 /** Which tables are hidden vs shown given the current selection. */
@@ -165,21 +176,30 @@ export class CustomTableUpdateCoordinator {
     void this.updateAsync(editor, tableBlocks, normalizedText, documentVersion);
   }
 
-  private buildTableSliceDecorationOptions(
-    range: Range,
+  private buildTableSliceDecorations(
+    hideRange: Range,
+    overlayRange: Range,
     dataUri: string,
+    bandWidth: number,
     bandHeight: number,
-  ): DecorationOptions {
-    return {
-      range,
-      renderOptions: {
-        before: {
-          contentIconPath: Uri.parse(dataUri),
-          height: `${bandHeight}px`,
-          textDecoration: `none; display: inline-block; vertical-align: top; overflow: hidden; max-height: ${bandHeight}px;`,
+  ): DecorationOptions[] {
+    return [
+      {
+        range: hideRange,
+        renderOptions: { color: 'transparent' },
+      },
+      {
+        range: overlayRange,
+        renderOptions: {
+          before: {
+            contentIconPath: Uri.parse(dataUri),
+            width: `${bandWidth}px`,
+            height: `${bandHeight}px`,
+            textDecoration: `none; display: inline-block; vertical-align: top; overflow: hidden; max-height: ${bandHeight}px;`,
+          },
         },
       },
-    };
+    ];
   }
 
   private bandHeightForSlice(
@@ -297,8 +317,13 @@ export class CustomTableUpdateCoordinator {
           continue;
         }
 
-        const lineRange = createTableLineRange(editor, block, sourceLineIndex, normalizedText);
-        if (!lineRange) {
+        const lineRanges = createTableSourceLineRanges(
+          editor,
+          block,
+          sourceLineIndex,
+          normalizedText,
+        );
+        if (!lineRanges) {
           continue;
         }
 
@@ -307,13 +332,15 @@ export class CustomTableUpdateCoordinator {
         const cachedUri = this.svgDataUriCache.get(key);
         if (cachedUri) {
           const bandHeight = this.bandHeightForSlice(block, sourceLineIndex, renderOptions, blockLayout);
-          const options = this.buildTableSliceDecorationOptions(
-            lineRange,
+          const options = this.buildTableSliceDecorations(
+            lineRanges.hideRange,
+            lineRanges.overlayRange,
             cachedUri,
+            blockLayout.totalWidth,
             bandHeight,
           );
           const existing = decorationsByKey.get(key) || [];
-          existing.push(options);
+          existing.push(...options);
           decorationsByKey.set(key, existing);
           continue;
         }
@@ -344,13 +371,13 @@ export class CustomTableUpdateCoordinator {
         }
         this.svgDataUriCache.set(job.sliceKey, svgToDataUri(svg));
 
-        const lineRange = createTableLineRange(
+        const lineRanges = createTableSourceLineRanges(
           editor,
           job.block,
           job.sourceLineIndex,
           normalizedText,
         );
-        if (!lineRange) {
+        if (!lineRanges) {
           continue;
         }
 
@@ -361,13 +388,15 @@ export class CustomTableUpdateCoordinator {
           renderOptions,
           layout,
         );
-        const options = this.buildTableSliceDecorationOptions(
-          lineRange,
+        const options = this.buildTableSliceDecorations(
+          lineRanges.hideRange,
+          lineRanges.overlayRange,
           dataUri,
+          layout.totalWidth,
           bandHeight,
         );
         const existing = decorationsByKey.get(job.sliceKey) || [];
-        existing.push(options);
+        existing.push(...options);
         decorationsByKey.set(job.sliceKey, existing);
       }
 

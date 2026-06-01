@@ -131,10 +131,10 @@ describe('custom overlay regression: header', () => {
     expect(headerSvg).not.toMatch(new RegExp(`y1="${bandHeight - 0.5}"`));
   });
 
-  it('draws the separator hide band with grid lines only (no fill over labels)', () => {
+  it('draws the separator hide band with thead fill and the thead bottom rule', () => {
     const separatorSvg = sliceSvg(layout, 1);
     const { headerBackground, background } = layout.metrics.colors;
-    expect(separatorSvg).not.toContain(`fill="${headerBackground}"`);
+    expect(separatorSvg).toContain(`fill="${headerBackground}"`);
     expect(separatorSvg).not.toContain(`fill="${background}"`);
     expect(separatorSvg).toMatch(/<line[^>]*stroke="/);
     expect(separatorSvg).toMatch(/y1="17\.5"/);
@@ -142,16 +142,46 @@ describe('custom overlay regression: header', () => {
 });
 
 describe('custom overlay regression: body', () => {
-  it('draws a stroked cell grid on every data row overlay', () => {
+  it('caps single-line body band height to the editor line height', () => {
+    const block: TableBlock = {
+      startPos: 0,
+      endPos: 80,
+      numLines: 5,
+      header: ['A', 'B', 'C', 'D'],
+      rows: [
+        ['r1', 'r1', 'r1', 'r1'],
+        ['r2', 'r2', 'r2', 'r2'],
+        ['r3', 'r3', 'r3', 'r3'],
+      ],
+      align: [null, null, null, null],
+    };
+    const layout = layoutFor(block);
+    for (const sourceLine of [2, 3, 4]) {
+      const slice = sourceLineToSliceSpec(sourceLine, layout)!;
+      const bandHeight = resolveOverlayBandHeight(layout, slice);
+      expect(bandHeight).toBeLessThanOrEqual(metrics.lineHeight);
+      const svg = sliceSvg(layout, sourceLine);
+      expect(parseBandHeight(svg)).toBe(bandHeight);
+    }
+  });
+
+  it('draws one outer right border (not a column divider plus outer edge)', () => {
+    const layout = layoutFor();
+    const svg = sliceSvg(layout, 2);
+    const w = layout.totalWidth;
+    const rightEdgeX = [...svg.matchAll(/<line x1="([\d.]+)"[^>]*y1="0\.5"/g)]
+      .map((m) => Number(m[1]))
+      .filter((x) => x >= w - 2);
+    expect(rightEdgeX).toEqual([w - 0.5]);
+  });
+
+  it('draws a line grid (not stroked rects) on every data row overlay', () => {
     const layout = layoutFor();
     const border = layout.metrics.colors.border;
     for (const line of [2, 3]) {
       const svg = sliceSvg(layout, line);
-      const stroked = cellRects(svg).filter((r) => r.hasStroke);
-      expect(stroked.length).toBe(basicTable().header.length);
-      for (const rect of stroked) {
-        expect(svg).toContain(`stroke="${border}"`);
-      }
+      expect(cellRects(svg).every((r) => !r.hasStroke)).toBe(true);
+      expect(svg).toMatch(new RegExp(`<line[^>]*stroke="${border.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
     }
   });
 
@@ -164,11 +194,12 @@ describe('custom overlay regression: body', () => {
     expect(fills.some((f) => f === headerBackground)).toBe(false);
   });
 
-  it('sizes each body cell rect to the full band height', () => {
+  it('insets body cell fills below the bottom grid line', () => {
     const layout = layoutFor();
     const bandHeight = parseBandHeight(sliceSvg(layout, 2));
+    const fillHeight = bandHeight - 1;
     const heights = cellRects(sliceSvg(layout, 2)).map((r) => r.height);
-    expect(heights.filter((h) => h === bandHeight).length).toBeGreaterThanOrEqual(2);
+    expect(heights.filter((h) => h === fillHeight).length).toBeGreaterThanOrEqual(2);
   });
 
   it('top-aligns short body text beside a taller wrapped cell', () => {
@@ -181,11 +212,12 @@ describe('custom overlay regression: body', () => {
     expect(baseline).toBeLessThan(bandHeight * 0.45);
   });
 
-  it('does not stroke header cells like data cells', () => {
+  it('uses fill-only cells on header and data overlays', () => {
     const layout = layoutFor();
     const headerSvg = sliceSvg(layout, 0);
-    expect(cellRects(headerSvg).some((r) => r.hasStroke)).toBe(false);
-    expect(cellRects(sliceSvg(layout, 2)).some((r) => r.hasStroke)).toBe(true);
+    const dataSvg = sliceSvg(layout, 2);
+    expect(cellRects(headerSvg).every((r) => !r.hasStroke)).toBe(true);
+    expect(cellRects(dataSvg).every((r) => !r.hasStroke)).toBe(true);
   });
 });
 

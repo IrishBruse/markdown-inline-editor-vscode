@@ -104,19 +104,19 @@ describe('multiline header band', () => {
     expect(baseline).toBeLessThan(bandHeight * 0.65 + fontSize);
   });
 
-  it('draws stroked cell borders on data row overlays', () => {
+  it('draws line borders on data row overlays (not stroked cell rects)', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const dataSvg = renderTableSvgLineSlice(layout, 2)!;
     const borderColor = layout.metrics.colors.border;
-    expect(dataSvg).toContain(`stroke="${borderColor}"`);
+    expect(dataSvg).toMatch(new RegExp(`<line[^>]*stroke="${borderColor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
     const strokeRects = [...dataSvg.matchAll(new RegExp(`<rect[^>]*stroke="${borderColor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'g'))];
-    expect(strokeRects.length).toBeGreaterThanOrEqual(2);
+    expect(strokeRects.length).toBe(0);
   });
 
-  it('does not fill the separator hide band over centered header text', () => {
+  it('fills the separator hide band with header background to hide GFM dashes', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const separatorSvg = renderTableSvgLineSlice(layout, 1)!;
-    expect(separatorSvg).not.toContain('fill="#f3f3f3"');
+    expect(separatorSvg).toContain('fill="#f3f3f3"');
     expect(separatorSvg).not.toContain('fill="#ffffff"');
   });
 
@@ -203,7 +203,7 @@ describe('renderTableSvgLineSlice', () => {
     expect(Number(yMatch![1])).toBeLessThan(bandHeight * 0.45);
   });
 
-  it('sizes every cell rect to the full band height', () => {
+  it('insets cell fills below the bottom grid line on tall data bands', () => {
     const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
     const block: TableBlock = {
       startPos: 0,
@@ -219,8 +219,9 @@ describe('renderTableSvgLineSlice', () => {
     expect(bandMatch).not.toBeNull();
     const bandHeight = Number(bandMatch![1]);
     expect(bandHeight).toBeGreaterThan(metrics.lineHeight);
+    const fillHeight = bandHeight - 1;
     const cellHeights = [...svg.matchAll(/<rect[^>]*height="(\d+)"/g)].map((m) => Number(m[1]));
-    const rowRects = cellHeights.filter((h) => h === bandHeight);
+    const rowRects = cellHeights.filter((h) => h === fillHeight);
     expect(rowRects.length).toBeGreaterThanOrEqual(2);
   });
 

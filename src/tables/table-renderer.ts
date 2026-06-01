@@ -2,7 +2,7 @@ import * as os from 'os';
 import { workspace } from 'vscode';
 import type { TableBlock } from '../parser';
 import { measureTextWidth } from '../parser/tables';
-import { processSvg } from '../mermaid/svg-processor';
+import { ensureSvgDimensions } from '../mermaid/svg-processor';
 import { resolveTableColors, type TableColors } from './table-colors';
 
 export type TableRenderOptions = {
@@ -314,8 +314,23 @@ export function resolveBandRowHeight(
   lineStep: number,
 ): number {
   const fromContent = bandContentHeight(visibleWrapLines, layout.metrics, lineStep);
-  const fromSlice = computeBandHeightForSlice(layout, slice);
-  return Math.min(Math.max(fromContent, fromSlice), maxBandHeightPx(layout.metrics));
+  const sliceBudget = computeBandHeightForSlice(layout, slice);
+  const maxBand = maxBandHeightPx(layout.metrics);
+  if (slice.mergedHeader === true) {
+    return Math.min(Math.max(fromContent, sliceBudget), maxBand);
+  }
+
+  const { lineHeight } = layout.metrics;
+  const sourceLineBudget = slice.hideSeparatorRow === true
+    ? lineHeight
+    : (layout.rowLayouts[slice.rowLayoutIndex]?.sourceWeight ?? 1) * lineHeight;
+
+  // One editor line per overlay: cap to line height so the band does not cover the row bottom border.
+  if (sliceBudget <= sourceLineBudget) {
+    return Math.min(fromContent, sourceLineBudget, maxBand);
+  }
+
+  return Math.min(Math.max(fromContent, sliceBudget), maxBand);
 }
 
 /** Keep at most {@link maxLines}; mark overflow with an ellipsis on the last line. */
@@ -603,6 +618,23 @@ function appendVerticalBorder(
   );
 }
 
+/** Inset band/cell fills inside the outer vertical border lines. */
+function bandInnerFrame(
+  bandHeight: number,
+  tableWidth: number,
+  edges: { top: boolean; bottom: boolean },
+): { x: number; y: number; width: number; height: number } {
+  const x = BORDER_WIDTH;
+  const y = edges.top ? BORDER_WIDTH : 0;
+  const bottomInset = edges.bottom ? BORDER_WIDTH : 0;
+  return {
+    x,
+    y,
+    width: tableWidth - BORDER_WIDTH * 2,
+    height: bandHeight - y - bottomInset,
+  };
+}
+
 function appendBandBorderLines(
   parts: string[],
   layout: TableLayout,
@@ -614,18 +646,26 @@ function appendBandBorderLines(
   const tableWidth = layout.totalWidth;
 
   if (edges.top) {
-    appendHorizontalBorder(parts, 0, tableWidth, BORDER_INSET, border);
+    appendHorizontalBorder(parts, BORDER_INSET, tableWidth - BORDER_INSET, BORDER_INSET, border);
   }
   if (edges.bottom) {
-    appendHorizontalBorder(parts, 0, tableWidth, bandHeight - BORDER_INSET, border);
+    appendHorizontalBorder(
+      parts,
+      BORDER_INSET,
+      tableWidth - BORDER_INSET,
+      bandHeight - BORDER_INSET,
+      border,
+    );
   }
 
   appendVerticalBorder(parts, BORDER_INSET, bandHeight, border);
   let x = BORDER_WIDTH;
   for (let colIdx = 0; colIdx < colWidths.length; colIdx++) {
     x += colWidths[colIdx];
-    appendVerticalBorder(parts, x - BORDER_INSET, bandHeight, border);
-    x += BORDER_WIDTH;
+    if (colIdx < colWidths.length - 1) {
+      appendVerticalBorder(parts, x - BORDER_INSET, bandHeight, border);
+      x += BORDER_WIDTH;
+    }
   }
   appendVerticalBorder(parts, tableWidth - BORDER_INSET, bandHeight, border);
 }
@@ -705,12 +745,8 @@ function renderRowBand(
   const { fontSize, charWidth, cellPadX, cellPadY, fontFamily, colors } = metrics;
   const { background: bg, headerBackground: headerBg, text: textColor } = colors;
   const { cellLines, rowHeight, lineStep } = prepared;
-
-  if (slice.mergedHeader === true) {
-    parts.push(
-      `<rect width="${layout.totalWidth}" height="${rowHeight}" fill="${headerBg}"/>`,
-    );
-  }
+  const edges = slice.bandBorders ?? { top: false, bottom: true };
+  const { y: fillY, height: fillHeight } = bandInnerFrame(rowHeight, layout.totalWidth, edges);
 
   let x = BORDER_WIDTH;
   for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
@@ -730,15 +766,9 @@ function renderRowBand(
       );
 
     const fill = rowLayout.isHeader ? headerBg : bg;
-    if (rowLayout.isHeader) {
-      parts.push(
-        `<rect x="${x}" y="0" width="${colWidth}" height="${rowHeight}" fill="${fill}"/>`,
-      );
-    } else {
-      parts.push(
-        `<rect x="${x}" y="0" width="${colWidth}" height="${rowHeight}" fill="${fill}" stroke="${metrics.colors.border}" stroke-width="${BORDER_WIDTH}"/>`,
-      );
-    }
+    parts.push(
+      `<rect x="${x}" y="${fillY}" width="${colWidth}" height="${fillHeight}" fill="${fill}"/>`,
+    );
 
     appendWrappedCellText(
       parts,
@@ -758,10 +788,7 @@ function renderRowBand(
     x += colWidth + BORDER_WIDTH;
   }
 
-  if (rowLayout.isHeader) {
-    const edges = slice.bandBorders ?? { top: false, bottom: true };
-    appendBandBorderLines(parts, layout, rowHeight, edges);
-  }
+  appendBandBorderLines(parts, layout, rowHeight, edges);
 }
 
 /**
@@ -797,18 +824,27 @@ export function buildTableLayout(block: TableBlock, options: TableRenderOptions)
 
 function renderSvgFromParts(parts: string[], width: number, height: number): string {
   const body = parts.join('');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${body}</svg>`;
-  return processSvg(svg, height);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${body}</svg>`;
+  return ensureSvgDimensions(svg, width, height);
 }
 
 /**
- * Grid lines on the GFM separator source line only (no fill).
- * Header fill and labels live on the title-line overlay; source text is hidden via transparent decorations.
+ * Separator source line: opaque thead fill hides `|---|---|`; thead bottom rule drawn here.
+ * Header labels live on the title-line overlay (taller band above).
  */
 function renderSeparatorHideBand(layout: TableLayout, bandHeight: number): string {
   const w = layout.totalWidth;
+  const edges = { top: false, bottom: true };
+  const { headerBackground } = layout.metrics.colors;
+  const { x, y, width, height } = bandInnerFrame(bandHeight, w, edges);
   const parts: string[] = [];
-  appendBandBorderLines(parts, layout, bandHeight, { top: false, bottom: true });
+  parts.push(
+    `<defs><clipPath id="band"><rect width="${w}" height="${bandHeight}"/></clipPath></defs>`,
+  );
+  parts.push(`<g clip-path="url(#band)">`);
+  parts.push(`<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${headerBackground}"/>`);
+  appendBandBorderLines(parts, layout, bandHeight, edges);
+  parts.push('</g>');
   return renderSvgFromParts(parts, w, bandHeight);
 }
 
@@ -839,14 +875,19 @@ export function renderTableSvgLineSlice(
   const bandFill = slice.mergedHeader === true || rowLayout?.isHeader === true
     ? layout.metrics.colors.headerBackground
     : layout.metrics.colors.background;
+  const edges = slice.bandBorders ?? { top: false, bottom: true };
+  const { x: fillX, y: fillY, width: fillW, height: fillH } = bandInnerFrame(
+    bandHeight,
+    layout.totalWidth,
+    edges,
+  );
   const parts: string[] = [];
   const w = layout.totalWidth;
-  const clipHeight = bandHeight + BORDER_WIDTH;
   parts.push(
-    `<defs><clipPath id="band"><rect width="${w}" height="${clipHeight}"/></clipPath></defs>`,
+    `<defs><clipPath id="band"><rect width="${w}" height="${bandHeight}"/></clipPath></defs>`,
   );
   parts.push(`<g clip-path="url(#band)">`);
-  parts.push(`<rect width="${w}" height="${bandHeight}" fill="${bandFill}"/>`);
+  parts.push(`<rect x="${fillX}" y="${fillY}" width="${fillW}" height="${fillH}" fill="${bandFill}"/>`);
   renderRowBand(parts, layout, slice.rowLayoutIndex, slice, prepared);
   parts.push('</g>');
   return renderSvgFromParts(parts, w, bandHeight);

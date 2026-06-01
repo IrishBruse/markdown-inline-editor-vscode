@@ -66,7 +66,7 @@ describe('CustomTableUpdateCoordinator', () => {
       (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
       0,
     );
-    expect(totalDecorations).toBe(expectedLines);
+    expect(totalDecorations).toBe(expectedLines * 2);
   });
 
   it('keeps early table overlays when the document has many unique tables', async () => {
@@ -196,11 +196,32 @@ describe('CustomTableUpdateCoordinator', () => {
 
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>;
     const dataRowOptions = [...decorationsByKey.values()].flat().find(
-      (opt) => opt.range.start.line === 2,
+      (opt) => opt.range.start.line === 2 && opt.renderOptions?.before?.contentIconPath,
     );
     expect(dataRowOptions).toBeDefined();
     expect(dataRowOptions!.renderOptions?.before?.height).toBe(`${expectedBandHeight}px`);
     expect(dataRowOptions!.renderOptions?.before?.textDecoration).toContain('max-height');
+  });
+
+  it('hides GFM source on the full line and anchors the SVG on a collapsed range', async () => {
+    const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
+    const outside = document.positionAt(md.indexOf('After'));
+    const editor = new TextEditor(document, [new Selection(outside, outside)]);
+
+    const apply = vi.fn();
+    const coordinator = makeCoordinator(apply);
+    await coordinator.updateAsync(editor, tableBlocks, md, document.version);
+
+    const lineOptions = [...(apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>).values()]
+      .flat()
+      .filter((opt) => opt.range.start.line === 0);
+    expect(lineOptions).toHaveLength(2);
+    const hide = lineOptions.find((opt) => !opt.renderOptions?.before?.contentIconPath);
+    const overlay = lineOptions.find((opt) => opt.renderOptions?.before?.contentIconPath);
+    expect(hide?.range.end.character).toBeGreaterThan(0);
+    expect(overlay?.range.start).toEqual(overlay?.range.end);
   });
 
   it('renders an overlay on the separator source line to cover GFM dashes', async () => {
@@ -216,7 +237,7 @@ describe('CustomTableUpdateCoordinator', () => {
 
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>;
     const separatorOptions = [...decorationsByKey.values()].flat().find(
-      (opt) => opt.range.start.line === 1,
+      (opt) => opt.range.start.line === 1 && opt.renderOptions?.before?.contentIconPath,
     );
     expect(separatorOptions).toBeDefined();
     expect(separatorOptions!.renderOptions?.before?.contentIconPath).toBeDefined();

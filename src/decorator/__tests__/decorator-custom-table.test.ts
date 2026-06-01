@@ -47,8 +47,10 @@ describe('Decorator - custom tables', () => {
 
     expect(applyMock).toHaveBeenCalledTimes(1);
     const decorationsByKey = applyMock.mock.calls[0][1] as Map<string, { renderOptions?: { before?: { contentIconPath?: { path?: string } } } }[]>;
-    const firstEntry = [...decorationsByKey.values()][0][0];
-    const iconPath = firstEntry.renderOptions?.before?.contentIconPath;
+    const overlayEntry = [...decorationsByKey.values()]
+      .flat()
+      .find((opt) => opt.renderOptions?.before?.contentIconPath);
+    const iconPath = overlayEntry?.renderOptions?.before?.contentIconPath;
     expect(String(iconPath)).toMatch(/data:image\/svg\+xml/);
   });
 
