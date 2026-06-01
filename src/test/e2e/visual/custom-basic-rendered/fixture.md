@@ -1,8 +1,7 @@
-Before table.
+Basic custom table rendering.
 
 | Name | Role |
 |------|------|
 | Ada  | Lead |
 | Bob  | Dev  |
 
-After table.

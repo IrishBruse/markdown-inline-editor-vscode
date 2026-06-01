@@ -1,3 +1,4 @@
+Long rows with wrapping and row height.
 
 | Section Header | Detailed Placeholder Content |
 | -------------- | ---------------------------- |

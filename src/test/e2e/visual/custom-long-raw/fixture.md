@@ -1,3 +1,4 @@
+Raw reveal on a long wrapped row.
 
 | Section Header | Detailed Placeholder Content |
 | -------------- | ---------------------------- |

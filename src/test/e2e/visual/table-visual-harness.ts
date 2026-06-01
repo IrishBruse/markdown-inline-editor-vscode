@@ -123,10 +123,8 @@ export function defineTableVisualSuite(scenario: TableVisualScenario): void {
         new vscode.Range(0, 0, document.lineCount, 0),
         vscode.TextEditorRevealType.AtTop,
       );
-      env.decoratorApi?.updateDecorationsForSelection();
-
       fs.mkdirSync(paths.outputDir, { recursive: true });
-      const actualPng = await captureEditorPng(env.cdpClient, scenario);
+      const actualPng = await captureEditorPng(env.cdpClient, scenario, env.decoratorApi);
       fs.writeFileSync(paths.actual, actualPng);
 
       if (UPDATE_BASELINES) {
@@ -176,6 +174,11 @@ async function ensureVisualTestEnvironment(): Promise<VisualTestEnvironment> {
       'custom',
       'Visual E2E must run with custom table rendering enabled',
     );
+    assert.strictEqual(
+      vscode.workspace.getConfiguration('editor').get('lineNumbers'),
+      'on',
+      'Visual E2E must run with editor line numbers enabled (see e2e-visual-user-settings.json)',
+    );
 
     const target = await findWorkbenchTarget();
     assert.ok(target.webSocketDebuggerUrl, 'VS Code remote debugging target did not expose a WebSocket URL');
@@ -193,8 +196,9 @@ async function ensureVisualTestEnvironment(): Promise<VisualTestEnvironment> {
 async function captureEditorPng(
   client: CdpClient,
   scenario: TableVisualScenario,
+  decoratorApi: DecoratorExport | undefined,
 ): Promise<Buffer> {
-  const state = await waitForTableState(client, scenario);
+  const state = await waitForTableState(client, scenario, decoratorApi);
   assert.ok(state.clip, `${scenario.id} did not produce a screenshot clip: ${state.diagnostics}`);
   const capture = await client.send<{ data: string }>('Page.captureScreenshot', {
     format: 'png',
@@ -320,10 +324,9 @@ const TABLE_STATE_EXPRESSION = `(() => {
     const captureWidth = __CAPTURE_WIDTH__;
     const captureHeight = __CAPTURE_HEIGHT__;
     const dpr = window.devicePixelRatio || 1;
-    const editorWidth = Math.ceil(editorRect.width);
-    const editorHeight = Math.ceil(editorRect.height);
-    const clipWidth = Math.max(1, Math.min(Math.round(captureWidth / dpr), editorWidth));
-    const clipHeight = Math.max(1, Math.min(Math.round(captureHeight / dpr), editorHeight));
+    // Use scenario dimensions only so PNG size does not depend on sidebar/panel layout.
+    const clipWidth = Math.max(1, Math.round(captureWidth / dpr));
+    const clipHeight = Math.max(1, Math.round(captureHeight / dpr));
     return {
       clip: {
         x: Math.max(0, Math.floor(editorRect.left)),
@@ -348,12 +351,14 @@ function buildTableStateExpression(scenario: TableVisualScenario): string {
 async function waitForTableState(
   client: CdpClient,
   scenario: TableVisualScenario,
+  decoratorApi: DecoratorExport | undefined,
 ): Promise<CdpTableState> {
   const expression = buildTableStateExpression(scenario);
   const startedAt = Date.now();
   let lastState: CdpTableState | null = null;
 
   while (Date.now() - startedAt < TABLE_STATE_TIMEOUT_MS) {
+    decoratorApi?.updateDecorationsForSelection();
     const result = await client.send<{ result: { value: CdpTableState | null } }>('Runtime.evaluate', {
       expression,
       returnByValue: true,

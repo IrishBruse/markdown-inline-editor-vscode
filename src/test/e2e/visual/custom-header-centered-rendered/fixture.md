@@ -1,7 +1,6 @@
-Before table.
+Center-aligned header columns.
 
 | Status | ID |
 |:------:|:--:|
 | Open   |  1 |
 
-After table.
