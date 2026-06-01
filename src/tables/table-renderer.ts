@@ -22,6 +22,11 @@ const BORDER_WIDTH = 1;
 /** GFM header row plus `|---|---|` separator line rendered as one thead band. */
 export const HEADER_SOURCE_LINES = 2;
 
+/** Pixel height budget for merged header overlays (title row plus separator bridge). */
+export function mergedHeaderBandBudgetPx(metrics: Pick<TableLayoutMetrics, 'lineHeight'>): number {
+  return HEADER_SOURCE_LINES * metrics.lineHeight;
+}
+
 /** Source lines that receive a per-line SVG overlay (title + separator hide + data rows). */
 export function countTableOverlaySourceLines(numLines: number): number {
   return Math.max(0, numLines);
@@ -726,9 +731,12 @@ function prepareRowBand(
 
   const { lineHeight, fontSize } = layout.metrics;
   const bandBudget = slice.mergedHeader === true
-    ? slice.sliceHeight
+    ? mergedHeaderBandBudgetPx(layout.metrics)
     : computeBandHeightForSlice(layout, slice);
-  const maxShow = maxWrapLinesForBandHeight(bandBudget, layout.metrics);
+  let maxShow = maxWrapLinesForBandHeight(bandBudget, layout.metrics);
+  if (slice.mergedHeader === true && rowLayout.maxWrapLines > 1) {
+    maxShow = Math.max(maxShow, Math.min(2, rowLayout.maxWrapLines));
+  }
   const lineStep = wrappedLineStep(lineHeight, fontSize);
 
   const cellLines: string[][] = [];

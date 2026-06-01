@@ -38,10 +38,12 @@ describe('wrapped merged header overlays', () => {
 
     const headerSlice = sourceLineToSliceSpec(0, layout)!;
     const headerBand = resolveOverlayBandHeight(layout, headerSlice);
-    expect(headerBand).toBeLessThanOrEqual(metrics.lineHeight + 1);
+    expect(headerBand).toBeLessThanOrEqual(HEADER_SOURCE_LINES * metrics.lineHeight);
 
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     expect(headerSvg.match(/height="(\d+)"/)?.[1]).toBe(String(headerBand));
+    expect((headerSvg.match(/<tspan/g) ?? []).length).toBeGreaterThan(1);
+    expect(headerSvg).toMatch(/&#x2026;|…/);
   });
 
   it('always renders a separator bridge overlay', () => {
@@ -56,7 +58,7 @@ describe('wrapped merged header overlays', () => {
     const layout = buildTableLayout(tallWrappedHeaderBlock(), { ...metrics, capToSourceLines: false });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     const headerBand = resolveOverlayBandHeight(layout, sourceLineToSliceSpec(0, layout)!);
-    expect(headerBand).toBeLessThan(HEADER_SOURCE_LINES * metrics.lineHeight);
+    expect(headerBand).toBeLessThanOrEqual(HEADER_SOURCE_LINES * metrics.lineHeight);
     expect(headerSvg).not.toMatch(new RegExp(`<rect x="0" y="${headerBand - 1}"[^>]*width="`));
     const bridgeSvg = renderTableSvgLineSlice(layout, 1)!;
     expect(bridgeSvg).toMatch(new RegExp(`<rect x="0" y="${metrics.lineHeight - 1}"[^>]*width="`));
