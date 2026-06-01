@@ -847,9 +847,16 @@ function renderSvgFromParts(parts: string[], width: number, height: number): str
   return ensureSvgDimensions(svg, width, height);
 }
 
-/** Merged title overlay may paint across the separator source line in the editor. */
-export function sliceAllowsDecorationOverflow(slice: TableLineSliceSpec): boolean {
-  return slice.mergedHeader === true;
+/** Allow overlay painting past the anchor source line (thead into separator, tall rows into following lines). */
+export function sliceAllowsDecorationOverflow(
+  slice: TableLineSliceSpec,
+  bandHeight: number,
+  lineHeight: number,
+): boolean {
+  if (slice.mergedHeader === true) {
+    return true;
+  }
+  return bandHeight > lineHeight;
 }
 
 /**

@@ -174,6 +174,25 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(TABLE_SVG_RENDER_BATCH_SIZE).toBe(20);
   });
 
+  it('allows tall data row overlays to overflow into following source lines', async () => {
+    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
+    const md = `| Row | Content |\n| --- | --- |\n| Label | ${longText} |\n\nAfter.`;
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
+    const outside = document.positionAt(md.indexOf('After'));
+    const editor = new TextEditor(document, [new Selection(outside, outside)]);
+
+    const apply = vi.fn();
+    const coordinator = makeCoordinator(apply);
+    await coordinator.updateAsync(editor, tableBlocks, md, document.version);
+
+    const dataOverlay = [...(apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>).values()]
+      .flat()
+      .find((opt) => opt.range.start.line === 2 && opt.renderOptions?.before?.contentIconPath);
+    expect(dataOverlay?.renderOptions?.before?.textDecoration).toContain('overflow: visible');
+    expect(dataOverlay?.renderOptions?.before?.textDecoration).toContain('max-height: none');
+  });
+
   it('sets before.height to band height for long-cell rows', async () => {
     const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
     const md = `| A | B |\n| --- | --- |\n| ${longText} | x |\n\nAfter.`;
@@ -204,7 +223,8 @@ describe('CustomTableUpdateCoordinator', () => {
     );
     expect(dataRowOptions).toBeDefined();
     expect(dataRowOptions!.renderOptions?.before?.height).toBe(`${expectedBandHeight}px`);
-    expect(dataRowOptions!.renderOptions?.before?.textDecoration).toContain('max-height');
+    expect(dataRowOptions!.renderOptions?.before?.textDecoration).toContain('overflow: visible');
+    expect(dataRowOptions!.renderOptions?.before?.textDecoration).toContain('max-height: none');
   });
 
   it('hides GFM source on the full line and anchors the SVG on a collapsed range', async () => {

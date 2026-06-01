@@ -185,8 +185,9 @@ export class CustomTableUpdateCoordinator {
     bandWidth: number,
     bandHeight: number,
     slice: TableLineSliceSpec,
+    lineHeight: number,
   ): DecorationOptions[] {
-    const overflow = sliceAllowsDecorationOverflow(slice);
+    const overflow = sliceAllowsDecorationOverflow(slice, bandHeight, lineHeight);
     const overflowStyle = overflow
       ? 'overflow: visible; max-height: none;'
       : `overflow: hidden; border-radius: 0; max-height: ${bandHeight}px;`;
@@ -351,6 +352,7 @@ export class CustomTableUpdateCoordinator {
             blockLayout.totalWidth,
             bandHeight,
             slice,
+            lineHeight,
           );
           const existing = decorationsByKey.get(key) || [];
           existing.push(...options);
@@ -413,6 +415,7 @@ export class CustomTableUpdateCoordinator {
           layout.totalWidth,
           bandHeight,
           slice,
+          lineHeight,
         );
         const existing = decorationsByKey.get(job.sliceKey) || [];
         existing.push(...options);

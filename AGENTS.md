@@ -73,7 +73,7 @@ npm run test:e2e:visual  # PNG visual regression for custom table rendering
 - Place tests beside modules: `src/<module>/__tests__/<module>.test.ts`
 - Mock the VS Code API following existing patterns
 - For UI-visible behavior, update or add a fixture under `docs/tests/`
-- For custom table rendering changes, run `npm run test:e2e:visual` to verify the VS Code PNG baseline does not regress. Each scenario lives under `src/test/e2e/visual/<id>/` (`config.ts`, `fixture.md`, `baseline-linux.png`, `visual.test.ts`); if the visual change is intentional, update baselines with `npm run test:e2e:visual:update`.
+- For custom table rendering changes, run `npm run test:e2e:visual` to verify the VS Code PNG baseline does not regress. Each scenario lives under `src/test/e2e/visual/<id>/` (`config.ts`, `fixture.md`, `baseline-linux.png`, `visual.test.ts`); if the visual change is intentional, update baselines with `npm run test:e2e:visual:update`. Agents must follow [.cursor/skills/visual-regression-validation/SKILL.md](.cursor/skills/visual-regression-validation/SKILL.md): read the captured PNG and confirm it looks correct before marking UI work done.
 
 ## Commit messages
 
