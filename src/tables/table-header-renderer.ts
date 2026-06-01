@@ -3,6 +3,12 @@ import type { TableLayout, TableLayoutMetrics, TableLineSliceSpec } from './tabl
 /** GFM header row plus `|---|---|` separator line rendered as one thead band. */
 export const HEADER_SOURCE_LINES = 2;
 
+/** Source-line index of the GFM header title row. */
+const TITLE_LINE_INDEX = 0;
+
+/** Source-line index of the GFM `|---|---|` separator row. */
+const SEPARATOR_LINE_INDEX = 1;
+
 /** Pixel height budget for merged header overlays (title row plus separator bridge). */
 export function mergedHeaderBandBudgetPx(metrics: Pick<TableLayoutMetrics, 'lineHeight'>): number {
   return HEADER_SOURCE_LINES * metrics.lineHeight;
@@ -18,7 +24,7 @@ export function mergedHeaderOverlayBandPx(
 
 /** Pixel height of the thead band used when capping header wrap lines. */
 export function headerBandHeightPx(metrics: Pick<TableLayoutMetrics, 'lineHeight'>): number {
-  return HEADER_SOURCE_LINES * metrics.lineHeight;
+  return mergedHeaderBandBudgetPx(metrics);
 }
 
 /** Map title or separator source lines to header slice specs; returns null for data lines. */
@@ -28,23 +34,25 @@ export function headerSourceLineToSliceSpec(
 ): TableLineSliceSpec | null {
   const { lineHeight } = layout.metrics;
 
-  if (sourceLineIndex === 0) {
+  // Both header lines occupy the first row layout as a single visual sub-line.
+  const headerSliceBase = {
+    rowLayoutIndex: 0,
+    subLine: 0,
+    subLineCount: 1,
+    sliceHeight: lineHeight,
+  } satisfies Partial<TableLineSliceSpec>;
+
+  if (sourceLineIndex === TITLE_LINE_INDEX) {
     return {
-      rowLayoutIndex: 0,
-      subLine: 0,
-      subLineCount: 1,
-      sliceHeight: lineHeight,
+      ...headerSliceBase,
       mergedHeader: true,
       bandBorders: { top: true, bottom: true },
     };
   }
 
-  if (sourceLineIndex === 1) {
+  if (sourceLineIndex === SEPARATOR_LINE_INDEX) {
     return {
-      rowLayoutIndex: 0,
-      subLine: 0,
-      subLineCount: 1,
-      sliceHeight: lineHeight,
+      ...headerSliceBase,
       separatorColumnBridge: true,
     };
   }
@@ -88,10 +96,13 @@ export function mergedHeaderPrepareConstraints(
   rowMaxWrapLines: number,
 ): { bandBudget: number; maxShow: number } {
   const bandBudget = mergedHeaderBandBudgetPx(layout.metrics);
-  let maxShow = maxWrapLinesForBandHeight(bandBudget, layout.metrics);
-  if (rowMaxWrapLines > 1) {
-    maxShow = Math.max(maxShow, Math.min(2, rowMaxWrapLines));
-  }
+  const fitsInBand = maxWrapLinesForBandHeight(bandBudget, layout.metrics);
+
+  // Allow up to two wrap lines when the header content actually wraps.
+  const maxShow = rowMaxWrapLines > 1
+    ? Math.max(fitsInBand, Math.min(2, rowMaxWrapLines))
+    : fitsInBand;
+
   return { bandBudget, maxShow };
 }
 
@@ -102,10 +113,8 @@ export function overlayBandFillForSlice(
   headerBackground: string,
   bodyBackground: string,
 ): string {
-  if (slice.mergedHeader === true || isHeaderRow) {
-    return headerBackground;
-  }
-  return bodyBackground;
+  const usesHeaderFill = slice.mergedHeader === true || isHeaderRow;
+  return usesHeaderFill ? headerBackground : bodyBackground;
 }
 
 /** Merged title overlay and separator bridge may paint past their anchor source line. */
@@ -118,9 +127,9 @@ export function renderHeaderSeparatorBridge(
   layout: TableLayout,
   renderLineSlice: (layout: TableLayout, sourceLineIndex: number) => string | null,
 ): string | null {
-  const slice = headerSourceLineToSliceSpec(1, layout);
+  const slice = headerSourceLineToSliceSpec(SEPARATOR_LINE_INDEX, layout);
   if (!slice?.separatorColumnBridge) {
     return null;
   }
-  return renderLineSlice(layout, 1);
+  return renderLineSlice(layout, SEPARATOR_LINE_INDEX);
 }
