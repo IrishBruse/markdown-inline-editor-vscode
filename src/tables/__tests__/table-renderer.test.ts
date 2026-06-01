@@ -57,15 +57,14 @@ describe('sourceLineToSliceSpec', () => {
       subLineCount: 1,
       sliceHeight: metrics.lineHeight,
       mergedHeader: true,
-      bandBorders: { top: true, bottom: false },
+      bandBorders: { top: true, bottom: true },
     });
     expect(sourceLineToSliceSpec(1, layout)).toEqual({
       rowLayoutIndex: 0,
       subLine: 0,
       subLineCount: 1,
       sliceHeight: metrics.lineHeight,
-      headerBridge: true,
-      bandBorders: { top: false, bottom: true },
+      hideSourceOnly: true,
     });
     expect(sourceLineToSliceSpec(2, layout)).toEqual({
       rowLayoutIndex: 1,
@@ -85,15 +84,13 @@ describe('sourceLineToSliceSpec', () => {
 });
 
 describe('multiline header band', () => {
-  it('renders the header title line and a header bridge on the separator line', () => {
+  it('renders the merged header on the title source line only', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
-    const bridgeSvg = renderTableSvgLineSlice(layout, 1)!;
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
     expect(headerSvg).not.toContain('Ada');
-    expect(bridgeSvg).toContain('#f3f3f3');
-    expect(bridgeSvg).not.toContain('Name');
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
     const titleSlice = sourceLineToSliceSpec(0, layout)!;
     expect(Number(headerSvg.match(/height="(\d+)px"/)![1])).toBe(
       resolveOverlayBandHeight(layout, titleSlice),
@@ -122,13 +119,6 @@ describe('multiline header band', () => {
     expect(strokeRects.length).toBe(0);
   });
 
-  it('renders a header bridge SVG on the separator source line', () => {
-    const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
-    const bridgeSvg = renderTableSvgLineSlice(layout, 1)!;
-    expect(bridgeSvg).toContain('#f3f3f3');
-    expect(bridgeSvg).toMatch(/<rect x="0" y="\d+"[^>]*height="1"/);
-  });
-
   it('uses header background for the merged title overlay', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
@@ -136,13 +126,11 @@ describe('multiline header band', () => {
     expect(headerSvg).not.toMatch(/fill="#ffffff"/);
   });
 
-  it('draws thead bottom border on the separator bridge for a short thead', () => {
+  it('draws thead bottom border on the merged title overlay for a short thead', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     const titleHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
-    expect(headerSvg).not.toMatch(new RegExp(`<rect x="0" y="${titleHeight - 1}"[^>]*width="`));
-    const bridgeSvg = renderTableSvgLineSlice(layout, 1)!;
-    expect(bridgeSvg).toMatch(new RegExp(`<rect x="0" y="${metrics.lineHeight - 1}"[^>]*width="`));
+    expect(headerSvg).toMatch(new RegExp(`<rect x="0" y="${titleHeight - 1}"[^>]*width="`));
   });
 
   it('vertically centers multiline wrapped header text', () => {

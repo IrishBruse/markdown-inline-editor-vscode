@@ -191,6 +191,22 @@ export class CustomTableUpdateCoordinator {
     const overflowStyle = overflow
       ? 'overflow: visible; max-height: none;'
       : `overflow: hidden; border-radius: 0; max-height: ${bandHeight}px;`;
+    // Block + top alignment keeps tall header/body overlays from vertically centering in the line box
+    // (centering clips column rules to short mid-line segments).
+    const layoutStyle = [
+      'display: block',
+      'position: relative',
+      'top: 0',
+      'left: 0',
+      'margin: 0',
+      'padding: 0',
+      'vertical-align: top',
+      'line-height: 0',
+      `width: ${bandWidth}px`,
+      `height: ${bandHeight}px`,
+      `max-width: ${bandWidth}px`,
+      `max-height: ${bandHeight}px`,
+    ].join('; ');
     return [
       { range: hideRange },
       {
@@ -200,7 +216,7 @@ export class CustomTableUpdateCoordinator {
             contentIconPath: Uri.parse(dataUri),
             width: `${bandWidth}px`,
             height: `${bandHeight}px`,
-            textDecoration: `none; display: inline-block; vertical-align: top; ${overflowStyle}`,
+            textDecoration: `none; ${layoutStyle} ${overflowStyle}`,
           },
         },
       },

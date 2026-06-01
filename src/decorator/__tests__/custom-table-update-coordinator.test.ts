@@ -63,7 +63,7 @@ describe('CustomTableUpdateCoordinator', () => {
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
     const totalDecorations = [...decorationsByKey.values()].reduce((sum, entries) => sum + entries.length, 0);
     const expectedDecorations = tableBlocks.reduce(
-      (sum, block) => sum + block.numLines * 2,
+      (sum, block) => sum + block.numLines * 2 - 1,
       0,
     );
     expect(totalDecorations).toBe(expectedDecorations);
@@ -87,10 +87,7 @@ describe('CustomTableUpdateCoordinator', () => {
     await coordinator.updateAsync(editor, tableBlocks, md, document.version);
 
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
-    const expectedSliceKeys = tableBlocks.reduce(
-      (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
-      0,
-    );
+    const expectedSliceKeys = tableBlocks.reduce((sum, block) => sum + block.numLines, 0);
     expect(decorationsByKey.size).toBe(expectedSliceKeys);
   });
 
@@ -115,10 +112,7 @@ describe('CustomTableUpdateCoordinator', () => {
 
     await coordinator.updateAsync(editor, tableBlocks, md, document.version);
 
-    const expectedSliceKeys = tableBlocks.reduce(
-      (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
-      0,
-    );
+    const expectedSliceKeys = tableBlocks.reduce((sum, block) => sum + block.numLines, 0);
     const expectedSvgJobs = tableBlocks.reduce(
       (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
       0,
@@ -248,7 +242,7 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(overlay?.range.start).toEqual(overlay?.range.end);
   });
 
-  it('hides separator source text and renders a header bridge for a short thead', async () => {
+  it('hides separator source text and renders only the merged title overlay for a short thead', async () => {
     const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
     const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
@@ -261,7 +255,9 @@ describe('CustomTableUpdateCoordinator', () => {
 
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>;
     const allOptions = [...decorationsByKey.values()].flat();
-    const separatorHide = allOptions.find((opt) => opt.range.start.line === 1);
+    const separatorHide = allOptions.find(
+      (opt) => opt.range.start.line === 1 && !opt.renderOptions?.before?.contentIconPath,
+    );
     const separatorIcon = allOptions.find(
       (opt) => opt.range.start.line === 1 && opt.renderOptions?.before?.contentIconPath,
     );
@@ -269,11 +265,11 @@ describe('CustomTableUpdateCoordinator', () => {
       (opt) => opt.range.start.line === 2 && opt.renderOptions?.before?.contentIconPath,
     );
     expect(separatorHide).toBeDefined();
-    expect(separatorIcon).toBeDefined();
+    expect(separatorIcon).toBeUndefined();
     expect(dataRowIcon).toBeDefined();
   });
 
-  it('renders a separator bridge overlay when the merged header is taller than two lines', async () => {
+  it('uses one merged title overlay when the header is taller than two lines', async () => {
     const longHeader = [
       'Detailed Placeholder Content with many additional words to force the header cell to wrap',
       'across at least six or seven lines in the overlay so row height exceeds max band cap',
@@ -290,15 +286,25 @@ describe('CustomTableUpdateCoordinator', () => {
     const coordinator = makeCoordinator(apply);
     await coordinator.updateAsync(editor, tableBlocks, md, document.version);
 
+    const titleOverlay = [...(apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>).values()]
+      .flat()
+      .find((opt) => opt.range.start.line === 0 && opt.renderOptions?.before?.contentIconPath);
     const separatorOptions = [...(apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>).values()]
       .flat()
       .filter((opt) => opt.range.start.line === 1);
-    expect(separatorOptions.some((opt) => opt.renderOptions?.before?.contentIconPath)).toBe(true);
+    expect(titleOverlay).toBeDefined();
+    expect(separatorOptions.some((opt) => opt.renderOptions?.before?.contentIconPath)).toBe(false);
     expect(separatorOptions.some((opt) => !opt.renderOptions?.before?.contentIconPath)).toBe(true);
   });
 
-  it('allows merged header overlays to overflow into the separator source line', async () => {
-    const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
+  it('allows merged thead title overlays to overflow into the separator source line', async () => {
+    const md = [
+      '| Section Header | Detailed Placeholder Content with enough words to wrap |',
+      '| --- | --- |',
+      '| 1 | 2 |',
+      '',
+      'After.',
+    ].join('\n');
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
     const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
     const outside = document.positionAt(md.indexOf('After'));

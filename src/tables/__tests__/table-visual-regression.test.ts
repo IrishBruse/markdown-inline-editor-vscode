@@ -165,26 +165,20 @@ describe('table SVG scene snapshots', () => {
 
     expect(scenes).toMatchInlineSnapshot(`
       "line 0:
-      svg width=469px height=19px viewBox=0 0 469 19
-      rect x=- y=- w=469 h=19 fill=- stroke=-
-      rect x=1 y=1 w=467 h=18 fill=#222222 stroke=-
+      svg width=469px height=36px viewBox=0 0 469 36
+      rect x=- y=- w=469 h=36 fill=- stroke=-
+      rect x=1 y=1 w=467 h=34 fill=#222222 stroke=-
       text x=6 y=14.05 dy=- fill=#eeeeee size=13 Left
       text x=230.6 y=14.05 dy=- fill=#eeeeee size=13 Center
       text x=424 y=14.05 dy=- fill=#eeeeee size=13 Right
       rect x=0 y=0 w=469 h=1 fill=#333333 stroke=-
-      rect x=0 y=0 w=1 h=19 fill=#333333 stroke=-
-      rect x=89 y=0 w=1 h=19 fill=#333333 stroke=-
-      rect x=419 y=0 w=1 h=19 fill=#333333 stroke=-
-      rect x=468 y=0 w=1 h=19 fill=#333333 stroke=-
+      rect x=0 y=35 w=469 h=1 fill=#333333 stroke=-
+      rect x=0 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=89 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=419 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=468 y=0 w=1 h=36 fill=#333333 stroke=-
       ---
-      line 1:
-      svg width=469px height=18px viewBox=0 0 469 18
-      rect x=1 y=0 w=467 h=17 fill=#222222 stroke=-
-      rect x=0 y=17 w=469 h=1 fill=#333333 stroke=-
-      rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=89 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=419 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=468 y=0 w=1 h=18 fill=#333333 stroke=-
+      line 1: <no overlay>
       ---
       line 2:
       svg width=469px height=18px viewBox=0 0 469 18
@@ -237,15 +231,16 @@ describe('table SVG scene snapshots', () => {
 
     expect(rowScenes).toMatchInlineSnapshot(`
       "line 0:
-      svg width=522px height=19px viewBox=0 0 522 19
-      rect x=- y=- w=522 h=19 fill=- stroke=-
-      rect x=1 y=1 w=520 h=18 fill=#222222 stroke=-
+      svg width=522px height=36px viewBox=0 0 522 36
+      rect x=- y=- w=522 h=36 fill=- stroke=-
+      rect x=1 y=1 w=520 h=34 fill=#222222 stroke=-
       text x=6 y=14.05 dy=- fill=#eeeeee size=13 Section Header
       text x=126 y=14.05 dy=- fill=#eeeeee size=13 Detailed Placeholder Content
       rect x=0 y=0 w=522 h=1 fill=#333333 stroke=-
-      rect x=0 y=0 w=1 h=19 fill=#333333 stroke=-
-      rect x=121 y=0 w=1 h=19 fill=#333333 stroke=-
-      rect x=521 y=0 w=1 h=19 fill=#333333 stroke=-
+      rect x=0 y=35 w=522 h=1 fill=#333333 stroke=-
+      rect x=0 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=121 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=521 y=0 w=1 h=36 fill=#333333 stroke=-
       ---
       line 2:
       svg width=522px height=79px viewBox=0 0 522 79
@@ -266,12 +261,10 @@ describe('table SVG scene snapshots', () => {
   it('keeps the fast SVG snapshots scoped to renderer invariants', () => {
     const layout = buildTableLayout(denseBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0);
-    const separatorSvg = renderTableSvgLineSlice(layout, 1);
     const wrappedSvg = renderTableSvgLineSlice(layout, 2);
 
     expect(headerSvg).toContain('Section Header');
-    expect(separatorSvg).not.toBeNull();
-    expect(separatorSvg!).not.toContain('Section Header');
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
     expect(wrappedSvg).toContain('&#x2026;');
     expect(wrappedSvg).toContain('shape-rendering="crispEdges"');
   });

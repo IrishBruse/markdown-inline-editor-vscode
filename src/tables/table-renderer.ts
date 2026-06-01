@@ -27,9 +27,17 @@ export function mergedHeaderBandBudgetPx(metrics: Pick<TableLayoutMetrics, 'line
   return HEADER_SOURCE_LINES * metrics.lineHeight;
 }
 
-/** Source lines that receive a per-line SVG overlay (title + separator hide + data rows). */
+/** Overlay band height for the merged header title line (spans title + separator source lines). */
+export function mergedHeaderOverlayBandPx(
+  layout: Pick<TableLayout, 'metrics'>,
+  contentRowHeight: number,
+): number {
+  return Math.max(contentRowHeight, mergedHeaderBandBudgetPx(layout.metrics));
+}
+
+/** Source lines that receive a per-line SVG overlay (title row + data rows; separator is hide-only). */
 export function countTableOverlaySourceLines(numLines: number): number {
-  return Math.max(0, numLines);
+  return Math.max(0, numLines - 1);
 }
 
 /** Cap column width so very wide cells do not produce oversized overlays. */
@@ -494,6 +502,7 @@ export function sourceLineToSliceSpec(
   }
 
   const { lineHeight } = layout.metrics;
+
   if (sourceLineIndex === 0) {
     return {
       rowLayoutIndex: 0,
@@ -501,7 +510,7 @@ export function sourceLineToSliceSpec(
       subLineCount: 1,
       sliceHeight: lineHeight,
       mergedHeader: true,
-      bandBorders: { top: true, bottom: false },
+      bandBorders: { top: true, bottom: true },
     };
   }
 
@@ -511,8 +520,7 @@ export function sourceLineToSliceSpec(
       subLine: 0,
       subLineCount: 1,
       sliceHeight: lineHeight,
-      headerBridge: true,
-      bandBorders: { top: false, bottom: true },
+      hideSourceOnly: true,
     };
   }
 
@@ -668,16 +676,26 @@ function bandInnerFrame(
   };
 }
 
+type BandBorderOptions = {
+  /** Height of vertical rules (defaults to {@link bandHeight}). */
+  verticalSpanHeight?: number;
+  /** When false, only horizontal rules from {@link edges} are drawn. */
+  verticalBorders?: boolean;
+};
+
 function appendBandBorderLines(
   parts: string[],
   layout: TableLayout,
   bandTop: number,
   bandHeight: number,
   edges: { top: boolean; bottom: boolean },
+  borderOptions: BandBorderOptions = {},
 ): void {
   const { colWidths, metrics } = layout;
   const border = metrics.colors.border;
   const tableWidth = layout.totalWidth;
+  const verticalBorders = borderOptions.verticalBorders !== false;
+  const verticalHeight = borderOptions.verticalSpanHeight ?? bandHeight;
 
   if (edges.top) {
     appendBorderRect(parts, 0, bandTop, tableWidth, BORDER_WIDTH, border);
@@ -686,15 +704,19 @@ function appendBandBorderLines(
     appendBorderRect(parts, 0, bandTop + bandHeight - BORDER_WIDTH, tableWidth, BORDER_WIDTH, border);
   }
 
-  appendBorderRect(parts, 0, bandTop, BORDER_WIDTH, bandHeight, border);
+  if (!verticalBorders) {
+    return;
+  }
+
+  appendBorderRect(parts, 0, bandTop, BORDER_WIDTH, verticalHeight, border);
   let x = BORDER_WIDTH;
   for (let colIdx = 0; colIdx < colWidths.length; colIdx++) {
     x += colWidths[colIdx];
     if (colIdx < colWidths.length - 1) {
-      appendBorderRect(parts, x, bandTop, BORDER_WIDTH, bandHeight, border);
+      appendBorderRect(parts, x, bandTop, BORDER_WIDTH, verticalHeight, border);
     }
   }
-  appendBorderRect(parts, tableWidth - BORDER_WIDTH, bandTop, BORDER_WIDTH, bandHeight, border);
+  appendBorderRect(parts, tableWidth - BORDER_WIDTH, bandTop, BORDER_WIDTH, verticalHeight, border);
 }
 
 type PreparedRowBand = {
@@ -709,14 +731,18 @@ export function resolveOverlayBandHeight(
   layout: TableLayout,
   slice: TableLineSliceSpec,
 ): number {
-  if (slice.hideSourceOnly === true || slice.headerBridge === true) {
+  if (slice.hideSourceOnly === true) {
     return computeBandHeightForSlice(layout, slice);
   }
   const prepared = prepareRowBand(layout, slice.rowLayoutIndex, slice);
   if (!prepared) {
     return computeBandHeightForSlice(layout, slice);
   }
-  return prepared.rowHeight + bodyBandHeaderInsetPx(layout, slice.rowLayoutIndex);
+  const inset = bodyBandHeaderInsetPx(layout, slice.rowLayoutIndex);
+  if (slice.mergedHeader === true) {
+    return mergedHeaderOverlayBandPx(layout, prepared.rowHeight) + inset;
+  }
+  return prepared.rowHeight + inset;
 }
 
 function prepareRowBand(
@@ -785,8 +811,11 @@ function renderRowBand(
     const align = colIdx < block.align.length ? block.align[colIdx] : null;
     const lines = cellLines[colIdx] ?? [''];
     const lineCount = lines.length;
+    const labelBandHeight = slice.mergedHeader === true
+      ? mergedHeaderOverlayBandPx(layout, rowHeight)
+      : rowHeight;
     const cellFirstY = slice.mergedHeader === true
-      ? mergedHeaderLabelBaselineY(rowHeight, fontSize, cellPadY, layout.metrics.lineHeight, lineCount, lineStep)
+      ? mergedHeaderLabelBaselineY(labelBandHeight, fontSize, cellPadY, layout.metrics.lineHeight, lineCount, lineStep)
       : firstLineBaselineY(
         bandTop,
         rowHeight,
@@ -815,10 +844,17 @@ function renderRowBand(
     x += colWidth;
   }
 
-  appendBandBorderLines(parts, layout, bandTop, rowHeight, edges);
+  const borderBandHeight = slice.mergedHeader === true
+    ? mergedHeaderOverlayBandPx(layout, rowHeight)
+    : rowHeight;
+  appendBandBorderLines(parts, layout, bandTop, borderBandHeight, edges);
 }
 
 export function renderHeaderSeparatorBridge(layout: TableLayout): string | null {
+  const slice = sourceLineToSliceSpec(1, layout);
+  if (!slice || slice.hideSourceOnly === true) {
+    return null;
+  }
   return renderTableSvgLineSlice(layout, 1);
 }
 
@@ -866,7 +902,7 @@ export function sliceAllowsDecorationOverflow(
   lineHeight: number,
 ): boolean {
   if (slice.mergedHeader === true) {
-    return true;
+    return bandHeight > lineHeight;
   }
   return bandHeight > lineHeight;
 }
@@ -887,20 +923,6 @@ export function renderTableSvgLineSlice(
     return null;
   }
 
-  if (slice.headerBridge === true) {
-    const bandHeight = computeBandHeightForSlice(layout, slice);
-    const edges = slice.bandBorders ?? { top: false, bottom: true };
-    const { x: fillX, y: fillY, width: fillW, height: fillH } = bandInnerFrame(
-      bandHeight,
-      layout.totalWidth,
-      edges,
-    );
-    const parts: string[] = [];
-    parts.push(`<rect x="${fillX}" y="${fillY}" width="${fillW}" height="${fillH}" fill="${layout.metrics.colors.headerBackground}"/>`);
-    appendBandBorderLines(parts, layout, 0, bandHeight, edges);
-    return renderSvgFromParts(parts, layout.totalWidth, bandHeight);
-  }
-
   const prepared = prepareRowBand(layout, slice.rowLayoutIndex, slice);
   if (!prepared) {
     return null;
@@ -908,23 +930,30 @@ export function renderTableSvgLineSlice(
 
   const bodyTopInset = bodyBandHeaderInsetPx(layout, slice.rowLayoutIndex);
   const { rowHeight } = prepared;
-  const bandHeight = rowHeight + bodyTopInset;
+  const contentSpan = slice.mergedHeader === true
+    ? mergedHeaderOverlayBandPx(layout, rowHeight)
+    : rowHeight;
+  const bandHeight = contentSpan + bodyTopInset;
   const rowLayout = layout.rowLayouts[slice.rowLayoutIndex];
   const bandFill = slice.mergedHeader === true || rowLayout?.isHeader === true
     ? layout.metrics.colors.headerBackground
     : layout.metrics.colors.background;
   const edges = slice.bandBorders ?? { top: false, bottom: true };
   const { x: fillX, y: fillY, width: fillW, height: fillH } = bandInnerFrame(
-    rowHeight,
+    contentSpan,
     layout.totalWidth,
     edges,
   );
   const parts: string[] = [];
   const w = layout.totalWidth;
-  parts.push(
-    `<defs><clipPath id="band"><rect width="${w}" height="${bandHeight}"/></clipPath></defs>`,
-  );
-  parts.push(`<g clip-path="url(#band)">`);
+  if (slice.mergedHeader !== true) {
+    parts.push(
+      `<defs><clipPath id="band"><rect width="${w}" height="${bandHeight}"/></clipPath></defs>`,
+    );
+    parts.push('<g clip-path="url(#band)">');
+  } else {
+    parts.push('<g>');
+  }
   parts.push(`<rect x="${fillX}" y="${fillY + bodyTopInset}" width="${fillW}" height="${fillH}" fill="${bandFill}"/>`);
   renderRowBand(parts, layout, slice.rowLayoutIndex, slice, prepared, bodyTopInset);
   parts.push('</g>');

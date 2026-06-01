@@ -4,6 +4,7 @@ import type { TableBlock } from '../../parser';
 import {
   buildTableLayout,
   HEADER_SOURCE_LINES,
+  mergedHeaderBandBudgetPx,
   renderHeaderSeparatorBridge,
   renderTableSvgLineSlice,
   resolveOverlayBandHeight,
@@ -38,7 +39,7 @@ describe('wrapped merged header overlays', () => {
 
     const headerSlice = sourceLineToSliceSpec(0, layout)!;
     const headerBand = resolveOverlayBandHeight(layout, headerSlice);
-    expect(headerBand).toBeLessThanOrEqual(HEADER_SOURCE_LINES * metrics.lineHeight);
+    expect(headerBand).toBe(mergedHeaderBandBudgetPx(layout.metrics));
 
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     expect(headerSvg.match(/height="(\d+)"/)?.[1]).toBe(String(headerBand));
@@ -46,22 +47,18 @@ describe('wrapped merged header overlays', () => {
     expect(headerSvg).toMatch(/&#x2026;|…/);
   });
 
-  it('always renders a separator bridge overlay', () => {
+  it('hides the separator source line without a bridge overlay', () => {
     const layout = buildTableLayout(tallWrappedHeaderBlock(), { ...metrics, capToSourceLines: false });
-    const bridge = renderHeaderSeparatorBridge(layout);
-    expect(bridge).not.toBeNull();
-    expect(bridge).toContain(layout.metrics.colors.headerBackground);
-    expect(renderTableSvgLineSlice(layout, 1)).toBe(bridge);
+    expect(renderHeaderSeparatorBridge(layout)).toBeNull();
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    expect(sourceLineToSliceSpec(1, layout)?.hideSourceOnly).toBe(true);
   });
 
-  it('puts the thead bottom rule on the separator bridge', () => {
+  it('puts the thead bottom rule on the merged title overlay', () => {
     const layout = buildTableLayout(tallWrappedHeaderBlock(), { ...metrics, capToSourceLines: false });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     const headerBand = resolveOverlayBandHeight(layout, sourceLineToSliceSpec(0, layout)!);
-    expect(headerBand).toBeLessThanOrEqual(HEADER_SOURCE_LINES * metrics.lineHeight);
-    expect(headerSvg).not.toMatch(new RegExp(`<rect x="0" y="${headerBand - 1}"[^>]*width="`));
-    const bridgeSvg = renderTableSvgLineSlice(layout, 1)!;
-    expect(bridgeSvg).toMatch(new RegExp(`<rect x="0" y="${metrics.lineHeight - 1}"[^>]*width="`));
+    expect(headerSvg).toMatch(new RegExp(`<rect x="0" y="${headerBand - 1}"[^>]*width="`));
   });
 
   it('renders the first body row on the first data source line', () => {
@@ -73,13 +70,12 @@ describe('wrapped merged header overlays', () => {
     expect(bodySvg).toContain('Row 1');
   });
 
-  it('bridges the separator for a short docs-style header row', () => {
+  it('covers the separator with the merged title overlay for a short docs-style header row', () => {
     const md = '| Section Header | Detailed Placeholder Content |\n| --- | --- |\n| Row 1 | x |';
     const { tableBlocks } = new MarkdownParser().extractDecorationsWithScopes(md);
     const layout = buildTableLayout(tableBlocks[0], { ...metrics, capToSourceLines: false });
     expect(layout.rowHeights[0]).toBe(HEADER_SOURCE_LINES * metrics.lineHeight);
-    const bridge = renderTableSvgLineSlice(layout, 1);
-    expect(bridge).not.toBeNull();
-    expect(bridge).toContain(layout.metrics.colors.headerBackground);
+    expect(renderTableSvgLineSlice(layout, 0)).toContain(layout.metrics.colors.headerBackground);
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
   });
 });
