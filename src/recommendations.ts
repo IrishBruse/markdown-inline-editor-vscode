@@ -34,6 +34,10 @@ function checkRecommendedExtension(
 }
 
 export function checkRecommendedExtensions(context: vscode.ExtensionContext): void {
+  if (context.extensionMode === vscode.ExtensionMode.Test) {
+    return;
+  }
+
   for (const extensionId of RECOMMENDED_EXTENSIONS) {
     checkRecommendedExtension(extensionId, context);
   }

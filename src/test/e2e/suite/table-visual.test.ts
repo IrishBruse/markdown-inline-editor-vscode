@@ -26,15 +26,7 @@ type TableVisualScenario = {
   mode: TableVisualMode;
   /** Markdown file under `fixtures/tables-visual/`. */
   fixture: string;
-  /** First visible table line in the clip. */
-  headerNeedle: string;
-  /** Last table body line included in the clip (last match before `footerNeedle`). */
-  lastRowNeedle: string;
-  /** Line below the table; clip height stops above this when present in the document. */
-  footerNeedle?: string;
   cursor: { line: number; character: number };
-  /** Cap screenshot width (raw GFM lines otherwise span the full editor). */
-  clipMaxWidth?: number;
 };
 
 const SCENARIOS: TableVisualScenario[] = [
@@ -42,69 +34,43 @@ const SCENARIOS: TableVisualScenario[] = [
     id: 'custom-basic-rendered',
     mode: 'rendered',
     fixture: 'custom-basic.md',
-    headerNeedle: '| Name | Role |',
-    lastRowNeedle: '| Bob  | Dev  |',
-    footerNeedle: 'After table.',
     cursor: { line: 0, character: 0 },
-    clipMaxWidth: 360,
   },
   {
     id: 'custom-raw-reveal',
     mode: 'raw',
     fixture: 'custom-basic.md',
-    headerNeedle: '| Name | Role |',
-    lastRowNeedle: '| Bob  | Dev  |',
-    footerNeedle: 'After table.',
     cursor: { line: 4, character: 4 },
-    clipMaxWidth: 320,
   },
   {
     id: 'custom-alignment-rendered',
     mode: 'rendered',
     fixture: 'custom-alignment.md',
-    headerNeedle: '| Left | Center | Right |',
-    lastRowNeedle: '| long |  mid   |   1.0 |',
-    footerNeedle: 'After table.',
     cursor: { line: 0, character: 0 },
-    clipMaxWidth: 420,
   },
   {
     id: 'custom-long-rendered',
     mode: 'rendered',
     fixture: 'custom-long.md',
-    headerNeedle: '| Section Header |',
-    lastRowNeedle: '| Row 5          |',
     cursor: { line: 0, character: 0 },
-    clipMaxWidth: 680,
   },
   {
     id: 'custom-long-raw',
     mode: 'raw',
     fixture: 'custom-long.md',
-    headerNeedle: '| Section Header |',
-    lastRowNeedle: '| Row 5          |',
     cursor: { line: 5, character: 4 },
-    clipMaxWidth: 680,
   },
   {
     id: 'custom-wrap-ellipsis-rendered',
     mode: 'rendered',
     fixture: 'custom-wrap-ellipsis.md',
-    headerNeedle: '| Section Header |',
-    lastRowNeedle: '| Row 2          |',
-    footerNeedle: 'After table.',
     cursor: { line: 0, character: 0 },
-    clipMaxWidth: 820,
   },
   {
     id: 'custom-cjk-rendered',
     mode: 'rendered',
     fixture: 'custom-cjk.md',
-    headerNeedle: '| Name | CJK  | Emoji |',
-    lastRowNeedle: '| CD   | 世界 | 🚀    |',
-    footerNeedle: 'After table.',
     cursor: { line: 0, character: 0 },
-    clipMaxWidth: 360,
   },
 ];
 
@@ -156,7 +122,6 @@ suite('Table visual e2e', function () {
   }
 
   suiteSetup(async () => {
-    await configureStableEditor();
     const extension = vscode.extensions.getExtension(EXTENSION_ID);
     if (extension && !extension.isActive) {
       await extension.activate();
@@ -205,17 +170,11 @@ suite('Table visual e2e', function () {
       const actualPath = path.join(OUTPUT_DIR, `${scenario.id}-linux.actual.png`);
       const diffPath = path.join(OUTPUT_DIR, `${scenario.id}-linux.diff.png`);
 
-      const actualPng = capPngWidth(
-        await captureTablePng(
-          await getCdpClient(cdpClient, (client) => {
-            cdpClient = client;
-          }),
-          scenario,
-          scenario.headerNeedle,
-          scenario.lastRowNeedle,
-          scenario.clipMaxWidth,
-        ),
-        scenario.clipMaxWidth,
+      const actualPng = await captureEditorPng(
+        await getCdpClient(cdpClient, (client) => {
+          cdpClient = client;
+        }),
+        scenario,
       );
       fs.mkdirSync(OUTPUT_DIR, { recursive: true });
       fs.writeFileSync(actualPath, actualPng);
@@ -246,25 +205,6 @@ suite('Table visual e2e', function () {
   }
 });
 
-async function configureStableEditor(): Promise<void> {
-  await vscode.workspace.getConfiguration('workbench').update('colorTheme', 'Default Dark Modern', vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('window').update('zoomLevel', 0, vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('editor').update('fontFamily', 'monospace', vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('editor').update('fontSize', 14, vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('editor').update('lineHeight', 20, vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('editor').update('lineNumbers', 'off', vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('editor').update('glyphMargin', false, vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('editor').update('folding', false, vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('editor').update('minimap.enabled', false, vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('editor').update('cursorBlinking', 'solid', vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('editor').update('renderLineHighlight', 'none', vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('editor').update('overviewRulerBorder', false, vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableBackground', '#111111', vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableHeaderBackground', '#222222', vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableBorder', '#666666', vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableText', '#eeeeee', vscode.ConfigurationTarget.Global);
-}
-
 async function getCdpClient(
   client: CdpClient | undefined,
   setClient: (client: CdpClient) => void,
@@ -279,14 +219,11 @@ async function getCdpClient(
   return nextClient;
 }
 
-async function captureTablePng(
+async function captureEditorPng(
   client: CdpClient,
   scenario: TableVisualScenario,
-  headerNeedle: string,
-  lastRowNeedle: string,
-  clipMaxWidth = 980,
 ): Promise<Buffer> {
-  const state = await waitForTableState(client, scenario, headerNeedle, lastRowNeedle, clipMaxWidth);
+  const state = await waitForTableState(client, scenario);
   assert.ok(state.clip, `${scenario.id} did not produce a screenshot clip: ${state.diagnostics}`);
   const capture = await client.send<{ data: string }>('Page.captureScreenshot', {
     format: 'png',
@@ -320,127 +257,39 @@ async function findWorkbenchTarget(): Promise<CdpPageTarget> {
 }
 
 const TABLE_STATE_EXPRESSION = `(() => {
-    const headerNeedle = __HEADER_NEEDLE__;
-    const lastRowNeedle = __LAST_ROW_NEEDLE__;
-    const footerNeedle = __FOOTER_NEEDLE__;
     const expectedMode = __EXPECTED_MODE__;
     const editor = document.querySelector('.monaco-editor');
     const lines = Array.from(document.querySelectorAll('.monaco-editor .view-line'));
     const textForMatch = (line) => (line.textContent || '').replace(/\\u00a0/g, ' ');
-    const headerLine = lines.find((line) => textForMatch(line).includes(headerNeedle));
-    if (!editor || !headerLine) {
+    if (!editor) {
+      return {
+        clip: null,
+        overlayCount: 0,
+        rawLineCount: 0,
+        diagnostics: 'editor missing',
+      };
+    }
+    const hasTableLines = lines.some((line) => textForMatch(line).includes('|'));
+    if (!hasTableLines) {
       const sampleLines = lines.slice(0, 8).map((line) => textForMatch(line).trim()).filter(Boolean);
       return {
         clip: null,
         overlayCount: 0,
         rawLineCount: 0,
-        diagnostics: [
-          editor ? 'editor found' : 'editor missing',
-          headerLine ? 'header found' : 'header missing',
-          'editors=' + document.querySelectorAll('.monaco-editor').length,
-          'lines=' + lines.length,
-          'sample=' + sampleLines.join(' | '),
-        ].join(', '),
+        diagnostics: 'table lines missing; sample=' + sampleLines.join(' | '),
       };
     }
-    const headerIndex = lines.indexOf(headerLine);
-    let footerIndex = lines.length;
-    if (footerNeedle) {
-      const footerLine = lines.find((line) => textForMatch(line).includes(footerNeedle));
-      if (footerLine) {
-        footerIndex = lines.indexOf(footerLine);
-      }
-    }
-    let lastLine = null;
-    let lastIndex = headerIndex;
-    for (let i = headerIndex; i < footerIndex; i++) {
-      if (textForMatch(lines[i]).includes(lastRowNeedle)) {
-        lastLine = lines[i];
-        lastIndex = i;
-      }
-    }
-    if (!lastLine) {
-      return {
-        clip: null,
-        overlayCount: 0,
-        rawLineCount: 0,
-        diagnostics: 'last row missing before footer',
-      };
-    }
-    const padX = 16;
-    const padY = 14;
-    const maxWidth = __CLIP_MAX_WIDTH__;
-    const minWidth = 120;
-    const minHeight = 48;
-    let bandTop = Infinity;
-    let bandBottom = -Infinity;
-    for (let i = headerIndex; i <= lastIndex; i++) {
-      const rect = lines[i].getBoundingClientRect();
-      if (rect.height < 0.5) {
-        continue;
-      }
-      bandTop = Math.min(bandTop, rect.top);
-      bandBottom = Math.max(bandBottom, rect.bottom);
-    }
-    if (!isFinite(bandTop) || !isFinite(bandBottom)) {
-      const headerRect = headerLine.getBoundingClientRect();
-      bandTop = headerRect.top;
-      bandBottom = lastLine.getBoundingClientRect().bottom;
-    }
-    let footerTop = Infinity;
-    if (footerIndex < lines.length) {
-      const footerRect = lines[footerIndex].getBoundingClientRect();
-      if (footerRect.height > 0.5) {
-        footerTop = footerRect.top;
-      }
-    }
-    const maxGrowWidth = editor.getBoundingClientRect().width * 0.9;
-    const linesContent = document.querySelector('.monaco-editor .lines-content');
-    const contentRect = linesContent
-      ? linesContent.getBoundingClientRect()
-      : headerLine.getBoundingClientRect();
-    let left = contentRect.left;
-    let right = contentRect.left;
     let overlayCount = 0;
     let rawLineCount = 0;
-    function growHorizontal(rect, allowWide) {
-      if (!rect || rect.width < 0.5 || rect.height < 0.5) {
-        return;
-      }
-      if (!allowWide && rect.width > maxGrowWidth) {
-        return;
-      }
-      if (rect.bottom < bandTop || rect.top >= footerTop) {
-        return;
-      }
-      left = Math.min(left, rect.left);
-      right = Math.max(right, rect.right);
-    }
-    const overlayRects = [];
     const countOverlayRect = (rect, width, height) => {
-      if (!rect || rect.top >= footerTop) {
+      if (!rect) {
         return;
       }
       const bottom = height > 0 ? rect.top + height : rect.bottom;
-      const rightEdge = width > 0 ? rect.left + width : rect.right;
-      if (bottom <= bandTop) {
+      if (bottom <= rect.top) {
         return;
       }
       overlayCount++;
-      overlayRects.push({
-        left: rect.left,
-        right: rightEdge,
-        top: rect.top,
-        bottom,
-      });
-      growHorizontal({
-        left: rect.left,
-        right: rightEdge,
-        top: rect.top,
-        bottom,
-        width: rightEdge - rect.left,
-        height: bottom - rect.top,
-      }, true);
     };
     const imgs = document.querySelectorAll('.monaco-editor img');
     for (let k = 0; k < imgs.length; k++) {
@@ -466,31 +315,12 @@ const TABLE_STATE_EXPRESSION = `(() => {
       }
       countOverlayRect(rect, width, height);
     }
-    for (let i = headerIndex; i <= lastIndex; i++) {
-      const text = textForMatch(lines[i]);
-      if (text.indexOf('|') < 0) {
+    for (let i = 0; i < lines.length; i++) {
+      if (textForMatch(lines[i]).indexOf('|') < 0) {
         continue;
       }
       rawLineCount++;
-      if (expectedMode !== 'raw') {
-        continue;
-      }
-      const spans = lines[i].querySelectorAll('span');
-      for (let j = 0; j < spans.length; j++) {
-        growHorizontal(spans[j].getBoundingClientRect(), false);
-      }
     }
-    const useCharEstimate = () => {
-      let maxChars = 0;
-      for (let i = headerIndex; i <= lastIndex; i++) {
-        const text = textForMatch(lines[i]);
-        if (text.indexOf('|') >= 0) {
-          maxChars = Math.max(maxChars, text.length);
-        }
-      }
-      left = contentRect.left;
-      right = contentRect.left + Math.min(maxWidth, Math.max(minWidth, maxChars * 7.2));
-    };
     if (expectedMode === 'rendered' && overlayCount === 0) {
       return {
         clip: null,
@@ -515,56 +345,13 @@ const TABLE_STATE_EXPRESSION = `(() => {
         diagnostics: 'waiting for raw table source lines',
       };
     }
-    if (!isFinite(left) || right <= left) {
-      useCharEstimate();
-    } else if (right - left > maxGrowWidth * 0.75) {
-      useCharEstimate();
-    }
-    if (expectedMode === 'rendered') {
-      function anchorLineIndex(rect) {
-        let bestIndex = -1;
-        let bestDistance = Infinity;
-        for (let i = headerIndex; i < footerIndex; i++) {
-          const lineRect = lines[i].getBoundingClientRect();
-          if (lineRect.height < 0.5) {
-            continue;
-          }
-          const distance = Math.abs(rect.top - lineRect.top);
-          if (distance < bestDistance) {
-            bestDistance = distance;
-            bestIndex = i;
-          }
-        }
-        return bestIndex;
-      }
-      for (let k = 0; k < overlayRects.length; k++) {
-        const rect = overlayRects[k];
-        if (rect.bottom <= bandTop || rect.top >= footerTop) {
-          continue;
-        }
-        const anchoredAt = anchorLineIndex(rect);
-        if (anchoredAt < headerIndex || anchoredAt > lastIndex) {
-          continue;
-        }
-        bandTop = Math.min(bandTop, rect.top);
-        bandBottom = Math.max(bandBottom, rect.bottom);
-      }
-    }
-    if (footerTop < Infinity) {
-      bandBottom = Math.min(bandBottom, footerTop - 4);
-    }
-    const width = Math.min(maxWidth, Math.max(minWidth, Math.ceil(right - left + padX * 2)));
-    const contentHeight = Math.max(minHeight, Math.ceil(bandBottom - bandTop));
-    const height = contentHeight + padY * 2;
-    const centerX = (left + right) / 2;
+    const editorRect = editor.getBoundingClientRect();
     return {
       clip: {
-        x: Math.max(0, Math.floor(centerX - width / 2)),
-        y: Math.max(0, Math.floor(bandTop - padY)),
-        width,
-        height: footerTop < Infinity
-          ? Math.min(height, Math.max(minHeight, Math.ceil(footerTop - Math.max(0, bandTop - padY) - 4)))
-          : height,
+        x: Math.max(0, Math.floor(editorRect.left)),
+        y: Math.max(0, Math.floor(editorRect.top)),
+        width: Math.max(1, Math.ceil(editorRect.width)),
+        height: Math.max(1, Math.ceil(editorRect.height)),
         scale: 1,
       },
       overlayCount,
@@ -573,28 +360,15 @@ const TABLE_STATE_EXPRESSION = `(() => {
     };
   })()`;
 
-function buildTableStateExpression(
-  scenario: TableVisualScenario,
-  headerNeedle: string,
-  lastRowNeedle: string,
-  clipMaxWidth: number,
-): string {
-  return TABLE_STATE_EXPRESSION
-    .replace('__HEADER_NEEDLE__', JSON.stringify(headerNeedle))
-    .replace('__LAST_ROW_NEEDLE__', JSON.stringify(lastRowNeedle))
-    .replace('__FOOTER_NEEDLE__', JSON.stringify(scenario.footerNeedle ?? ''))
-    .replace('__EXPECTED_MODE__', JSON.stringify(scenario.mode))
-    .replace('__CLIP_MAX_WIDTH__', String(clipMaxWidth));
+function buildTableStateExpression(scenario: TableVisualScenario): string {
+  return TABLE_STATE_EXPRESSION.replace('__EXPECTED_MODE__', JSON.stringify(scenario.mode));
 }
 
 async function waitForTableState(
   client: CdpClient,
   scenario: TableVisualScenario,
-  headerNeedle: string,
-  lastRowNeedle: string,
-  clipMaxWidth: number,
 ): Promise<CdpTableState> {
-  const expression = buildTableStateExpression(scenario, headerNeedle, lastRowNeedle, clipMaxWidth);
+  const expression = buildTableStateExpression(scenario);
   const startedAt = Date.now();
   let lastState: CdpTableState | null = null;
 
@@ -613,33 +387,7 @@ async function waitForTableState(
   const diagnostics = lastState
     ? `${lastState.diagnostics}; overlays=${lastState.overlayCount}; rawLines=${lastState.rawLineCount}`
     : 'no table state returned';
-  throw new Error(`Could not prepare ${scenario.id} (${scenario.mode}) for ${headerNeedle} / ${lastRowNeedle}: ${diagnostics}`);
-}
-
-function capPngWidth(pngBytes: Buffer, maxWidth: number | undefined): Buffer {
-  if (maxWidth === undefined) {
-    return pngBytes;
-  }
-
-  const source = PNG.sync.read(pngBytes);
-  if (source.width <= maxWidth) {
-    return pngBytes;
-  }
-
-  const cropX = 0;
-  const cropped = new PNG({ width: maxWidth, height: source.height });
-  for (let y = 0; y < source.height; y++) {
-    for (let x = 0; x < maxWidth; x++) {
-      const srcOffset = (y * source.width + (cropX + x)) << 2;
-      const dstOffset = (y * maxWidth + x) << 2;
-      cropped.data[dstOffset] = source.data[srcOffset];
-      cropped.data[dstOffset + 1] = source.data[srcOffset + 1];
-      cropped.data[dstOffset + 2] = source.data[srcOffset + 2];
-      cropped.data[dstOffset + 3] = source.data[srcOffset + 3];
-    }
-  }
-
-  return PNG.sync.write(cropped);
+  throw new Error(`Could not prepare ${scenario.id} (${scenario.mode}): ${diagnostics}`);
 }
 
 function comparePngs(expectedBytes: Buffer, actualBytes: Buffer, diffPath: string): number {

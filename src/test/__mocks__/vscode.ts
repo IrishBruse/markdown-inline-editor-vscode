@@ -202,6 +202,12 @@ export enum ColorThemeKind {
   HighContrastLight = 4,
 }
 
+export enum ExtensionMode {
+  Production = 1,
+  Development = 2,
+  Test = 3,
+}
+
 /** Last options passed to `createTextEditorDecorationType` (for tests that need to assert omit-`color` behavior). */
 let lastTextEditorDecorationTypeOptions: unknown;
 

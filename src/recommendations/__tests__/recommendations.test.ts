@@ -53,4 +53,18 @@ describe('recommendations', () => {
 
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
+
+  it('skips prompts when the extension runs in test mode', () => {
+    const context = {
+      extensionMode: vscode.ExtensionMode.Test,
+      globalState: {
+        get: vi.fn(() => false),
+        update: vi.fn(() => Promise.resolve()),
+      },
+    };
+
+    checkRecommendedExtensions(context as any);
+
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
 });
