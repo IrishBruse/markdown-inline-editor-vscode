@@ -22,11 +22,11 @@ describe('custom-long table layout', () => {
     const block = tableBlocks[0]!;
     const layout = buildTableLayout(block, { isDark: false, ...metrics, capToSourceLines: false });
 
-    const slice = sourceLineToSliceSpec(2, layout)!;
+    const slice = sourceLineToSliceSpec(0, layout)!;
     const bandHeight = resolveOverlayBandHeight(layout, slice);
     expect(bandHeight).toBeGreaterThan(metrics.lineHeight);
 
-    const svg = renderTableSvgLineSlice(layout, 2)!;
+    const svg = renderTableSvgLineSlice(layout, 0)!;
     const row1Y = svg.match(/<tspan x="[^"]*" y="([\d.]+)">Row 1<\/tspan>/)?.[1];
     expect(row1Y).toBeDefined();
     const baseline = Number(row1Y);

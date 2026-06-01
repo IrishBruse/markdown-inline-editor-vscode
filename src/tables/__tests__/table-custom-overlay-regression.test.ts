@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { TableBlock } from '../../parser';
 import { MarkdownParser } from '../../parser/core';
 import {
+  bodyBandHeaderInsetPx,
   buildTableLayout,
   countTableOverlaySourceLines,
   HEADER_SOURCE_LINES,
@@ -109,7 +110,8 @@ describe('custom overlay regression: header', () => {
 
   it('maps title and separator source lines to header slices', () => {
     expect(sourceLineToSliceSpec(0, layout)?.mergedHeader).toBe(true);
-    expect(sourceLineToSliceSpec(1, layout)?.hideSeparatorRow).toBe(true);
+    expect(sourceLineToSliceSpec(0, layout)?.includeFirstBodyRow).toBe(true);
+    expect(sourceLineToSliceSpec(1, layout)?.hideSourceOnly).toBe(true);
     expect(sourceLineToSliceSpec(2, layout)?.mergedHeader).toBeUndefined();
   });
 
@@ -117,20 +119,16 @@ describe('custom overlay regression: header', () => {
     const headerSvg = sliceSvg(layout, 0);
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
-    const bridgeSvg = renderTableSvgLineSlice(layout, 1);
-    expect(bridgeSvg).not.toBeNull();
-    expect(bridgeSvg).not.toContain('Name');
+    expect(headerSvg).toContain('Ada');
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
   });
 
-  it('uses a one-line title band plus separator bridge for a short thead', () => {
+  it('uses a title overlay that also covers the separator with the first body row', () => {
     const headerSvg = sliceSvg(layout, 0);
-    const bridgeSvg = sliceSvg(layout, 1);
     const titleSlice = sourceLineToSliceSpec(0, layout)!;
     expect(parseBandHeight(headerSvg)).toBe(resolveOverlayBandHeight(layout, titleSlice));
-    expect(parseBandHeight(bridgeSvg)).toBe(metrics.lineHeight);
-    const theadPx = HEADER_SOURCE_LINES * metrics.lineHeight;
-    expect(parseBandHeight(headerSvg) + parseBandHeight(bridgeSvg)).toBeGreaterThanOrEqual(theadPx);
-    expect(parseBandHeight(headerSvg) + parseBandHeight(bridgeSvg)).toBeLessThanOrEqual(theadPx + 2);
+    expect(headerSvg).toContain('Ada');
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
   });
 
   it('top-aligns single-line header labels in the title band', () => {
@@ -165,11 +163,11 @@ describe('custom overlay regression: header', () => {
     expect((headerSvg.match(/<tspan/g) ?? []).length).toBeGreaterThan(1);
   });
 
-  it('paints the title band with header background only', () => {
+  it('paints the header band with header background and first body row with body background', () => {
     const headerSvg = sliceSvg(layout, 0);
     const { headerBackground, background } = layout.metrics.colors;
     expect(headerSvg).toContain(`fill="${headerBackground}"`);
-    expect(headerSvg).not.toContain(`fill="${background}"`);
+    expect(headerSvg).toContain(`fill="${background}"`);
     for (const rect of cellFillRects(headerSvg)) {
       if (rect.fill === headerBackground) {
         expect(rect.hasStroke).toBe(false);
@@ -177,19 +175,18 @@ describe('custom overlay regression: header', () => {
     }
   });
 
-  it('draws the table top on the title band and thead bottom on the separator bridge', () => {
+  it('draws the table top and thead bottom on the title band', () => {
     const headerSvg = sliceSvg(layout, 0);
-    const bridgeSvg = sliceSvg(layout, 1);
-    const bridgeHeight = parseBandHeight(bridgeSvg);
+    const headerHeight = parseBandHeight(headerSvg);
     expect(headerSvg).toMatch(/<rect x="0" y="0"[^>]*width="\d+"/);
-    expect(headerSvg).not.toMatch(new RegExp(`<rect x="0" y="${parseBandHeight(headerSvg) - 1}"[^>]*width="`));
-    expect(bridgeSvg).toMatch(new RegExp(`<rect x="0" y="${bridgeHeight - 1}"[^>]*width="`));
+    expect(headerSvg).toMatch(new RegExp(`<rect x="0" y="${headerHeight - 1}"[^>]*width="`));
   });
 
-  it('renders a separator bridge for every table (short thead)', () => {
-    const bridgeSvg = sliceSvg(layout, 1);
-    expect(bridgeSvg).toContain(layout.metrics.colors.headerBackground);
-    expect(bridgeSvg).toContain(layout.metrics.colors.border);
+  it('renders the first body row inside the title overlay for every short thead table', () => {
+    const headerSvg = sliceSvg(layout, 0);
+    expect(headerSvg).toContain('Ada');
+    expect(headerSvg).toContain(layout.metrics.colors.background);
+    expect(headerSvg).toContain(layout.metrics.colors.border);
   });
 });
 
@@ -208,7 +205,7 @@ describe('custom overlay regression: body', () => {
       align: [null, null, null, null],
     };
     const layout = layoutFor(block);
-    for (const sourceLine of [2, 3, 4]) {
+    for (const sourceLine of [2, 3]) {
       const slice = sourceLineToSliceSpec(sourceLine, layout)!;
       const bandHeight = resolveOverlayBandHeight(layout, slice);
       expect(bandHeight).toBeLessThanOrEqual(metrics.lineHeight);
@@ -219,7 +216,7 @@ describe('custom overlay regression: body', () => {
 
   it('draws one outer right border (not a column divider plus outer edge)', () => {
     const layout = layoutFor();
-    const svg = sliceSvg(layout, 2);
+    const svg = sliceSvg(layout, 0);
     const w = layout.totalWidth;
     expect(svg).toContain(`<rect x="${w - 1}" y="0" width="1" height="`);
   });
@@ -236,7 +233,7 @@ describe('custom overlay regression: body', () => {
     const layout = layoutFor(block);
     const junction = 1 + layout.colWidths[0];
     const border = layout.metrics.colors.border;
-    const svg = sliceSvg(layout, 2);
+    const svg = sliceSvg(layout, 0);
     expect(svg).toContain(`<rect x="${junction}" y="0" width="1" height="`);
     expect(svg).not.toMatch(new RegExp(`<rect x="${junction}" y="0" width="${layout.colWidths[1]}"`));
   });
@@ -244,7 +241,7 @@ describe('custom overlay regression: body', () => {
   it('draws rect borders on every data row overlay (not stroked cell rects)', () => {
     const layout = layoutFor();
     const border = layout.metrics.colors.border;
-    for (const line of [2, 3]) {
+    for (const line of [0, 2]) {
       const svg = sliceSvg(layout, line);
       expect(cellRects(svg).every((r) => !r.hasStroke)).toBe(true);
       expect(svg).toContain(`fill="${border}"`);
@@ -254,16 +251,16 @@ describe('custom overlay regression: body', () => {
 
   it('draws a top rule only when the prior row band overflows its source line', () => {
     const border = layoutFor().metrics.colors.border;
-    const topRuleFor = (layout: TableLayout) => new RegExp(
-      `<rect x="0" y="0" width="${layout.totalWidth}" height="1"[^>]*fill="${border.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`,
+    const topRuleFor = (layout: TableLayout, y: number) => new RegExp(
+      `<rect x="0" y="${y}" width="${layout.totalWidth}" height="1"[^>]*fill="${border.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`,
     );
     const shortRows = layoutFor();
-    expect(sliceSvg(shortRows, 2)).not.toMatch(topRuleFor(shortRows));
-    expect(sliceSvg(shortRows, 3)).not.toMatch(topRuleFor(shortRows));
+    expect(sliceSvg(shortRows, 2)).not.toMatch(topRuleFor(shortRows, 0));
 
     const overflowRows = layoutFor(overflowThenShortRowTable());
-    expect(sliceSvg(overflowRows, 2)).not.toMatch(topRuleFor(overflowRows));
-    expect(sliceSvg(overflowRows, 3)).toMatch(topRuleFor(overflowRows));
+    expect(sliceSvg(overflowRows, 3)).toMatch(
+      topRuleFor(overflowRows, bodyBandHeaderInsetPx(overflowRows, 2)),
+    );
   });
 
   it('fills data cells with body background, not header background', () => {
@@ -297,7 +294,7 @@ describe('custom overlay regression: body', () => {
   it('uses fill-only cells on header and data overlays', () => {
     const layout = layoutFor();
     const headerSvg = sliceSvg(layout, 0);
-    const dataSvg = sliceSvg(layout, 2);
+    const dataSvg = sliceSvg(layout, 0);
     expect(cellRects(headerSvg).every((r) => !r.hasStroke)).toBe(true);
     expect(cellRects(dataSvg).every((r) => !r.hasStroke)).toBe(true);
   });

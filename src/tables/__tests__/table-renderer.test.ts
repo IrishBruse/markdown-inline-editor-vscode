@@ -4,7 +4,6 @@ import {
   buildTableLayout,
   computeBandHeightForSlice,
   resolveOverlayBandHeight,
-  HEADER_SOURCE_LINES,
   MAX_BAND_LINES,
   maxBandHeightPx,
   maxWrapLinesForBandHeight,
@@ -52,7 +51,6 @@ describe('wrapText', () => {
 describe('sourceLineToSliceSpec', () => {
   it('maps merged header and data source lines', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
-    const theadMinHeight = HEADER_SOURCE_LINES * metrics.lineHeight;
     expect(sourceLineToSliceSpec(0, layout)).toEqual({
       rowLayoutIndex: 0,
       subLine: 0,
@@ -66,7 +64,8 @@ describe('sourceLineToSliceSpec', () => {
       subLine: 0,
       subLineCount: 1,
       sliceHeight: metrics.lineHeight,
-      hideSeparatorRow: true,
+      headerBridge: true,
+      bandBorders: { top: false, bottom: true },
     });
     expect(sourceLineToSliceSpec(2, layout)).toEqual({
       rowLayoutIndex: 1,
@@ -86,13 +85,15 @@ describe('sourceLineToSliceSpec', () => {
 });
 
 describe('multiline header band', () => {
-  it('renders the thead on the title line and a bridge on the separator line', () => {
+  it('renders the header title line and a header bridge on the separator line', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     const bridgeSvg = renderTableSvgLineSlice(layout, 1)!;
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
+    expect(headerSvg).not.toContain('Ada');
     expect(bridgeSvg).toContain('#f3f3f3');
+    expect(bridgeSvg).not.toContain('Name');
     const titleSlice = sourceLineToSliceSpec(0, layout)!;
     expect(Number(headerSvg.match(/height="(\d+)px"/)![1])).toBe(
       resolveOverlayBandHeight(layout, titleSlice),
@@ -121,7 +122,7 @@ describe('multiline header band', () => {
     expect(strokeRects.length).toBe(0);
   });
 
-  it('renders a separator bridge SVG on the separator source line', () => {
+  it('renders a header bridge SVG on the separator source line', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const bridgeSvg = renderTableSvgLineSlice(layout, 1)!;
     expect(bridgeSvg).toContain('#f3f3f3');
@@ -177,9 +178,11 @@ describe('renderTableSvgLineSlice', () => {
         expect(svg).toBeNull();
         continue;
       }
-      const bandHeight = slice.hideSeparatorRow === true
-        ? metrics.lineHeight
-        : resolveOverlayBandHeight(layout, slice);
+      if (slice.hideSourceOnly === true) {
+        expect(svg).toBeNull();
+        continue;
+      }
+      const bandHeight = resolveOverlayBandHeight(layout, slice);
       expect(svg).toContain('<svg');
       const heightMatch = svg!.match(/height="(\d+)px"/);
       expect(heightMatch).not.toBeNull();
@@ -191,8 +194,8 @@ describe('renderTableSvgLineSlice', () => {
       if (!slice) {
         return 0;
       }
-      if (slice.hideSeparatorRow === true) {
-        return metrics.lineHeight;
+      if (slice.hideSourceOnly === true) {
+        return 0;
       }
       return resolveOverlayBandHeight(layout, slice);
     }).reduce((sum, h) => sum + h, 0);
@@ -262,11 +265,10 @@ describe('renderTableSvgLineSlice', () => {
     expect(bandMatch).not.toBeNull();
     const bandHeight = Number(bandMatch![1]);
     expect(bandHeight).toBeGreaterThan(metrics.lineHeight);
-    const fillHeight = bandHeight - 1;
     const bandFillHeights = [...svg.matchAll(/<rect[^>]*height="(\d+)"[^>]*fill="#/g)]
       .map((m) => Number(m[1]))
       .filter((h) => h > 1);
-    expect(bandFillHeights).toContain(fillHeight);
+    expect(Math.max(...bandFillHeights)).toBeGreaterThan(metrics.lineHeight);
   });
 
   it('uses full wrapped height for a long cell on one source line', () => {
@@ -313,7 +315,7 @@ describe('renderTableSvgLineSlice', () => {
     expect(Number(heightMatch![1])).toBe(maxBandHeightPx(layout.metrics));
     expect(svg).toMatch(/&#x2026;|…/);
     const tspanCount = (svg.match(/<tspan/g) ?? []).length;
-    expect(tspanCount).toBeLessThanOrEqual(MAX_BAND_LINES);
+    expect(tspanCount).toBeLessThanOrEqual(MAX_BAND_LINES + block.header.length);
   });
 
   it('includes row content on the matching slice', () => {

@@ -335,31 +335,9 @@ export class CustomTableUpdateCoordinator {
 
         const key = sliceCacheKey(blockKey, sourceLineIndex);
 
-        if (slice.hideSeparatorRow === true) {
+        if (slice.hideSourceOnly === true) {
           const existing = decorationsByKey.get(key) || [];
           existing.push({ range: lineRanges.hideRange });
-          const bridgeKey = `${key}:bridge`;
-          const cachedBridge = this.svgDataUriCache.get(bridgeKey);
-          if (cachedBridge) {
-            const bandHeight = blockLayout.metrics.lineHeight;
-            existing.push(
-              ...this.buildTableSliceDecorations(
-                lineRanges.hideRange,
-                lineRanges.overlayRange,
-                cachedBridge,
-                blockLayout.totalWidth,
-                bandHeight,
-                slice,
-                lineHeight,
-              ).filter((opt) => opt.renderOptions?.before?.contentIconPath),
-            );
-          } else if (!jobsToRender.some((job) => job.sliceKey === bridgeKey)) {
-            jobsToRender.push({
-              sliceKey: bridgeKey,
-              block,
-              sourceLineIndex,
-            });
-          }
           decorationsByKey.set(key, existing);
           continue;
         }
@@ -424,32 +402,19 @@ export class CustomTableUpdateCoordinator {
           continue;
         }
 
-        const decorKey = job.sliceKey.replace(/:bridge$/, '');
-        const bandHeight = slice.hideSeparatorRow === true
-          ? layout.metrics.lineHeight
-          : this.bandHeightForSlice(job.block, job.sourceLineIndex, renderOptions, layout);
-        const options = slice.hideSeparatorRow === true
-          ? this.buildTableSliceDecorations(
-            lineRanges.hideRange,
-            lineRanges.overlayRange,
-            dataUri,
-            layout.totalWidth,
-            bandHeight,
-            slice,
-            lineHeight,
-          ).filter((opt) => opt.renderOptions?.before?.contentIconPath)
-          : this.buildTableSliceDecorations(
-            lineRanges.hideRange,
-            lineRanges.overlayRange,
-            dataUri,
-            layout.totalWidth,
-            bandHeight,
-            slice,
-            lineHeight,
-          );
-        const existing = decorationsByKey.get(decorKey) || [];
+        const bandHeight = this.bandHeightForSlice(job.block, job.sourceLineIndex, renderOptions, layout);
+        const options = this.buildTableSliceDecorations(
+          lineRanges.hideRange,
+          lineRanges.overlayRange,
+          dataUri,
+          layout.totalWidth,
+          bandHeight,
+          slice,
+          lineHeight,
+        );
+        const existing = decorationsByKey.get(job.sliceKey) || [];
         existing.push(...options);
-        decorationsByKey.set(decorKey, existing);
+        decorationsByKey.set(job.sliceKey, existing);
       }
 
       const hasMore = offset + batch.length < jobsToRender.length;

@@ -165,35 +165,31 @@ describe('table SVG scene snapshots', () => {
 
     expect(scenes).toMatchInlineSnapshot(`
       "line 0:
-      svg width=469px height=36px viewBox=0 0 469 36
-      rect x=- y=- w=469 h=36 fill=- stroke=-
-      rect x=1 y=1 w=467 h=34 fill=#222222 stroke=-
-      text x=6 y=22.55 dy=- fill=#eeeeee size=13 Left
-      text x=230.6 y=22.55 dy=- fill=#eeeeee size=13 Center
-      text x=424 y=22.55 dy=- fill=#eeeeee size=13 Right
+      svg width=469px height=37px viewBox=0 0 469 37
+      rect x=- y=- w=469 h=37 fill=- stroke=-
+      rect x=1 y=1 w=467 h=17 fill=#222222 stroke=-
+      text x=6 y=14.05 dy=- fill=#eeeeee size=13 Left
+      text x=230.6 y=14.05 dy=- fill=#eeeeee size=13 Center
+      text x=424 y=14.05 dy=- fill=#eeeeee size=13 Right
       rect x=0 y=0 w=469 h=1 fill=#333333 stroke=-
-      rect x=0 y=35 w=469 h=1 fill=#333333 stroke=-
-      rect x=0 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=89 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=419 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=468 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=0 y=18 w=469 h=1 fill=#333333 stroke=-
+      rect x=0 y=0 w=1 h=19 fill=#333333 stroke=-
+      rect x=89 y=0 w=1 h=19 fill=#333333 stroke=-
+      rect x=419 y=0 w=1 h=19 fill=#333333 stroke=-
+      rect x=468 y=0 w=1 h=19 fill=#333333 stroke=-
+      rect x=1 y=19 w=467 h=17 fill=#111111 stroke=-
+      text x=6 y=33.05 dy=- fill=#eeeeee size=13 plain
+      text x=242.3 y=33.05 dy=- fill=#eeeeee size=13 mid
+      text x=439.6 y=33.05 dy=- fill=#eeeeee size=13 1.0
+      rect x=0 y=36 w=469 h=1 fill=#333333 stroke=-
+      rect x=0 y=19 w=1 h=18 fill=#333333 stroke=-
+      rect x=89 y=19 w=1 h=18 fill=#333333 stroke=-
+      rect x=419 y=19 w=1 h=18 fill=#333333 stroke=-
+      rect x=468 y=19 w=1 h=18 fill=#333333 stroke=-
       ---
       line 1: <no overlay>
       ---
       line 2:
-      svg width=469px height=18px viewBox=0 0 469 18
-      rect x=- y=- w=469 h=18 fill=- stroke=-
-      rect x=1 y=0 w=467 h=17 fill=#111111 stroke=-
-      text x=6 y=14.05 dy=- fill=#eeeeee size=13 plain
-      text x=242.3 y=14.05 dy=- fill=#eeeeee size=13 mid
-      text x=439.6 y=14.05 dy=- fill=#eeeeee size=13 1.0
-      rect x=0 y=17 w=469 h=1 fill=#333333 stroke=-
-      rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=89 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=419 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=468 y=0 w=1 h=18 fill=#333333 stroke=-
-      ---
-      line 3:
       svg width=469px height=18px viewBox=0 0 469 18
       rect x=- y=- w=469 h=18 fill=- stroke=-
       rect x=1 y=0 w=467 h=17 fill=#111111 stroke=-
@@ -206,7 +202,7 @@ describe('table SVG scene snapshots', () => {
       rect x=419 y=0 w=1 h=18 fill=#333333 stroke=-
       rect x=468 y=0 w=1 h=18 fill=#333333 stroke=-
       ---
-      line 4:
+      line 3:
       svg width=469px height=18px viewBox=0 0 469 18
       rect x=- y=- w=469 h=18 fill=- stroke=-
       rect x=1 y=0 w=467 h=17 fill=#111111 stroke=-
@@ -217,13 +213,15 @@ describe('table SVG scene snapshots', () => {
       rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
       rect x=89 y=0 w=1 h=18 fill=#333333 stroke=-
       rect x=419 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=468 y=0 w=1 h=18 fill=#333333 stroke=-"
+      rect x=468 y=0 w=1 h=18 fill=#333333 stroke=-
+      ---
+      line 4: <no overlay>"
     `);
   });
 
   it('locks dense custom overlay wrapping and ellipsis renderer output', () => {
     const layout = buildTableLayout(denseBlock(), { isDark: false, ...metrics });
-    const rowScenes = [0, 2, 3].map((sourceLine) => {
+    const rowScenes = [0, 2].map((sourceLine) => {
       const svg = renderTableSvgLineSlice(layout, sourceLine);
       expect(svg).not.toBeNull();
       return `line ${sourceLine}:\n${svgVisualScene(svg!)}`;
@@ -231,42 +229,38 @@ describe('table SVG scene snapshots', () => {
 
     expect(rowScenes).toMatchInlineSnapshot(`
       "line 0:
-      svg width=522px height=36px viewBox=0 0 522 36
-      rect x=- y=- w=522 h=36 fill=- stroke=-
-      rect x=1 y=1 w=520 h=34 fill=#222222 stroke=-
-      text x=6 y=22.55 dy=- fill=#eeeeee size=13 Section Header
-      text x=126 y=22.55 dy=- fill=#eeeeee size=13 Detailed Placeholder Content
+      svg width=522px height=98px viewBox=0 0 522 98
+      rect x=- y=- w=522 h=98 fill=- stroke=-
+      rect x=1 y=1 w=520 h=17 fill=#222222 stroke=-
+      text x=6 y=14.05 dy=- fill=#eeeeee size=13 Section Header
+      text x=126 y=14.05 dy=- fill=#eeeeee size=13 Detailed Placeholder Content
       rect x=0 y=0 w=522 h=1 fill=#333333 stroke=-
-      rect x=0 y=35 w=522 h=1 fill=#333333 stroke=-
-      rect x=0 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=121 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=521 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=0 y=18 w=522 h=1 fill=#333333 stroke=-
+      rect x=0 y=0 w=1 h=19 fill=#333333 stroke=-
+      rect x=121 y=0 w=1 h=19 fill=#333333 stroke=-
+      rect x=521 y=0 w=1 h=19 fill=#333333 stroke=-
+      rect x=1 y=19 w=520 h=78 fill=#111111 stroke=-
+      text x=6 y=63.05 dy=- fill=#eeeeee size=13 Row 1
+      text x=126 y=33.05 dy=- fill=#eeeeee size=13 Lorem ipsum dolor sit amet, consectetur adipiscing
+      text x=126 y=- dy=16.56 fill=#eeeeee size=13 elit, sed do eiusmod tempor incididunt ut labore
+      text x=126 y=- dy=16.56 fill=#eeeeee size=13 et dolore magna aliqua. Ut enim ad minim veniam,
+      text x=126 y=- dy=16.56 fill=#eeeeee size=13 quis nostrud exercitation ullamco laboris nisi u[ellipsis]
+      rect x=0 y=97 w=522 h=1 fill=#333333 stroke=-
+      rect x=0 y=19 w=1 h=79 fill=#333333 stroke=-
+      rect x=121 y=19 w=1 h=79 fill=#333333 stroke=-
+      rect x=521 y=19 w=1 h=79 fill=#333333 stroke=-
       ---
       line 2:
       svg width=522px height=79px viewBox=0 0 522 79
       rect x=- y=- w=522 h=79 fill=- stroke=-
-      rect x=1 y=0 w=520 h=78 fill=#111111 stroke=-
-      text x=6 y=44.05 dy=- fill=#eeeeee size=13 Row 1
-      text x=126 y=14.05 dy=- fill=#eeeeee size=13 Lorem ipsum dolor sit amet, consectetur adipiscing
-      text x=126 y=- dy=16.56 fill=#eeeeee size=13 elit, sed do eiusmod tempor incididunt ut labore
-      text x=126 y=- dy=16.56 fill=#eeeeee size=13 et dolore magna aliqua. Ut enim ad minim veniam,
-      text x=126 y=- dy=16.56 fill=#eeeeee size=13 quis nostrud exercitation ullamco laboris nisi u[ellipsis]
+      rect x=1 y=62 w=520 h=16 fill=#111111 stroke=-
+      text x=6 y=75.05 dy=- fill=#eeeeee size=13 Row 2
+      text x=126 y=75.05 dy=- fill=#eeeeee size=13 abcdefghijklmnopqrstuvwxyz0123456789
+      rect x=0 y=61 w=522 h=1 fill=#333333 stroke=-
       rect x=0 y=78 w=522 h=1 fill=#333333 stroke=-
-      rect x=0 y=0 w=1 h=79 fill=#333333 stroke=-
-      rect x=121 y=0 w=1 h=79 fill=#333333 stroke=-
-      rect x=521 y=0 w=1 h=79 fill=#333333 stroke=-
-      ---
-      line 3:
-      svg width=522px height=18px viewBox=0 0 522 18
-      rect x=- y=- w=522 h=18 fill=- stroke=-
-      rect x=1 y=1 w=520 h=16 fill=#111111 stroke=-
-      text x=6 y=14.05 dy=- fill=#eeeeee size=13 Row 2
-      text x=126 y=14.05 dy=- fill=#eeeeee size=13 abcdefghijklmnopqrstuvwxyz0123456789
-      rect x=0 y=0 w=522 h=1 fill=#333333 stroke=-
-      rect x=0 y=17 w=522 h=1 fill=#333333 stroke=-
-      rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=121 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=521 y=0 w=1 h=18 fill=#333333 stroke=-"
+      rect x=0 y=61 w=1 h=18 fill=#333333 stroke=-
+      rect x=121 y=61 w=1 h=18 fill=#333333 stroke=-
+      rect x=521 y=61 w=1 h=18 fill=#333333 stroke=-"
     `);
   });
 
@@ -277,8 +271,7 @@ describe('table SVG scene snapshots', () => {
     const wrappedSvg = renderTableSvgLineSlice(layout, 2);
 
     expect(headerSvg).toContain('Section Header');
-    expect(separatorSvg).not.toBeNull();
-    expect(separatorSvg!).not.toContain('Section Header');
+    expect(separatorSvg).toBeNull();
     expect(wrappedSvg).toContain('&#x2026;');
     expect(wrappedSvg).toContain('shape-rendering="crispEdges"');
   });

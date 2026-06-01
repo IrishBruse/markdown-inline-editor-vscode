@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { TableBlock } from '../../parser';
 import { MarkdownParser } from '../../parser/core';
 import {
+  bodyBandHeaderInsetPx,
   buildTableLayout,
   maxBandHeightPx,
   MAX_BAND_LINES,
@@ -57,12 +58,14 @@ describe('wrapped body cell overlays (05-tables long cell text)', () => {
     const layout = buildTableLayout(docsLongBodyBlock(), { ...metrics, capToSourceLines: false });
     const slice = sourceLineToSliceSpec(2, layout)!;
     const bandHeight = resolveOverlayBandHeight(layout, slice);
-    expect(bandHeight).toBe(maxBandHeightPx(layout.metrics));
+    expect(bandHeight).toBeGreaterThan(maxBandHeightPx(layout.metrics));
 
     const svg = renderTableSvgLineSlice(layout, 2)!;
     expect(svg.match(/height="(\d+)"/)?.[1]).toBe(String(bandHeight));
     expect(svg).toMatch(/&#x2026;|…/);
-    expect((svg.match(/<tspan/g) ?? []).length).toBeLessThanOrEqual(MAX_BAND_LINES);
+    expect((svg.match(/<tspan/g) ?? []).length).toBeLessThanOrEqual(
+      MAX_BAND_LINES + layout.block.header.length,
+    );
   });
 
   it('vertically centers the row label beside wrapped content', () => {
@@ -92,8 +95,9 @@ describe('wrapped body cell overlays (05-tables long cell text)', () => {
 
     const border = layout.metrics.colors.border;
     const svg = renderTableSvgLineSlice(layout, 3)!;
+    const inset = bodyBandHeaderInsetPx(layout, 2);
     expect(svg).toMatch(
-      new RegExp(`<rect x="0" y="0" width="${layout.totalWidth}" height="1"[^>]*fill="${border.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
+      new RegExp(`<rect x="0" y="${inset}" width="${layout.totalWidth}" height="1"[^>]*fill="${border.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
     );
   });
 
@@ -108,11 +112,11 @@ describe('wrapped body cell overlays (05-tables long cell text)', () => {
 
   it('matches the custom-long visual fixture derived from 05-tables.md', () => {
     const layout = parseLayout(readFileSync(docsLongCellFixture, 'utf8'));
-    const slice = sourceLineToSliceSpec(2, layout)!;
+    const slice = sourceLineToSliceSpec(0, layout)!;
     const bandHeight = resolveOverlayBandHeight(layout, slice);
     expect(bandHeight).toBeGreaterThan(metrics.lineHeight);
 
-    const svg = renderTableSvgLineSlice(layout, 2)!;
+    const svg = renderTableSvgLineSlice(layout, 0)!;
     const row1Y = svg.match(/<tspan x="[^"]*" y="([\d.]+)">Row 1<\/tspan>/)?.[1];
     expect(row1Y).toBeDefined();
     const baseline = Number(row1Y);
