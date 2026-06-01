@@ -248,4 +248,22 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(separatorHide).toBeDefined();
     expect(separatorIcon).toBeUndefined();
   });
+
+  it('allows merged header overlays to overflow into the separator source line', async () => {
+    const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
+    const outside = document.positionAt(md.indexOf('After'));
+    const editor = new TextEditor(document, [new Selection(outside, outside)]);
+
+    const apply = vi.fn();
+    const coordinator = makeCoordinator(apply);
+    await coordinator.updateAsync(editor, tableBlocks, md, document.version);
+
+    const titleOverlay = [...(apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>).values()]
+      .flat()
+      .find((opt) => opt.range.start.line === 0 && opt.renderOptions?.before?.contentIconPath);
+    expect(titleOverlay?.renderOptions?.before?.textDecoration).toContain('overflow: visible');
+    expect(titleOverlay?.renderOptions?.before?.textDecoration).toContain('max-height: none');
+  });
 });

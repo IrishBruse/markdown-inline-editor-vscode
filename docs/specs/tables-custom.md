@@ -40,12 +40,14 @@ The GFM header is **two source lines** (title row + `|---|---|` separator) but *
 - **Vertically center** single-line header labels in the two-line thead (`HEADER_SOURCE_LINES * editorLineHeight`). Multi-line wrapped labels center in the full title band when it grows taller.
 - Draw the full thead grid on source line `0` only (top, verticals, and **bottom** rule on the tall title band). Labels stay on that overlay only.
 - On source line `1` (GFM separator), hide `|---|---|` with **transparent text only** (no SVG overlay). A second SVG band on line `1` stacks on the title overlay and clips centered header labels.
-- Clip overlay content to the band (`clipPath`) so tall SVG does not paint outside the decoration box.
+- Allow the title-line decoration to **overflow** into the separator source line (`overflow: visible`, no `max-height` cap) so header fill and the thead bottom rule meet the first body row without a gap.
+- Clip SVG content to the band (`clipPath`) in the SVG itself; editor decoration overflow is intentional for the merged header only.
 
 ### MUST NOT (regression guards)
 
 - Top-align header labels in the title-line band (short headers like `| Col | Note |` must not hug the top border).
 - Render an SVG overlay on the separator source line (line `1`).
+- Split the thead into separate title and separator overlay boxes (creates visible gaps between header and body).
 - Leave raw GFM visible on any overlaid source line (missing `color: transparent` on decorations).
 - Render header label glyphs on the separator hide band (labels must stay on the title line overlay only).
 - **Split the thead** across two overlay bands by slicing header layout with `subLineCount: 2` on lines `0` and `1`. That draws a cell bottom border on the title line, which looks like `---` bleeding under the header labels.

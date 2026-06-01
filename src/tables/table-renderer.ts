@@ -811,6 +811,11 @@ function renderSvgFromParts(parts: string[], width: number, height: number): str
   return ensureSvgDimensions(svg, width, height);
 }
 
+/** Merged title overlay may paint across the separator source line in the editor. */
+export function sliceAllowsDecorationOverflow(slice: TableLineSliceSpec): boolean {
+  return slice.mergedHeader === true;
+}
+
 /**
  * Render one source-line band of the table (for per-line editor overlays).
  */
@@ -823,8 +828,8 @@ export function renderTableSvgLineSlice(
     return null;
   }
 
-  // Separator source line: hide GFM dashes via transparent text only. A second SVG band here
-  // stacks on top of the tall title-line overlay and clips centered header labels.
+  // Separator source line: hide GFM dashes via transparent text only. The tall title-line
+  // overlay (overflow allowed) carries header fill, labels, and the thead bottom rule.
   if (slice.hideSeparatorRow === true) {
     return null;
   }

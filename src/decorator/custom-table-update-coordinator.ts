@@ -17,7 +17,9 @@ import {
   resolveOverlayBandHeight,
   getEditorLineMetrics,
   renderTableSvgLineSlice,
+  sliceAllowsDecorationOverflow,
   sourceLineToSliceSpec,
+  type TableLineSliceSpec,
   type TableRenderOptions,
 } from '../tables/table-renderer';
 import { SvgOverlayDecorations } from './mermaid-diagram-decorations';
@@ -182,7 +184,12 @@ export class CustomTableUpdateCoordinator {
     dataUri: string,
     bandWidth: number,
     bandHeight: number,
+    slice: TableLineSliceSpec,
   ): DecorationOptions[] {
+    const overflow = sliceAllowsDecorationOverflow(slice);
+    const overflowStyle = overflow
+      ? 'overflow: visible; max-height: none;'
+      : `overflow: hidden; border-radius: 0; max-height: ${bandHeight}px;`;
     return [
       { range: hideRange },
       {
@@ -192,7 +199,7 @@ export class CustomTableUpdateCoordinator {
             contentIconPath: Uri.parse(dataUri),
             width: `${bandWidth}px`,
             height: `${bandHeight}px`,
-            textDecoration: `none; display: inline-block; vertical-align: top; overflow: hidden; border-radius: 0; max-height: ${bandHeight}px;`,
+            textDecoration: `none; display: inline-block; vertical-align: top; ${overflowStyle}`,
           },
         },
       },
@@ -343,6 +350,7 @@ export class CustomTableUpdateCoordinator {
             cachedUri,
             blockLayout.totalWidth,
             bandHeight,
+            slice,
           );
           const existing = decorationsByKey.get(key) || [];
           existing.push(...options);
@@ -371,7 +379,7 @@ export class CustomTableUpdateCoordinator {
       for (const job of batch) {
         const layout = buildTableLayout(job.block, renderOptions);
         const slice = sourceLineToSliceSpec(job.sourceLineIndex, layout);
-        if (!slice || slice.hideSeparatorRow === true) {
+        if (!slice) {
           continue;
         }
 
@@ -404,6 +412,7 @@ export class CustomTableUpdateCoordinator {
           dataUri,
           layout.totalWidth,
           bandHeight,
+          slice,
         );
         const existing = decorationsByKey.get(job.sliceKey) || [];
         existing.push(...options);
