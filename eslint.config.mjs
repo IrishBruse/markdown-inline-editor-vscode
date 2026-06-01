@@ -37,6 +37,7 @@ export default defineConfig(
       '.vscode-test/**',
       '.vscode-test.mjs',
       '.vscode-test-cursor.mjs',
+      '.vscode-test-visual.mjs',
       'build',
       'assets/**',
       '**/*.d.ts',

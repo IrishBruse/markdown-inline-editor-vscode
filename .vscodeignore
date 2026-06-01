@@ -72,5 +72,6 @@ scripts/**
 cliff.toml
 .eslintignore
 .vscode-test-cursor.mjs
+.vscode-test-visual.mjs
 .vscode-test.mjs
 tsconfig.e2e.json

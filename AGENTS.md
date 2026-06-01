@@ -49,10 +49,10 @@ Before committing:
 ```bash
 npm run validate    # lint + test + test:crlf + build (run before PRs)
 npm test            # unit tests (Vitest)
-npm run test:crlf   # CRLF-specific tests
 npm run build       # production bundle + .vsix
 npm run test:e2e    # extension tests in VS Code (CI)
 npm run test:e2e:cursor  # e2e in local Cursor (dev only)
+npm run test:e2e:visual  # PNG visual regression for custom table rendering
 ```
 
 ## Critical rules
@@ -73,6 +73,7 @@ npm run test:e2e:cursor  # e2e in local Cursor (dev only)
 - Place tests beside modules: `src/<module>/__tests__/<module>.test.ts`
 - Mock the VS Code API following existing patterns
 - For UI-visible behavior, update or add a fixture under `docs/tests/`
+- For custom table rendering changes, run `xvfb-run -a npm run test:e2e:visual` to verify the VS Code PNG baseline does not regress. If the visual change is intentional, update the approved baseline with `xvfb-run -a npm run test:e2e:visual:update`.
 
 ## Commit messages
 
@@ -90,8 +91,7 @@ This fork tracks [SeardnaSchmid/markdown-inline-editor-vscode](https://github.co
 
 ## Definition of done
 
-- [ ] `npm run validate` passes
 - [ ] Tests added or updated for behavior changes
+- [ ] Custom table rendering changes pass `xvfb-run -a npm run test:e2e:visual` or include an intentionally updated PNG baseline
 - [ ] README / CONTRIBUTING / `docs/tests/` updated when user-facing or manual QA changes
-- [ ] No edits under `dist/`
-- [ ] Commit message follows Conventional Commits
+- [ ] `npm run validate` passes
