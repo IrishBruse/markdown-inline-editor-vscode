@@ -184,10 +184,7 @@ export class CustomTableUpdateCoordinator {
     bandHeight: number,
   ): DecorationOptions[] {
     return [
-      {
-        range: hideRange,
-        renderOptions: { color: 'transparent' },
-      },
+      { range: hideRange },
       {
         range: overlayRange,
         renderOptions: {
@@ -195,7 +192,7 @@ export class CustomTableUpdateCoordinator {
             contentIconPath: Uri.parse(dataUri),
             width: `${bandWidth}px`,
             height: `${bandHeight}px`,
-            textDecoration: `none; display: inline-block; vertical-align: top; overflow: hidden; max-height: ${bandHeight}px;`,
+            textDecoration: `none; display: inline-block; vertical-align: top; overflow: hidden; border-radius: 0; max-height: ${bandHeight}px;`,
           },
         },
       },

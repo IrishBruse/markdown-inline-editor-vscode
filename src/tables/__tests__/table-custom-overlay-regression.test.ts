@@ -65,17 +65,29 @@ function labelBaselineY(svg: string, label: string): number {
   return Number(match![1]);
 }
 
-function cellRects(svg: string): { height: number; hasStroke: boolean; fill: string | null }[] {
+function cellRects(svg: string): {
+  width: number;
+  height: number;
+  hasStroke: boolean;
+  fill: string | null;
+}[] {
   return [...svg.matchAll(/<rect[^>]*>/g)].map((m) => {
     const tag = m[0];
+    const widthMatch = tag.match(/width="(\d+)"/);
     const heightMatch = tag.match(/height="(\d+)"/);
     const fillMatch = tag.match(/fill="([^"]+)"/);
     return {
+      width: widthMatch ? Number(widthMatch[1]) : 0,
       height: heightMatch ? Number(heightMatch[1]) : 0,
       hasStroke: /stroke="/.test(tag),
       fill: fillMatch ? fillMatch[1] : null,
     };
   });
+}
+
+/** Cell background rects only (excludes 1px border grid rects). */
+function cellFillRects(svg: string) {
+  return cellRects(svg).filter((r) => r.height > 1 && r.width > 1);
 }
 
 describe('custom overlay regression: header', () => {
@@ -117,7 +129,7 @@ describe('custom overlay regression: header', () => {
     const { headerBackground, background } = layout.metrics.colors;
     expect(headerSvg).toContain(`fill="${headerBackground}"`);
     expect(headerSvg).not.toContain(`fill="${background}"`);
-    for (const rect of cellRects(headerSvg)) {
+    for (const rect of cellFillRects(headerSvg)) {
       if (rect.fill === headerBackground) {
         expect(rect.hasStroke).toBe(false);
       }
@@ -127,8 +139,8 @@ describe('custom overlay regression: header', () => {
   it('draws the table top rule on the title band, not the thead bottom', () => {
     const headerSvg = sliceSvg(layout, 0);
     const bandHeight = parseBandHeight(headerSvg);
-    expect(headerSvg).toMatch(/y1="0\.5"/);
-    expect(headerSvg).not.toMatch(new RegExp(`y1="${bandHeight - 0.5}"`));
+    expect(headerSvg).toMatch(/<rect x="0" y="0"[^>]*width="\d+"/);
+    expect(headerSvg).not.toMatch(new RegExp(`y="${bandHeight - 1}"[^>]*width="`));
   });
 
   it('draws the separator hide band with thead fill and the thead bottom rule', () => {
@@ -136,8 +148,8 @@ describe('custom overlay regression: header', () => {
     const { headerBackground, background } = layout.metrics.colors;
     expect(separatorSvg).toContain(`fill="${headerBackground}"`);
     expect(separatorSvg).not.toContain(`fill="${background}"`);
-    expect(separatorSvg).toMatch(/<line[^>]*stroke="/);
-    expect(separatorSvg).toMatch(/y1="17\.5"/);
+    expect(separatorSvg).toMatch(/<rect[^>]*fill="[^"]+"/);
+    expect(separatorSvg).toMatch(/<rect x="0" y="17"[^>]*width="/);
   });
 });
 
@@ -169,19 +181,17 @@ describe('custom overlay regression: body', () => {
     const layout = layoutFor();
     const svg = sliceSvg(layout, 2);
     const w = layout.totalWidth;
-    const rightEdgeX = [...svg.matchAll(/<line x1="([\d.]+)"[^>]*y1="0\.5"/g)]
-      .map((m) => Number(m[1]))
-      .filter((x) => x >= w - 2);
-    expect(rightEdgeX).toEqual([w - 0.5]);
+    expect(svg).toContain(`<rect x="${w - 1}" y="0" width="1" height="`);
   });
 
-  it('draws a line grid (not stroked rects) on every data row overlay', () => {
+  it('draws rect borders on every data row overlay (not stroked cell rects)', () => {
     const layout = layoutFor();
     const border = layout.metrics.colors.border;
     for (const line of [2, 3]) {
       const svg = sliceSvg(layout, line);
       expect(cellRects(svg).every((r) => !r.hasStroke)).toBe(true);
-      expect(svg).toMatch(new RegExp(`<line[^>]*stroke="${border.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+      expect(svg).toContain(`fill="${border}"`);
+      expect(svg).toMatch(/<rect x="0" y="\d+"[^>]*width="\d+"[^>]*height="1"/);
     }
   });
 
@@ -189,7 +199,7 @@ describe('custom overlay regression: body', () => {
     const layout = layoutFor();
     const svg = sliceSvg(layout, 2);
     const { headerBackground, background } = layout.metrics.colors;
-    const fills = cellRects(svg).map((r) => r.fill).filter(Boolean);
+    const fills = cellFillRects(svg).map((r) => r.fill).filter(Boolean);
     expect(fills.every((f) => f === background)).toBe(true);
     expect(fills.some((f) => f === headerBackground)).toBe(false);
   });
@@ -198,7 +208,7 @@ describe('custom overlay regression: body', () => {
     const layout = layoutFor();
     const bandHeight = parseBandHeight(sliceSvg(layout, 2));
     const fillHeight = bandHeight - 1;
-    const heights = cellRects(sliceSvg(layout, 2)).map((r) => r.height);
+    const heights = cellFillRects(sliceSvg(layout, 2)).map((r) => r.height);
     expect(heights.filter((h) => h === fillHeight).length).toBeGreaterThanOrEqual(2);
   });
 

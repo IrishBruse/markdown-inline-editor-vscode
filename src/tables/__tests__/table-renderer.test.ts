@@ -104,11 +104,12 @@ describe('multiline header band', () => {
     expect(baseline).toBeLessThan(bandHeight * 0.65 + fontSize);
   });
 
-  it('draws line borders on data row overlays (not stroked cell rects)', () => {
+  it('draws rect borders on data row overlays (not stroked cell rects)', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const dataSvg = renderTableSvgLineSlice(layout, 2)!;
     const borderColor = layout.metrics.colors.border;
-    expect(dataSvg).toMatch(new RegExp(`<line[^>]*stroke="${borderColor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+    expect(dataSvg).toContain(`fill="${borderColor}"`);
+    expect(dataSvg).toMatch(/<rect x="0" y="\d+"[^>]*width="\d+"[^>]*height="1"/);
     const strokeRects = [...dataSvg.matchAll(new RegExp(`<rect[^>]*stroke="${borderColor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'g'))];
     expect(strokeRects.length).toBe(0);
   });
@@ -132,9 +133,9 @@ describe('multiline header band', () => {
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     const separatorSvg = renderTableSvgLineSlice(layout, 1)!;
     const titleHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
-    expect(headerSvg).not.toMatch(new RegExp(`y1="${titleHeight}"`));
+    expect(headerSvg).not.toMatch(/<rect x="0" y="35"/);
     const sepHeight = Number(separatorSvg.match(/height="(\d+)px"/)![1]);
-    expect(separatorSvg).toMatch(/y1="17\.5"/);
+    expect(separatorSvg).toMatch(/<rect x="0" y="17"[^>]*width="/);
   });
 
   it('vertically centers multiline wrapped header text', () => {

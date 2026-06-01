@@ -68,10 +68,12 @@ The GFM header is **two source lines** (title row + `|---|---|` separator) but *
 
 ## Grid lines (per-line overlays)
 
-- **All bands:** fill-only cell rects plus explicit `<line>` strokes (`appendBandBorderLines`). Cell and band fills are inset by `BORDER_WIDTH` on edges where a grid line is drawn so fill does not bleed past borders.
+- **All bands:** fill-only cell rects plus a 1px `<rect>` border grid (`appendBandBorderLines`) on integer coordinates so corners and row joins stay square (no inset `<line>` strokes).
+- Cell and band fills are inset by `BORDER_WIDTH` on edges where a border rect is drawn so fill does not bleed past borders.
 - **Horizontal** header rules: merged title band draws the table **top**; separator hide band draws the thead/tbody **bottom** on thead-colored fill.
-- Table slice SVGs use `ensureSvgDimensions` (not aspect-ratio rescaling) so every band shares the same pixel width.
-- **Vertical** rules: one crisp line per column boundary (no per-cell rect strokes, which double-thicken internal edges and spill past the clip).
+- Table slice SVGs use `ensureSvgDimensions` with `preserveAspectRatio="none"` so every band shares the same pixel width.
+- **Vertical** rules: one 1px rect per column boundary; only one outer right edge (no duplicate divider before the right gutter).
+- Overlay decorations set `border-radius: 0` so the editor does not round band corners.
 
 ## Decoration alignment
 

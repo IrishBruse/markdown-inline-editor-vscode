@@ -593,28 +593,17 @@ function appendWrappedCellText(
   parts.push('</text>');
 }
 
-const BORDER_INSET = BORDER_WIDTH / 2;
-
-function appendHorizontalBorder(
-  parts: string[],
-  x1: number,
-  x2: number,
-  y: number,
-  border: string,
-): void {
-  parts.push(
-    `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${border}" stroke-width="${BORDER_WIDTH}" shape-rendering="crispEdges"/>`,
-  );
-}
-
-function appendVerticalBorder(
+/** 1px filled rect on integer coords so corners and row joins stay square (no line inset gaps). */
+function appendBorderRect(
   parts: string[],
   x: number,
+  y: number,
+  width: number,
   height: number,
   border: string,
 ): void {
   parts.push(
-    `<line x1="${x}" y1="${BORDER_INSET}" x2="${x}" y2="${height - BORDER_INSET}" stroke="${border}" stroke-width="${BORDER_WIDTH}" shape-rendering="crispEdges"/>`,
+    `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${border}" shape-rendering="crispEdges"/>`,
   );
 }
 
@@ -646,28 +635,22 @@ function appendBandBorderLines(
   const tableWidth = layout.totalWidth;
 
   if (edges.top) {
-    appendHorizontalBorder(parts, BORDER_INSET, tableWidth - BORDER_INSET, BORDER_INSET, border);
+    appendBorderRect(parts, 0, 0, tableWidth, BORDER_WIDTH, border);
   }
   if (edges.bottom) {
-    appendHorizontalBorder(
-      parts,
-      BORDER_INSET,
-      tableWidth - BORDER_INSET,
-      bandHeight - BORDER_INSET,
-      border,
-    );
+    appendBorderRect(parts, 0, bandHeight - BORDER_WIDTH, tableWidth, BORDER_WIDTH, border);
   }
 
-  appendVerticalBorder(parts, BORDER_INSET, bandHeight, border);
+  appendBorderRect(parts, 0, 0, BORDER_WIDTH, bandHeight, border);
   let x = BORDER_WIDTH;
   for (let colIdx = 0; colIdx < colWidths.length; colIdx++) {
     x += colWidths[colIdx];
     if (colIdx < colWidths.length - 1) {
-      appendVerticalBorder(parts, x - BORDER_INSET, bandHeight, border);
+      appendBorderRect(parts, x, 0, BORDER_WIDTH, bandHeight, border);
       x += BORDER_WIDTH;
     }
   }
-  appendVerticalBorder(parts, tableWidth - BORDER_INSET, bandHeight, border);
+  appendBorderRect(parts, tableWidth - BORDER_WIDTH, 0, BORDER_WIDTH, bandHeight, border);
 }
 
 type PreparedRowBand = {
