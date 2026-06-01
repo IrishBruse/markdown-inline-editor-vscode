@@ -262,11 +262,12 @@ describe('table SVG scene snapshots', () => {
       line 3:
       svg width=523px height=18px viewBox=0 0 523 18
       rect x=- y=- w=523 h=18 fill=- stroke=-
-      rect x=1 y=0 w=521 h=17 fill=#111111 stroke=-
-      rect x=1 y=0 w=120 h=17 fill=#111111 stroke=-
+      rect x=1 y=1 w=521 h=16 fill=#111111 stroke=-
+      rect x=1 y=1 w=120 h=16 fill=#111111 stroke=-
       text x=6 y=14.05 dy=- fill=#eeeeee size=13 Row 2
-      rect x=122 y=0 w=400 h=17 fill=#111111 stroke=-
+      rect x=122 y=1 w=400 h=16 fill=#111111 stroke=-
       text x=127 y=14.05 dy=- fill=#eeeeee size=13 abcdefghijklmnopqrstuvwxyz0123456789
+      rect x=0 y=0 w=523 h=1 fill=#333333 stroke=-
       rect x=0 y=17 w=523 h=1 fill=#333333 stroke=-
       rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
       rect x=121 y=0 w=1 h=18 fill=#333333 stroke=-

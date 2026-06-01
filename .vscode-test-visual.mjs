@@ -2,7 +2,7 @@ import { defineConfig } from '@vscode/test-cli';
 
 export default defineConfig([
   {
-    files: 'dist/test/e2e/suite/table-visual.test.js',
+    files: 'dist/test/e2e/visual/**/visual.test.js',
     launchArgs: [
       '--remote-debugging-port=9333',
       '--disable-gpu',

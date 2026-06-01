@@ -42,6 +42,21 @@ function wrappedBodyTable(): TableBlock {
   };
 }
 
+function overflowThenShortRowTable(): TableBlock {
+  const longText = [
+    'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore',
+    'et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip',
+  ].join(' ');
+  return {
+    startPos: 0,
+    endPos: 120,
+    numLines: 4,
+    header: ['Col', 'Note'],
+    rows: [[longText, 'x'], ['short', 'y']],
+    align: [null, null],
+  };
+}
+
 function layoutFor(block: TableBlock = basicTable()) {
   return buildTableLayout(block, { isDark: false, ...metrics });
 }
@@ -186,6 +201,20 @@ describe('custom overlay regression: body', () => {
       expect(svg).toContain(`fill="${border}"`);
       expect(svg).toMatch(/<rect x="0" y="\d+"[^>]*width="\d+"[^>]*height="1"/);
     }
+  });
+
+  it('draws a top rule only when the prior row band overflows its source line', () => {
+    const border = layoutFor().metrics.colors.border;
+    const topRuleFor = (layout: TableLayout) => new RegExp(
+      `<rect x="0" y="0" width="${layout.totalWidth}" height="1"[^>]*fill="${border.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`,
+    );
+    const shortRows = layoutFor();
+    expect(sliceSvg(shortRows, 2)).not.toMatch(topRuleFor(shortRows));
+    expect(sliceSvg(shortRows, 3)).not.toMatch(topRuleFor(shortRows));
+
+    const overflowRows = layoutFor(overflowThenShortRowTable());
+    expect(sliceSvg(overflowRows, 2)).not.toMatch(topRuleFor(overflowRows));
+    expect(sliceSvg(overflowRows, 3)).toMatch(topRuleFor(overflowRows));
   });
 
   it('fills data cells with body background, not header background', () => {

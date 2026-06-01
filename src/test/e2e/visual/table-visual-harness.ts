@@ -5,74 +5,18 @@ import * as vscode from 'vscode';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import WebSocket from 'ws';
+import type { TableVisualScenario } from './table-visual-types';
 
-const VISUAL_E2E_ENABLED = process.env.MD_INLINE_VISUAL_E2E === '1'
+export const VISUAL_E2E_ENABLED = process.env.MD_INLINE_VISUAL_E2E === '1'
   || process.env.UPDATE_VISUAL_BASELINES === '1';
-const UPDATE_BASELINES = process.env.UPDATE_VISUAL_BASELINES === '1';
+export const UPDATE_BASELINES = process.env.UPDATE_VISUAL_BASELINES === '1';
+
 const REMOTE_DEBUGGING_PORT = Number(process.env.VSCODE_REMOTE_DEBUGGING_PORT ?? '9333');
 const EXTENSION_ID = 'CodeSmith.markdown-inline-editor-vscode';
-const REPO_ROOT = path.resolve(__dirname, '../../../..');
-const FIXTURE_DIR = path.join(REPO_ROOT, 'src/test/e2e/fixtures/tables-visual');
-const BASELINE_DIR = path.join(REPO_ROOT, 'src/test/e2e/visual-baselines');
-const OUTPUT_DIR = path.join(REPO_ROOT, 'dist/visual-regression');
 const TABLE_STATE_POLL_MS = 100;
 const TABLE_STATE_TIMEOUT_MS = 5000;
-
-type TableVisualMode = 'rendered' | 'raw';
-
-type TableVisualScenario = {
-  /** Baseline file slug: `{id}-linux.png` */
-  id: string;
-  mode: TableVisualMode;
-  /** Markdown file under `fixtures/tables-visual/`. */
-  fixture: string;
-  cursor: { line: number; character: number };
-};
-
-const SCENARIOS: TableVisualScenario[] = [
-  {
-    id: 'custom-basic-rendered',
-    mode: 'rendered',
-    fixture: 'custom-basic.md',
-    cursor: { line: 0, character: 0 },
-  },
-  {
-    id: 'custom-raw-reveal',
-    mode: 'raw',
-    fixture: 'custom-basic.md',
-    cursor: { line: 4, character: 4 },
-  },
-  {
-    id: 'custom-alignment-rendered',
-    mode: 'rendered',
-    fixture: 'custom-alignment.md',
-    cursor: { line: 0, character: 0 },
-  },
-  {
-    id: 'custom-long-rendered',
-    mode: 'rendered',
-    fixture: 'custom-long.md',
-    cursor: { line: 0, character: 0 },
-  },
-  {
-    id: 'custom-long-raw',
-    mode: 'raw',
-    fixture: 'custom-long.md',
-    cursor: { line: 5, character: 4 },
-  },
-  {
-    id: 'custom-wrap-ellipsis-rendered',
-    mode: 'rendered',
-    fixture: 'custom-wrap-ellipsis.md',
-    cursor: { line: 0, character: 0 },
-  },
-  {
-    id: 'custom-cjk-rendered',
-    mode: 'rendered',
-    fixture: 'custom-cjk.md',
-    cursor: { line: 0, character: 0 },
-  },
-];
+export const BASELINE_FILENAME = 'baseline-linux.png';
+const FIXTURE_FILENAME = 'fixture.md';
 
 type CdpResponse<T> = {
   id: number;
@@ -110,25 +54,118 @@ type ExtensionExports = {
   decorator?: DecoratorExport;
 };
 
-suite('Table visual e2e', function () {
-  let cdpClient: CdpClient | undefined;
-  let decoratorApi: DecoratorExport | undefined;
+type VisualTestEnvironment = {
+  cdpClient: CdpClient;
+  decoratorApi: DecoratorExport | undefined;
+};
 
-  if (!VISUAL_E2E_ENABLED) {
-    test('PNG visual regression is opt-in', function () {
-      this.skip();
+let visualEnvPromise: Promise<VisualTestEnvironment> | undefined;
+
+function findRepoRoot(startDir: string): string {
+  let dir = startDir;
+  while (dir !== path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) {
+      return dir;
+    }
+    dir = path.dirname(dir);
+  }
+  throw new Error('Could not find repository root');
+}
+
+function scenarioSourceDir(repoRoot: string, scenarioId: string): string {
+  return path.join(repoRoot, 'src/test/e2e/visual', scenarioId);
+}
+
+function pathsForScenario(repoRoot: string, scenarioId: string) {
+  const scenarioDir = scenarioSourceDir(repoRoot, scenarioId);
+  const outputDir = path.join(repoRoot, 'dist/visual-regression', scenarioId);
+  return {
+    fixture: path.join(scenarioDir, FIXTURE_FILENAME),
+    baseline: path.join(scenarioDir, BASELINE_FILENAME),
+    outputDir,
+    actual: path.join(outputDir, 'actual.png'),
+    diff: path.join(outputDir, 'diff.png'),
+  };
+}
+
+export function defineTableVisualSuite(scenario: TableVisualScenario): void {
+  suite(scenario.id, function () {
+    if (!VISUAL_E2E_ENABLED) {
+      test('PNG visual regression is opt-in', function () {
+        this.skip();
+      });
+      return;
+    }
+
+    let env: VisualTestEnvironment;
+
+    suiteSetup(async () => {
+      env = await ensureVisualTestEnvironment();
     });
-    return;
+
+    test('matches the approved PNG baseline', async () => {
+      const repoRoot = findRepoRoot(__dirname);
+      const paths = pathsForScenario(repoRoot, scenario.id);
+      assert.ok(fs.existsSync(paths.fixture), `Missing fixture: ${paths.fixture}`);
+
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.file(paths.fixture));
+      const editor = await vscode.window.showTextDocument(document, {
+        preview: false,
+        viewColumn: vscode.ViewColumn.One,
+      });
+      if (env.decoratorApi && !env.decoratorApi.isEnabled()) {
+        await vscode.commands.executeCommand('mdInline.toggleDecorations');
+      }
+
+      const cursorPosition = new vscode.Position(scenario.cursor.line, scenario.cursor.character);
+      editor.selection = new vscode.Selection(cursorPosition, cursorPosition);
+      editor.revealRange(
+        new vscode.Range(0, 0, document.lineCount, 0),
+        vscode.TextEditorRevealType.AtTop,
+      );
+      env.decoratorApi?.updateDecorationsForSelection();
+
+      fs.mkdirSync(paths.outputDir, { recursive: true });
+      const actualPng = await captureEditorPng(env.cdpClient, scenario);
+      fs.writeFileSync(paths.actual, actualPng);
+
+      if (UPDATE_BASELINES) {
+        fs.writeFileSync(paths.baseline, actualPng);
+        return;
+      }
+
+      assert.ok(
+        fs.existsSync(paths.baseline),
+        `Missing baseline: ${paths.baseline}. Run npm run test:e2e:visual:update to create it.`,
+      );
+
+      const diffRatio = comparePngs(
+        fs.readFileSync(paths.baseline),
+        actualPng,
+        paths.diff,
+      );
+      const maxDiffRatio = process.env.CI === 'true' ? 0.01 : 0.02;
+      assert.ok(
+        diffRatio <= maxDiffRatio,
+        `${scenario.id} PNG visual diff ${formatPercent(diffRatio)} exceeded ${formatPercent(maxDiffRatio)}. `
+        + `Actual: ${paths.actual}. Diff: ${paths.diff}.`,
+      );
+    });
+  });
+}
+
+async function ensureVisualTestEnvironment(): Promise<VisualTestEnvironment> {
+  if (visualEnvPromise) {
+    return visualEnvPromise;
   }
 
-  suiteSetup(async () => {
+  visualEnvPromise = (async () => {
     const extension = vscode.extensions.getExtension(EXTENSION_ID);
     if (extension && !extension.isActive) {
       await extension.activate();
     }
-    decoratorApi = (extension?.exports as ExtensionExports | undefined)?.decorator;
+    const decoratorApi = (extension?.exports as ExtensionExports | undefined)?.decorator;
 
-    // Custom table rendering is identical for every scenario, so configure it once.
     await vscode.workspace.getConfiguration().update(
       'markdownInlineEditor.tables.renderingMode',
       'custom',
@@ -140,75 +177,18 @@ suite('Table visual e2e', function () {
       'Visual E2E must run with custom table rendering enabled',
     );
 
-    // Connect to the workbench CDP target once and reuse it across scenarios.
     const target = await findWorkbenchTarget();
     assert.ok(target.webSocketDebuggerUrl, 'VS Code remote debugging target did not expose a WebSocket URL');
-    cdpClient = await CdpClient.connect(target.webSocketDebuggerUrl);
+    const cdpClient = await CdpClient.connect(target.webSocketDebuggerUrl);
 
-    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-    if (UPDATE_BASELINES) {
-      fs.mkdirSync(BASELINE_DIR, { recursive: true });
-    }
-  });
+    const repoRoot = findRepoRoot(__dirname);
+    fs.mkdirSync(path.join(repoRoot, 'dist/visual-regression'), { recursive: true });
 
-  suiteTeardown(() => {
-    cdpClient?.close();
-  });
+    return { cdpClient, decoratorApi };
+  })();
 
-  for (const scenario of SCENARIOS) {
-    test(`${scenario.id} matches the approved PNG baseline`, async () => {
-      const fixturePath = path.join(FIXTURE_DIR, scenario.fixture);
-      assert.ok(fs.existsSync(fixturePath), `Missing fixture: ${fixturePath}`);
-
-      const document = await vscode.workspace.openTextDocument(vscode.Uri.file(fixturePath));
-      const editor = await vscode.window.showTextDocument(document, {
-        preview: false,
-        viewColumn: vscode.ViewColumn.One,
-      });
-      if (decoratorApi && !decoratorApi.isEnabled()) {
-        await vscode.commands.executeCommand('mdInline.toggleDecorations');
-      }
-
-      const cursorPosition = new vscode.Position(scenario.cursor.line, scenario.cursor.character);
-      editor.selection = new vscode.Selection(cursorPosition, cursorPosition);
-      editor.revealRange(
-        new vscode.Range(0, 0, document.lineCount, 0),
-        vscode.TextEditorRevealType.AtTop,
-      );
-      decoratorApi?.updateDecorationsForSelection();
-
-      const baselinePath = path.join(BASELINE_DIR, `${scenario.id}-linux.png`);
-      const actualPath = path.join(OUTPUT_DIR, `${scenario.id}-linux.actual.png`);
-      const diffPath = path.join(OUTPUT_DIR, `${scenario.id}-linux.diff.png`);
-
-      assert.ok(cdpClient, 'CDP client was not initialised in suiteSetup');
-      const actualPng = await captureEditorPng(cdpClient, scenario);
-      fs.writeFileSync(actualPath, actualPng);
-
-      if (UPDATE_BASELINES) {
-        fs.writeFileSync(baselinePath, actualPng);
-        return;
-      }
-
-      assert.ok(
-        fs.existsSync(baselinePath),
-        `Missing visual baseline: ${baselinePath}. Run npm run test:e2e:visual:update to create it.`,
-      );
-
-      const diffRatio = comparePngs(
-        fs.readFileSync(baselinePath),
-        actualPng,
-        diffPath,
-      );
-      const maxDiffRatio = process.env.CI === 'true' ? 0.01 : 0.02;
-      assert.ok(
-        diffRatio <= maxDiffRatio,
-        `${scenario.id} PNG visual diff ${formatPercent(diffRatio)} exceeded ${formatPercent(maxDiffRatio)}. `
-        + `Actual: ${actualPath}. Diff: ${diffPath}.`,
-      );
-    });
-  }
-});
+  return visualEnvPromise;
+}
 
 async function captureEditorPng(
   client: CdpClient,
@@ -337,12 +317,19 @@ const TABLE_STATE_EXPRESSION = `(() => {
       };
     }
     const editorRect = editor.getBoundingClientRect();
+    const captureWidth = __CAPTURE_WIDTH__;
+    const captureHeight = __CAPTURE_HEIGHT__;
+    const dpr = window.devicePixelRatio || 1;
+    const editorWidth = Math.ceil(editorRect.width);
+    const editorHeight = Math.ceil(editorRect.height);
+    const clipWidth = Math.max(1, Math.min(Math.round(captureWidth / dpr), editorWidth));
+    const clipHeight = Math.max(1, Math.min(Math.round(captureHeight / dpr), editorHeight));
     return {
       clip: {
         x: Math.max(0, Math.floor(editorRect.left)),
         y: Math.max(0, Math.floor(editorRect.top)),
-        width: Math.max(1, Math.ceil(editorRect.width)),
-        height: Math.max(1, Math.ceil(editorRect.height)),
+        width: clipWidth,
+        height: clipHeight,
         scale: 1,
       },
       overlayCount,
@@ -352,7 +339,10 @@ const TABLE_STATE_EXPRESSION = `(() => {
   })()`;
 
 function buildTableStateExpression(scenario: TableVisualScenario): string {
-  return TABLE_STATE_EXPRESSION.replace('__EXPECTED_MODE__', JSON.stringify(scenario.mode));
+  return TABLE_STATE_EXPRESSION
+    .replace('__EXPECTED_MODE__', JSON.stringify(scenario.mode))
+    .replace('__CAPTURE_WIDTH__', String(scenario.captureWidth))
+    .replace('__CAPTURE_HEIGHT__', String(scenario.captureHeight));
 }
 
 async function waitForTableState(

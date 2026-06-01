@@ -452,6 +452,25 @@ export function sliceHeightForSubLine(
   return base + (subLine < remainder ? 1 : 0);
 }
 
+/** True when a row's per-line overlay band is taller than one editor line. */
+export function rowOverlayExceedsSourceLine(
+  layout: TableLayout,
+  rowLayoutIndex: number,
+): boolean {
+  const rowLayout = layout.rowLayouts[rowLayoutIndex];
+  if (!rowLayout) {
+    return false;
+  }
+  const { lineHeight } = layout.metrics;
+  const slice: TableLineSliceSpec = {
+    rowLayoutIndex,
+    subLine: 0,
+    subLineCount: 1,
+    sliceHeight: layout.rowHeights[rowLayoutIndex] ?? lineHeight,
+  };
+  return resolveOverlayBandHeight(layout, slice) > lineHeight;
+}
+
 /** Maps a source line index within the table block to a row band slice. */
 export function sourceLineToSliceSpec(
   sourceLineIndex: number,
@@ -491,12 +510,16 @@ export function sourceLineToSliceSpec(
   }
 
   const sliceHeight = layout.rowHeights[rowLayoutIndex] ?? lineHeight;
+  // When the previous row's band overflows, its bottom rule sits below this source line.
+  // Draw a top rule here only in that case; otherwise the previous row's bottom rule suffices.
+  const needsTopBorder = rowLayoutIndex > 1
+    && rowOverlayExceedsSourceLine(layout, rowLayoutIndex - 1);
   return {
     rowLayoutIndex,
     subLine: 0,
     subLineCount: 1,
     sliceHeight,
-    bandBorders: { top: false, bottom: true },
+    bandBorders: { top: needsTopBorder, bottom: true },
   };
 }
 

@@ -75,6 +75,13 @@ describe('sourceLineToSliceSpec', () => {
       sliceHeight: layout.rowHeights[1],
       bandBorders: { top: false, bottom: true },
     });
+    expect(sourceLineToSliceSpec(3, layout)).toEqual({
+      rowLayoutIndex: 2,
+      subLine: 0,
+      subLineCount: 1,
+      sliceHeight: layout.rowHeights[2],
+      bandBorders: { top: false, bottom: true },
+    });
   });
 });
 
