@@ -70,7 +70,7 @@ const SCENARIOS: TableVisualScenario[] = [
     headerNeedle: 'Section Header',
     lastRowNeedle: 'Row 2',
     cursor: { line: 0, character: 0 },
-    clipMaxWidth: 650,
+    clipMaxWidth: 820,
   },
   {
     id: 'custom-cjk-rendered',
