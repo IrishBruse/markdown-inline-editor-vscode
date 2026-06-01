@@ -28,8 +28,10 @@ type TableVisualScenario = {
   fixture: string;
   /** First visible table line in the clip. */
   headerNeedle: string;
-  /** Last table body line included in the clip. */
+  /** Last table body line included in the clip (last match before `footerNeedle`). */
   lastRowNeedle: string;
+  /** Line below the table; clip height stops above this when present in the document. */
+  footerNeedle?: string;
   cursor: { line: number; character: number };
   /** Cap screenshot width (raw GFM lines otherwise span the full editor). */
   clipMaxWidth?: number;
@@ -42,6 +44,7 @@ const SCENARIOS: TableVisualScenario[] = [
     fixture: 'custom-basic.md',
     headerNeedle: '| Name | Role |',
     lastRowNeedle: '| Bob  | Dev  |',
+    footerNeedle: 'After table.',
     cursor: { line: 0, character: 0 },
     clipMaxWidth: 360,
   },
@@ -51,6 +54,7 @@ const SCENARIOS: TableVisualScenario[] = [
     fixture: 'custom-basic.md',
     headerNeedle: '| Name | Role |',
     lastRowNeedle: '| Bob  | Dev  |',
+    footerNeedle: 'After table.',
     cursor: { line: 4, character: 4 },
     clipMaxWidth: 320,
   },
@@ -60,15 +64,35 @@ const SCENARIOS: TableVisualScenario[] = [
     fixture: 'custom-alignment.md',
     headerNeedle: '| Left | Center | Right |',
     lastRowNeedle: '| long |  mid   |   1.0 |',
+    footerNeedle: 'After table.',
     cursor: { line: 0, character: 0 },
     clipMaxWidth: 420,
+  },
+  {
+    id: 'custom-long-rendered',
+    mode: 'rendered',
+    fixture: 'custom-long.md',
+    headerNeedle: '| Section Header |',
+    lastRowNeedle: '| Row 5          |',
+    cursor: { line: 0, character: 0 },
+    clipMaxWidth: 680,
+  },
+  {
+    id: 'custom-long-raw',
+    mode: 'raw',
+    fixture: 'custom-long.md',
+    headerNeedle: '| Section Header |',
+    lastRowNeedle: '| Row 5          |',
+    cursor: { line: 5, character: 4 },
+    clipMaxWidth: 680,
   },
   {
     id: 'custom-wrap-ellipsis-rendered',
     mode: 'rendered',
     fixture: 'custom-wrap-ellipsis.md',
-    headerNeedle: 'Section Header',
-    lastRowNeedle: 'Row 2',
+    headerNeedle: '| Section Header |',
+    lastRowNeedle: '| Row 2          |',
+    footerNeedle: 'After table.',
     cursor: { line: 0, character: 0 },
     clipMaxWidth: 820,
   },
@@ -78,6 +102,7 @@ const SCENARIOS: TableVisualScenario[] = [
     fixture: 'custom-cjk.md',
     headerNeedle: '| Name | CJK  | Emoji |',
     lastRowNeedle: '| CD   | 世界 | 🚀    |',
+    footerNeedle: 'After table.',
     cursor: { line: 0, character: 0 },
     clipMaxWidth: 360,
   },
@@ -232,6 +257,8 @@ async function configureStableEditor(): Promise<void> {
   await vscode.workspace.getConfiguration('editor').update('folding', false, vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('editor').update('minimap.enabled', false, vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('editor').update('cursorBlinking', 'solid', vscode.ConfigurationTarget.Global);
+  await vscode.workspace.getConfiguration('editor').update('renderLineHighlight', 'none', vscode.ConfigurationTarget.Global);
+  await vscode.workspace.getConfiguration('editor').update('overviewRulerBorder', false, vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableBackground', '#111111', vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableHeaderBackground', '#222222', vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableBorder', '#666666', vscode.ConfigurationTarget.Global);
@@ -266,7 +293,7 @@ async function captureTablePng(
     fromSurface: true,
     clip: state.clip,
   });
-  return tightCropPng(Buffer.from(capture.data, 'base64'));
+  return Buffer.from(capture.data, 'base64');
 }
 
 async function findWorkbenchTarget(): Promise<CdpPageTarget> {
@@ -295,13 +322,13 @@ async function findWorkbenchTarget(): Promise<CdpPageTarget> {
 const TABLE_STATE_EXPRESSION = `(() => {
     const headerNeedle = __HEADER_NEEDLE__;
     const lastRowNeedle = __LAST_ROW_NEEDLE__;
+    const footerNeedle = __FOOTER_NEEDLE__;
     const expectedMode = __EXPECTED_MODE__;
     const editor = document.querySelector('.monaco-editor');
     const lines = Array.from(document.querySelectorAll('.monaco-editor .view-line'));
     const textForMatch = (line) => (line.textContent || '').replace(/\\u00a0/g, ' ');
     const headerLine = lines.find((line) => textForMatch(line).includes(headerNeedle));
-    const lastLine = lines.find((line) => textForMatch(line).includes(lastRowNeedle));
-    if (!editor || !headerLine || !lastLine) {
+    if (!editor || !headerLine) {
       const sampleLines = lines.slice(0, 8).map((line) => textForMatch(line).trim()).filter(Boolean);
       return {
         clip: null,
@@ -310,60 +337,110 @@ const TABLE_STATE_EXPRESSION = `(() => {
         diagnostics: [
           editor ? 'editor found' : 'editor missing',
           headerLine ? 'header found' : 'header missing',
-          lastLine ? 'last row found' : 'last row missing',
           'editors=' + document.querySelectorAll('.monaco-editor').length,
           'lines=' + lines.length,
           'sample=' + sampleLines.join(' | '),
         ].join(', '),
       };
     }
-    const padX = 20;
-    const padY = 12;
+    const headerIndex = lines.indexOf(headerLine);
+    let footerIndex = lines.length;
+    if (footerNeedle) {
+      const footerLine = lines.find((line) => textForMatch(line).includes(footerNeedle));
+      if (footerLine) {
+        footerIndex = lines.indexOf(footerLine);
+      }
+    }
+    let lastLine = null;
+    let lastIndex = headerIndex;
+    for (let i = headerIndex; i < footerIndex; i++) {
+      if (textForMatch(lines[i]).includes(lastRowNeedle)) {
+        lastLine = lines[i];
+        lastIndex = i;
+      }
+    }
+    if (!lastLine) {
+      return {
+        clip: null,
+        overlayCount: 0,
+        rawLineCount: 0,
+        diagnostics: 'last row missing before footer',
+      };
+    }
+    const padX = 16;
+    const padY = 14;
     const maxWidth = __CLIP_MAX_WIDTH__;
     const minWidth = 120;
     const minHeight = 48;
-    const headerRect = headerLine.getBoundingClientRect();
-    const lastRect = lastLine.getBoundingClientRect();
-    let bandTop = headerRect.top;
-    let bandBottom = lastRect.bottom;
+    let bandTop = Infinity;
+    let bandBottom = -Infinity;
+    for (let i = headerIndex; i <= lastIndex; i++) {
+      const rect = lines[i].getBoundingClientRect();
+      if (rect.height < 0.5) {
+        continue;
+      }
+      bandTop = Math.min(bandTop, rect.top);
+      bandBottom = Math.max(bandBottom, rect.bottom);
+    }
+    if (!isFinite(bandTop) || !isFinite(bandBottom)) {
+      const headerRect = headerLine.getBoundingClientRect();
+      bandTop = headerRect.top;
+      bandBottom = lastLine.getBoundingClientRect().bottom;
+    }
+    let footerTop = Infinity;
+    if (footerIndex < lines.length) {
+      const footerRect = lines[footerIndex].getBoundingClientRect();
+      if (footerRect.height > 0.5) {
+        footerTop = footerRect.top;
+      }
+    }
     const maxGrowWidth = editor.getBoundingClientRect().width * 0.9;
-    let left = 1e10;
-    let right = -1e10;
+    const linesContent = document.querySelector('.monaco-editor .lines-content');
+    const contentRect = linesContent
+      ? linesContent.getBoundingClientRect()
+      : headerLine.getBoundingClientRect();
+    let left = contentRect.left;
+    let right = contentRect.left;
     let overlayCount = 0;
     let rawLineCount = 0;
-    function grow(rect, allowWide, growY) {
+    function growHorizontal(rect, allowWide) {
       if (!rect || rect.width < 0.5 || rect.height < 0.5) {
         return;
       }
       if (!allowWide && rect.width > maxGrowWidth) {
         return;
       }
+      if (rect.bottom < bandTop || rect.top >= footerTop) {
+        return;
+      }
       left = Math.min(left, rect.left);
       right = Math.max(right, rect.right);
-      if (growY) {
-        bandTop = Math.min(bandTop, rect.top);
-        bandBottom = Math.max(bandBottom, rect.bottom);
-      }
     }
-    const headerIndex = lines.indexOf(headerLine);
-    const lastIndex = lines.indexOf(lastLine);
+    const overlayRects = [];
     const countOverlayRect = (rect, width, height) => {
-      if (!rect || rect.bottom < bandTop || rect.top > bandBottom) {
+      if (!rect || rect.top >= footerTop) {
+        return;
+      }
+      const bottom = height > 0 ? rect.top + height : rect.bottom;
+      const rightEdge = width > 0 ? rect.left + width : rect.right;
+      if (bottom <= bandTop) {
         return;
       }
       overlayCount++;
-      if (width > 0 && height > 0) {
-        grow({
-          left: rect.left,
-          right: rect.left + width,
-          top: rect.top,
-          bottom: rect.top + height,
-          width,
-          height,
-        }, true, true);
-        return;
-      }
-      grow(rect, true, true);
+      overlayRects.push({
+        left: rect.left,
+        right: rightEdge,
+        top: rect.top,
+        bottom,
+      });
+      growHorizontal({
+        left: rect.left,
+        right: rightEdge,
+        top: rect.top,
+        bottom,
+        width: rightEdge - rect.left,
+        height: bottom - rect.top,
+      }, true);
     };
     const imgs = document.querySelectorAll('.monaco-editor img');
     for (let k = 0; k < imgs.length; k++) {
@@ -400,7 +477,7 @@ const TABLE_STATE_EXPRESSION = `(() => {
       }
       const spans = lines[i].querySelectorAll('span');
       for (let j = 0; j < spans.length; j++) {
-        grow(spans[j].getBoundingClientRect(), false, false);
+        growHorizontal(spans[j].getBoundingClientRect(), false);
       }
     }
     const useCharEstimate = () => {
@@ -411,10 +488,6 @@ const TABLE_STATE_EXPRESSION = `(() => {
           maxChars = Math.max(maxChars, text.length);
         }
       }
-      const content = document.querySelector('.monaco-editor .lines-content');
-      const contentRect = content
-        ? content.getBoundingClientRect()
-        : headerRect;
       left = contentRect.left;
       right = contentRect.left + Math.min(maxWidth, Math.max(minWidth, maxChars * 7.2));
     };
@@ -447,16 +520,51 @@ const TABLE_STATE_EXPRESSION = `(() => {
     } else if (right - left > maxGrowWidth * 0.75) {
       useCharEstimate();
     }
+    if (expectedMode === 'rendered') {
+      function anchorLineIndex(rect) {
+        let bestIndex = -1;
+        let bestDistance = Infinity;
+        for (let i = headerIndex; i < footerIndex; i++) {
+          const lineRect = lines[i].getBoundingClientRect();
+          if (lineRect.height < 0.5) {
+            continue;
+          }
+          const distance = Math.abs(rect.top - lineRect.top);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = i;
+          }
+        }
+        return bestIndex;
+      }
+      for (let k = 0; k < overlayRects.length; k++) {
+        const rect = overlayRects[k];
+        if (rect.bottom <= bandTop || rect.top >= footerTop) {
+          continue;
+        }
+        const anchoredAt = anchorLineIndex(rect);
+        if (anchoredAt < headerIndex || anchoredAt > lastIndex) {
+          continue;
+        }
+        bandTop = Math.min(bandTop, rect.top);
+        bandBottom = Math.max(bandBottom, rect.bottom);
+      }
+    }
+    if (footerTop < Infinity) {
+      bandBottom = Math.min(bandBottom, footerTop - 4);
+    }
     const width = Math.min(maxWidth, Math.max(minWidth, Math.ceil(right - left + padX * 2)));
-    const height = Math.max(minHeight, Math.ceil(bandBottom - bandTop + padY * 2));
+    const contentHeight = Math.max(minHeight, Math.ceil(bandBottom - bandTop));
+    const height = contentHeight + padY * 2;
     const centerX = (left + right) / 2;
-    const centerY = (bandTop + bandBottom) / 2;
     return {
       clip: {
         x: Math.max(0, Math.floor(centerX - width / 2)),
-        y: Math.max(0, Math.floor(centerY - height / 2)),
+        y: Math.max(0, Math.floor(bandTop - padY)),
         width,
-        height,
+        height: footerTop < Infinity
+          ? Math.min(height, Math.max(minHeight, Math.ceil(footerTop - Math.max(0, bandTop - padY) - 4)))
+          : height,
         scale: 1,
       },
       overlayCount,
@@ -474,6 +582,7 @@ function buildTableStateExpression(
   return TABLE_STATE_EXPRESSION
     .replace('__HEADER_NEEDLE__', JSON.stringify(headerNeedle))
     .replace('__LAST_ROW_NEEDLE__', JSON.stringify(lastRowNeedle))
+    .replace('__FOOTER_NEEDLE__', JSON.stringify(scenario.footerNeedle ?? ''))
     .replace('__EXPECTED_MODE__', JSON.stringify(scenario.mode))
     .replace('__CLIP_MAX_WIDTH__', String(clipMaxWidth));
 }
@@ -517,7 +626,7 @@ function capPngWidth(pngBytes: Buffer, maxWidth: number | undefined): Buffer {
     return pngBytes;
   }
 
-  const cropX = Math.max(0, Math.floor((source.width - maxWidth) / 2));
+  const cropX = 0;
   const cropped = new PNG({ width: maxWidth, height: source.height });
   for (let y = 0; y < source.height; y++) {
     for (let x = 0; x < maxWidth; x++) {
@@ -527,82 +636,6 @@ function capPngWidth(pngBytes: Buffer, maxWidth: number | undefined): Buffer {
       cropped.data[dstOffset + 1] = source.data[srcOffset + 1];
       cropped.data[dstOffset + 2] = source.data[srcOffset + 2];
       cropped.data[dstOffset + 3] = source.data[srcOffset + 3];
-    }
-  }
-
-  return PNG.sync.write(cropped);
-}
-
-function tightCropPng(pngBytes: Buffer): Buffer {
-  const source = PNG.sync.read(pngBytes);
-  const { width, height, data } = source;
-  if (width === 0 || height === 0) {
-    return pngBytes;
-  }
-
-  const sample = (x: number, y: number) => {
-    const offset = (width * y + x) << 2;
-    return [data[offset], data[offset + 1], data[offset + 2]] as const;
-  };
-  const corners = [
-    sample(0, 0),
-    sample(width - 1, 0),
-    sample(0, height - 1),
-    sample(width - 1, height - 1),
-  ];
-  const background = [
-    Math.round(corners.reduce((sum, c) => sum + c[0], 0) / corners.length),
-    Math.round(corners.reduce((sum, c) => sum + c[1], 0) / corners.length),
-    Math.round(corners.reduce((sum, c) => sum + c[2], 0) / corners.length),
-  ] as const;
-  const threshold = 18;
-
-  const differs = (x: number, y: number) => {
-    const [r, g, b] = sample(x, y);
-    return Math.abs(r - background[0]) > threshold
-      || Math.abs(g - background[1]) > threshold
-      || Math.abs(b - background[2]) > threshold;
-  };
-
-  let minX = width;
-  let minY = height;
-  let maxX = -1;
-  let maxY = -1;
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (!differs(x, y)) {
-        continue;
-      }
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
-  }
-
-  if (maxX < minX || maxY < minY) {
-    return pngBytes;
-  }
-
-  const pad = 8;
-  minX = Math.max(0, minX - pad);
-  minY = Math.max(0, minY - pad);
-  maxX = Math.min(width - 1, maxX + pad);
-  maxY = Math.min(height - 1, maxY + pad);
-
-  const cropWidth = maxX - minX + 1;
-  const cropHeight = maxY - minY + 1;
-  const cropped = new PNG({ width: cropWidth, height: cropHeight });
-
-  for (let y = 0; y < cropHeight; y++) {
-    for (let x = 0; x < cropWidth; x++) {
-      const srcOffset = ((minY + y) * width + (minX + x)) << 2;
-      const dstOffset = (y * cropWidth + x) << 2;
-      cropped.data[dstOffset] = data[srcOffset];
-      cropped.data[dstOffset + 1] = data[srcOffset + 1];
-      cropped.data[dstOffset + 2] = data[srcOffset + 2];
-      cropped.data[dstOffset + 3] = data[srcOffset + 3];
     }
   }
 
