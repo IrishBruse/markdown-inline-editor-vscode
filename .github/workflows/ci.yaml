@@ -60,6 +60,11 @@ jobs:
           DISPLAY: ':99'
         run: npm run test:e2e
 
+      - name: Custom table visual regression tests
+        env:
+          DISPLAY: ':99'
+        run: npm run test:e2e:visual
+
   cd-ovsx:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: ci

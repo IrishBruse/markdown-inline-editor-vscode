@@ -107,8 +107,8 @@ function denseBlock(): TableBlock {
   };
 }
 
-describe('table visual regression snapshots', () => {
-  it('locks the full SVG table scene for borders, fills, alignment, and wrapping', () => {
+describe('table SVG scene snapshots', () => {
+  it('locks full-table renderer output for borders, fills, alignment, and wrapping', () => {
     const svg = renderTableSvg(tableBlock(), { isDark: false, ...metrics });
 
     expect(svgVisualScene(svg)).toMatchInlineSnapshot(`
@@ -141,7 +141,7 @@ describe('table visual regression snapshots', () => {
     `);
   });
 
-  it('locks per-line overlay scenes for custom table rendering', () => {
+  it('locks per-line SVG overlay output for custom table rendering', () => {
     const layout = buildTableLayout(tableBlock(), { isDark: false, ...metrics });
     const scenes = Array.from({ length: tableBlock().numLines }, (_, sourceLine) => {
       const svg = renderTableSvgLineSlice(layout, sourceLine);
@@ -220,7 +220,7 @@ describe('table visual regression snapshots', () => {
     `);
   });
 
-  it('locks dense custom overlay wrapping and ellipsis behavior', () => {
+  it('locks dense custom overlay wrapping and ellipsis renderer output', () => {
     const layout = buildTableLayout(denseBlock(), { isDark: false, ...metrics });
     const rowScenes = [0, 2, 3].map((sourceLine) => {
       const svg = renderTableSvgLineSlice(layout, sourceLine);
@@ -272,5 +272,17 @@ describe('table visual regression snapshots', () => {
       rect x=121 y=0 w=1 h=18 fill=#333333 stroke=-
       rect x=522 y=0 w=1 h=18 fill=#333333 stroke=-"
     `);
+  });
+
+  it('keeps the fast SVG snapshots scoped to renderer invariants', () => {
+    const layout = buildTableLayout(denseBlock(), { isDark: false, ...metrics });
+    const headerSvg = renderTableSvgLineSlice(layout, 0);
+    const separatorSvg = renderTableSvgLineSlice(layout, 1);
+    const wrappedSvg = renderTableSvgLineSlice(layout, 2);
+
+    expect(headerSvg).toContain('Section Header');
+    expect(separatorSvg).toBeNull();
+    expect(wrappedSvg).toContain('&#x2026;');
+    expect(wrappedSvg).toContain('shape-rendering="crispEdges"');
   });
 });

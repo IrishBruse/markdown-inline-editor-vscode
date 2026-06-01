@@ -1,6 +1,5 @@
 /**
  * Regression tests for custom table per-line SVG overlays.
- * Spec: docs/specs/tables-custom.md
  */
 import { describe, expect, it } from 'vitest';
 import type { TableBlock } from '../../parser';

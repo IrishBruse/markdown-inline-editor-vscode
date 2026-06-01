@@ -10,18 +10,20 @@ const VISUAL_E2E_ENABLED = process.env.MD_INLINE_VISUAL_E2E === '1'
   || process.env.UPDATE_VISUAL_BASELINES === '1';
 const UPDATE_BASELINES = process.env.UPDATE_VISUAL_BASELINES === '1';
 const REMOTE_DEBUGGING_PORT = Number(process.env.VSCODE_REMOTE_DEBUGGING_PORT ?? '9333');
+const EXTENSION_ID = 'CodeSmith.markdown-inline-editor-vscode';
 const REPO_ROOT = path.resolve(__dirname, '../../../..');
 const FIXTURE_DIR = path.join(REPO_ROOT, 'src/test/e2e/fixtures/tables-visual');
 const BASELINE_DIR = path.join(REPO_ROOT, 'src/test/e2e/visual-baselines');
 const OUTPUT_DIR = path.join(REPO_ROOT, 'dist/visual-regression');
-const RENDER_SETTLE_MS = 1800;
+const TABLE_STATE_POLL_MS = 100;
+const TABLE_STATE_TIMEOUT_MS = 5000;
 
-type TableRenderingMode = 'inline' | 'custom';
+type TableVisualMode = 'rendered' | 'raw';
 
 type TableVisualScenario = {
   /** Baseline file slug: `{id}-linux.png` */
   id: string;
-  renderingMode: TableRenderingMode;
+  mode: TableVisualMode;
   /** Markdown file under `fixtures/tables-visual/`. */
   fixture: string;
   /** First visible table line in the clip. */
@@ -35,61 +37,49 @@ type TableVisualScenario = {
 
 const SCENARIOS: TableVisualScenario[] = [
   {
-    id: 'custom-long-rendered',
-    renderingMode: 'custom',
-    fixture: 'custom-long.md',
-    headerNeedle: 'Section Header',
-    lastRowNeedle: 'Row 3',
-    cursor: { line: 0, character: 0 },
-  },
-  {
-    id: 'custom-long-raw',
-    renderingMode: 'custom',
-    fixture: 'custom-long.md',
-    headerNeedle: 'Section Header',
-    lastRowNeedle: 'Row 3',
-    cursor: { line: 6, character: 4 },
-  },
-  {
-    id: 'inline-basic-rendered',
-    renderingMode: 'inline',
-    fixture: 'inline-basic.md',
+    id: 'custom-basic-rendered',
+    mode: 'rendered',
+    fixture: 'custom-basic.md',
     headerNeedle: '| Name | Role |',
     lastRowNeedle: '| Bob  | Dev  |',
     cursor: { line: 0, character: 0 },
+    clipMaxWidth: 360,
   },
   {
-    id: 'inline-basic-raw',
-    renderingMode: 'inline',
-    fixture: 'inline-basic.md',
+    id: 'custom-raw-reveal',
+    mode: 'raw',
+    fixture: 'custom-basic.md',
     headerNeedle: '| Name | Role |',
     lastRowNeedle: '| Bob  | Dev  |',
-    cursor: { line: 3, character: 3 },
-    clipMaxWidth: 200,
+    cursor: { line: 4, character: 4 },
+    clipMaxWidth: 320,
   },
   {
     id: 'custom-alignment-rendered',
-    renderingMode: 'custom',
+    mode: 'rendered',
     fixture: 'custom-alignment.md',
-    headerNeedle: '|:-----|:------:|------:|',
+    headerNeedle: '| Left | Center | Right |',
     lastRowNeedle: '| long |  mid   |   1.0 |',
     cursor: { line: 0, character: 0 },
+    clipMaxWidth: 420,
+  },
+  {
+    id: 'custom-wrap-ellipsis-rendered',
+    mode: 'rendered',
+    fixture: 'custom-wrap-ellipsis.md',
+    headerNeedle: 'Section Header',
+    lastRowNeedle: 'Row 2',
+    cursor: { line: 0, character: 0 },
+    clipMaxWidth: 650,
   },
   {
     id: 'custom-cjk-rendered',
-    renderingMode: 'custom',
+    mode: 'rendered',
     fixture: 'custom-cjk.md',
     headerNeedle: '| Name | CJK  | Emoji |',
     lastRowNeedle: '| CD   | 世界 | 🚀    |',
     cursor: { line: 0, character: 0 },
-  },
-  {
-    id: 'inline-formatting-rendered',
-    renderingMode: 'inline',
-    fixture: 'inline-formatting.md',
-    headerNeedle: '| Plain | **Bold** | *Italic* | `code` |',
-    lastRowNeedle: '| ok    | loud     | soft     | mono   |',
-    cursor: { line: 0, character: 0 },
+    clipMaxWidth: 360,
   },
 ];
 
@@ -113,7 +103,26 @@ type CdpClip = {
   scale: number;
 };
 
+type CdpTableState = {
+  clip: CdpClip | null;
+  overlayCount: number;
+  rawLineCount: number;
+  diagnostics: string;
+};
+
+type DecoratorExport = {
+  isEnabled: () => boolean;
+  updateDecorationsForSelection: () => void;
+};
+
+type ExtensionExports = {
+  decorator?: DecoratorExport;
+};
+
 suite('Table visual e2e', function () {
+  let cdpClient: CdpClient | undefined;
+  let decoratorApi: DecoratorExport | undefined;
+
   if (!VISUAL_E2E_ENABLED) {
     test('PNG visual regression is opt-in', function () {
       this.skip();
@@ -123,6 +132,15 @@ suite('Table visual e2e', function () {
 
   suiteSetup(async () => {
     await configureStableEditor();
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
+    if (extension && !extension.isActive) {
+      await extension.activate();
+    }
+    decoratorApi = (extension?.exports as ExtensionExports | undefined)?.decorator;
+  });
+
+  suiteTeardown(() => {
+    cdpClient?.close();
   });
 
   for (const scenario of SCENARIOS) {
@@ -130,10 +148,15 @@ suite('Table visual e2e', function () {
       const fixturePath = path.join(FIXTURE_DIR, scenario.fixture);
       assert.ok(fs.existsSync(fixturePath), `Missing fixture: ${fixturePath}`);
 
-      await vscode.workspace.getConfiguration('markdownInlineEditor.tables').update(
-        'renderingMode',
-        scenario.renderingMode,
+      await vscode.workspace.getConfiguration().update(
+        'markdownInlineEditor.tables.renderingMode',
+        'custom',
         vscode.ConfigurationTarget.Global,
+      );
+      assert.strictEqual(
+        vscode.workspace.getConfiguration('markdownInlineEditor').get('tables.renderingMode'),
+        'custom',
+        'Visual E2E must run with custom table rendering enabled',
       );
 
       const document = await vscode.workspace.openTextDocument(vscode.Uri.file(fixturePath));
@@ -141,6 +164,9 @@ suite('Table visual e2e', function () {
         preview: false,
         viewColumn: vscode.ViewColumn.One,
       });
+      if (decoratorApi && !decoratorApi.isEnabled()) {
+        await vscode.commands.executeCommand('mdInline.toggleDecorations');
+      }
 
       const cursorPosition = new vscode.Position(scenario.cursor.line, scenario.cursor.character);
       editor.selection = new vscode.Selection(cursorPosition, cursorPosition);
@@ -148,7 +174,7 @@ suite('Table visual e2e', function () {
         new vscode.Range(0, 0, document.lineCount, 0),
         vscode.TextEditorRevealType.AtTop,
       );
-      await delay(RENDER_SETTLE_MS);
+      decoratorApi?.updateDecorationsForSelection();
 
       const baselinePath = path.join(BASELINE_DIR, `${scenario.id}-linux.png`);
       const actualPath = path.join(OUTPUT_DIR, `${scenario.id}-linux.actual.png`);
@@ -156,6 +182,10 @@ suite('Table visual e2e', function () {
 
       const actualPng = capPngWidth(
         await captureTablePng(
+          await getCdpClient(cdpClient, (client) => {
+            cdpClient = client;
+          }),
+          scenario,
           scenario.headerNeedle,
           scenario.lastRowNeedle,
           scenario.clipMaxWidth,
@@ -208,26 +238,35 @@ async function configureStableEditor(): Promise<void> {
   await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableText', '#eeeeee', vscode.ConfigurationTarget.Global);
 }
 
+async function getCdpClient(
+  client: CdpClient | undefined,
+  setClient: (client: CdpClient) => void,
+): Promise<CdpClient> {
+  if (client) {
+    return client;
+  }
+  const target = await findWorkbenchTarget();
+  assert.ok(target.webSocketDebuggerUrl, 'VS Code remote debugging target did not expose a WebSocket URL');
+  const nextClient = await CdpClient.connect(target.webSocketDebuggerUrl);
+  setClient(nextClient);
+  return nextClient;
+}
+
 async function captureTablePng(
+  client: CdpClient,
+  scenario: TableVisualScenario,
   headerNeedle: string,
   lastRowNeedle: string,
   clipMaxWidth = 980,
 ): Promise<Buffer> {
-  const target = await findWorkbenchTarget();
-  assert.ok(target.webSocketDebuggerUrl, 'VS Code remote debugging target did not expose a WebSocket URL');
-
-  const client = await CdpClient.connect(target.webSocketDebuggerUrl);
-  try {
-    const clip = await waitForTableClip(client, headerNeedle, lastRowNeedle, clipMaxWidth);
-    const capture = await client.send<{ data: string }>('Page.captureScreenshot', {
-      format: 'png',
-      fromSurface: true,
-      clip,
-    });
-    return tightCropPng(Buffer.from(capture.data, 'base64'));
-  } finally {
-    client.close();
-  }
+  const state = await waitForTableState(client, scenario, headerNeedle, lastRowNeedle, clipMaxWidth);
+  assert.ok(state.clip, `${scenario.id} did not produce a screenshot clip: ${state.diagnostics}`);
+  const capture = await client.send<{ data: string }>('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    clip: state.clip,
+  });
+  return tightCropPng(Buffer.from(capture.data, 'base64'));
 }
 
 async function findWorkbenchTarget(): Promise<CdpPageTarget> {
@@ -253,24 +292,29 @@ async function findWorkbenchTarget(): Promise<CdpPageTarget> {
   throw new Error(`Could not find VS Code CDP target on port ${REMOTE_DEBUGGING_PORT}`);
 }
 
-const TABLE_CLIP_EXPRESSION = `(() => {
+const TABLE_STATE_EXPRESSION = `(() => {
     const headerNeedle = __HEADER_NEEDLE__;
     const lastRowNeedle = __LAST_ROW_NEEDLE__;
+    const expectedMode = __EXPECTED_MODE__;
     const editor = document.querySelector('.monaco-editor');
     const lines = Array.from(document.querySelectorAll('.monaco-editor .view-line'));
-    const headerLine = lines.find((line) => (line.textContent || '').includes(headerNeedle));
-    const lastLine = lines.find((line) => (line.textContent || '').includes(lastRowNeedle));
+    const textForMatch = (line) => (line.textContent || '').replace(/\\u00a0/g, ' ');
+    const headerLine = lines.find((line) => textForMatch(line).includes(headerNeedle));
+    const lastLine = lines.find((line) => textForMatch(line).includes(lastRowNeedle));
     if (!editor || !headerLine || !lastLine) {
-      if (!editor) {
-        return null;
-      }
-      const editorRect = editor.getBoundingClientRect();
+      const sampleLines = lines.slice(0, 8).map((line) => textForMatch(line).trim()).filter(Boolean);
       return {
-        x: Math.max(0, Math.floor(editorRect.left + 4)),
-        y: Math.max(0, Math.floor(editorRect.top + 36)),
-        width: Math.ceil(Math.min(editorRect.width - 8, 900)),
-        height: 190,
-        scale: 1,
+        clip: null,
+        overlayCount: 0,
+        rawLineCount: 0,
+        diagnostics: [
+          editor ? 'editor found' : 'editor missing',
+          headerLine ? 'header found' : 'header missing',
+          lastLine ? 'last row found' : 'last row missing',
+          'editors=' + document.querySelectorAll('.monaco-editor').length,
+          'lines=' + lines.length,
+          'sample=' + sampleLines.join(' | '),
+        ].join(', '),
       };
     }
     const padX = 20;
@@ -280,12 +324,14 @@ const TABLE_CLIP_EXPRESSION = `(() => {
     const minHeight = 48;
     const headerRect = headerLine.getBoundingClientRect();
     const lastRect = lastLine.getBoundingClientRect();
-    const bandTop = headerRect.top;
-    const bandBottom = lastRect.bottom;
+    let bandTop = headerRect.top;
+    let bandBottom = lastRect.bottom;
     const maxGrowWidth = editor.getBoundingClientRect().width * 0.9;
     let left = 1e10;
     let right = -1e10;
-    function grow(rect, allowWide) {
+    let overlayCount = 0;
+    let rawLineCount = 0;
+    function grow(rect, allowWide, growY) {
       if (!rect || rect.width < 0.5 || rect.height < 0.5) {
         return;
       }
@@ -294,30 +340,73 @@ const TABLE_CLIP_EXPRESSION = `(() => {
       }
       left = Math.min(left, rect.left);
       right = Math.max(right, rect.right);
+      if (growY) {
+        bandTop = Math.min(bandTop, rect.top);
+        bandBottom = Math.max(bandBottom, rect.bottom);
+      }
     }
     const headerIndex = lines.indexOf(headerLine);
     const lastIndex = lines.indexOf(lastLine);
+    const countOverlayRect = (rect, width, height) => {
+      if (!rect || rect.bottom < bandTop || rect.top > bandBottom) {
+        return;
+      }
+      overlayCount++;
+      if (width > 0 && height > 0) {
+        grow({
+          left: rect.left,
+          right: rect.left + width,
+          top: rect.top,
+          bottom: rect.top + height,
+          width,
+          height,
+        }, true, true);
+        return;
+      }
+      grow(rect, true, true);
+    };
+    const imgs = document.querySelectorAll('.monaco-editor img');
+    for (let k = 0; k < imgs.length; k++) {
+      const rect = imgs[k].getBoundingClientRect();
+      countOverlayRect(rect, rect.width, rect.height);
+    }
+    const decorationElements = document.querySelectorAll('.monaco-editor .view-line, .monaco-editor .view-line *');
+    for (let k = 0; k < decorationElements.length; k++) {
+      const element = decorationElements[k];
+      const before = getComputedStyle(element, '::before');
+      const generatedImage = [
+        before.backgroundImage,
+        before.webkitMaskImage,
+        before.content,
+      ].join(' ');
+      const rect = element.getBoundingClientRect();
+      const width = parseFloat(before.width) || rect.width;
+      const height = parseFloat(before.height) || rect.height;
+      const looksLikeGeneratedOverlay = generatedImage.includes('svg') ||
+        (before.content !== 'none' && width > 20 && height > 10);
+      if (!looksLikeGeneratedOverlay) {
+        continue;
+      }
+      countOverlayRect(rect, width, height);
+    }
     for (let i = headerIndex; i <= lastIndex; i++) {
-      const text = lines[i].textContent || '';
+      const text = textForMatch(lines[i]);
       if (text.indexOf('|') < 0) {
+        continue;
+      }
+      rawLineCount++;
+      if (expectedMode !== 'raw') {
         continue;
       }
       const spans = lines[i].querySelectorAll('span');
       for (let j = 0; j < spans.length; j++) {
-        grow(spans[j].getBoundingClientRect(), false);
-      }
-    }
-    const imgs = document.querySelectorAll('.monaco-editor img');
-    for (let k = 0; k < imgs.length; k++) {
-      const rect = imgs[k].getBoundingClientRect();
-      if (rect.bottom >= bandTop && rect.top <= bandBottom) {
-        grow(rect, true);
+        grow(spans[j].getBoundingClientRect(), false, false);
       }
     }
     const useCharEstimate = () => {
       let maxChars = 0;
       for (let i = headerIndex; i <= lastIndex; i++) {
-        const text = lines[i].textContent || '';
+        const text = textForMatch(lines[i]);
         if (text.indexOf('|') >= 0) {
           maxChars = Math.max(maxChars, text.length);
         }
@@ -329,6 +418,30 @@ const TABLE_CLIP_EXPRESSION = `(() => {
       left = contentRect.left;
       right = contentRect.left + Math.min(maxWidth, Math.max(minWidth, maxChars * 7.2));
     };
+    if (expectedMode === 'rendered' && overlayCount === 0) {
+      return {
+        clip: null,
+        overlayCount,
+        rawLineCount,
+        diagnostics: 'waiting for custom table overlay image',
+      };
+    }
+    if (expectedMode === 'raw' && overlayCount > 0) {
+      return {
+        clip: null,
+        overlayCount,
+        rawLineCount,
+        diagnostics: 'waiting for raw reveal to remove custom table overlays',
+      };
+    }
+    if (expectedMode === 'raw' && rawLineCount < 3) {
+      return {
+        clip: null,
+        overlayCount,
+        rawLineCount,
+        diagnostics: 'waiting for raw table source lines',
+      };
+    }
     if (!isFinite(left) || right <= left) {
       useCharEstimate();
     } else if (right - left > maxGrowWidth * 0.75) {
@@ -339,45 +452,59 @@ const TABLE_CLIP_EXPRESSION = `(() => {
     const centerX = (left + right) / 2;
     const centerY = (bandTop + bandBottom) / 2;
     return {
-      x: Math.max(0, Math.floor(centerX - width / 2)),
-      y: Math.max(0, Math.floor(centerY - height / 2)),
-      width,
-      height,
-      scale: 1,
+      clip: {
+        x: Math.max(0, Math.floor(centerX - width / 2)),
+        y: Math.max(0, Math.floor(centerY - height / 2)),
+        width,
+        height,
+        scale: 1,
+      },
+      overlayCount,
+      rawLineCount,
+      diagnostics: 'ready',
     };
   })()`;
 
-function buildTableClipExpression(
+function buildTableStateExpression(
+  scenario: TableVisualScenario,
   headerNeedle: string,
   lastRowNeedle: string,
   clipMaxWidth: number,
 ): string {
-  return TABLE_CLIP_EXPRESSION
+  return TABLE_STATE_EXPRESSION
     .replace('__HEADER_NEEDLE__', JSON.stringify(headerNeedle))
     .replace('__LAST_ROW_NEEDLE__', JSON.stringify(lastRowNeedle))
+    .replace('__EXPECTED_MODE__', JSON.stringify(scenario.mode))
     .replace('__CLIP_MAX_WIDTH__', String(clipMaxWidth));
 }
 
-async function waitForTableClip(
+async function waitForTableState(
   client: CdpClient,
+  scenario: TableVisualScenario,
   headerNeedle: string,
   lastRowNeedle: string,
   clipMaxWidth: number,
-): Promise<CdpClip> {
-  const expression = buildTableClipExpression(headerNeedle, lastRowNeedle, clipMaxWidth);
+): Promise<CdpTableState> {
+  const expression = buildTableStateExpression(scenario, headerNeedle, lastRowNeedle, clipMaxWidth);
+  const startedAt = Date.now();
+  let lastState: CdpTableState | null = null;
 
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const result = await client.send<{ result: { value: CdpClip | null } }>('Runtime.evaluate', {
+  while (Date.now() - startedAt < TABLE_STATE_TIMEOUT_MS) {
+    const result = await client.send<{ result: { value: CdpTableState | null } }>('Runtime.evaluate', {
       expression,
       returnByValue: true,
     });
-    if (result.result.value) {
-      return result.result.value;
+    lastState = result.result.value;
+    if (lastState?.clip) {
+      return lastState;
     }
-    await delay(250);
+    await delay(TABLE_STATE_POLL_MS);
   }
 
-  throw new Error(`Could not locate rendered table lines for ${headerNeedle} / ${lastRowNeedle}`);
+  const diagnostics = lastState
+    ? `${lastState.diagnostics}; overlays=${lastState.overlayCount}; rawLines=${lastState.rawLineCount}`
+    : 'no table state returned';
+  throw new Error(`Could not prepare ${scenario.id} (${scenario.mode}) for ${headerNeedle} / ${lastRowNeedle}: ${diagnostics}`);
 }
 
 function capPngWidth(pngBytes: Buffer, maxWidth: number | undefined): Buffer {
