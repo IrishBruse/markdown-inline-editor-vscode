@@ -127,6 +127,28 @@ suite('Table visual e2e', function () {
       await extension.activate();
     }
     decoratorApi = (extension?.exports as ExtensionExports | undefined)?.decorator;
+
+    // Custom table rendering is identical for every scenario, so configure it once.
+    await vscode.workspace.getConfiguration().update(
+      'markdownInlineEditor.tables.renderingMode',
+      'custom',
+      vscode.ConfigurationTarget.Global,
+    );
+    assert.strictEqual(
+      vscode.workspace.getConfiguration('markdownInlineEditor').get('tables.renderingMode'),
+      'custom',
+      'Visual E2E must run with custom table rendering enabled',
+    );
+
+    // Connect to the workbench CDP target once and reuse it across scenarios.
+    const target = await findWorkbenchTarget();
+    assert.ok(target.webSocketDebuggerUrl, 'VS Code remote debugging target did not expose a WebSocket URL');
+    cdpClient = await CdpClient.connect(target.webSocketDebuggerUrl);
+
+    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+    if (UPDATE_BASELINES) {
+      fs.mkdirSync(BASELINE_DIR, { recursive: true });
+    }
   });
 
   suiteTeardown(() => {
@@ -137,17 +159,6 @@ suite('Table visual e2e', function () {
     test(`${scenario.id} matches the approved PNG baseline`, async () => {
       const fixturePath = path.join(FIXTURE_DIR, scenario.fixture);
       assert.ok(fs.existsSync(fixturePath), `Missing fixture: ${fixturePath}`);
-
-      await vscode.workspace.getConfiguration().update(
-        'markdownInlineEditor.tables.renderingMode',
-        'custom',
-        vscode.ConfigurationTarget.Global,
-      );
-      assert.strictEqual(
-        vscode.workspace.getConfiguration('markdownInlineEditor').get('tables.renderingMode'),
-        'custom',
-        'Visual E2E must run with custom table rendering enabled',
-      );
 
       const document = await vscode.workspace.openTextDocument(vscode.Uri.file(fixturePath));
       const editor = await vscode.window.showTextDocument(document, {
@@ -170,17 +181,11 @@ suite('Table visual e2e', function () {
       const actualPath = path.join(OUTPUT_DIR, `${scenario.id}-linux.actual.png`);
       const diffPath = path.join(OUTPUT_DIR, `${scenario.id}-linux.diff.png`);
 
-      const actualPng = await captureEditorPng(
-        await getCdpClient(cdpClient, (client) => {
-          cdpClient = client;
-        }),
-        scenario,
-      );
-      fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+      assert.ok(cdpClient, 'CDP client was not initialised in suiteSetup');
+      const actualPng = await captureEditorPng(cdpClient, scenario);
       fs.writeFileSync(actualPath, actualPng);
 
       if (UPDATE_BASELINES) {
-        fs.mkdirSync(BASELINE_DIR, { recursive: true });
         fs.writeFileSync(baselinePath, actualPng);
         return;
       }
@@ -204,20 +209,6 @@ suite('Table visual e2e', function () {
     });
   }
 });
-
-async function getCdpClient(
-  client: CdpClient | undefined,
-  setClient: (client: CdpClient) => void,
-): Promise<CdpClient> {
-  if (client) {
-    return client;
-  }
-  const target = await findWorkbenchTarget();
-  assert.ok(target.webSocketDebuggerUrl, 'VS Code remote debugging target did not expose a WebSocket URL');
-  const nextClient = await CdpClient.connect(target.webSocketDebuggerUrl);
-  setClient(nextClient);
-  return nextClient;
-}
 
 async function captureEditorPng(
   client: CdpClient,
