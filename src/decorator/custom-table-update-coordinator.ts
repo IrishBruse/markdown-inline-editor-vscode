@@ -310,7 +310,8 @@ export class CustomTableUpdateCoordinator {
       const blockLayout = buildTableLayout(block, renderOptions);
 
       for (let sourceLineIndex = 0; sourceLineIndex < block.numLines; sourceLineIndex++) {
-        if (!sourceLineToSliceSpec(sourceLineIndex, blockLayout)) {
+        const slice = sourceLineToSliceSpec(sourceLineIndex, blockLayout);
+        if (!slice) {
           continue;
         }
 
@@ -325,6 +326,13 @@ export class CustomTableUpdateCoordinator {
         }
 
         const key = sliceCacheKey(blockKey, sourceLineIndex);
+
+        if (slice.hideSeparatorRow === true) {
+          const existing = decorationsByKey.get(key) || [];
+          existing.push({ range: lineRanges.hideRange });
+          decorationsByKey.set(key, existing);
+          continue;
+        }
 
         const cachedUri = this.svgDataUriCache.get(key);
         if (cachedUri) {
@@ -362,6 +370,11 @@ export class CustomTableUpdateCoordinator {
       const batch = jobsToRender.slice(offset, offset + this.renderBatchSize);
       for (const job of batch) {
         const layout = buildTableLayout(job.block, renderOptions);
+        const slice = sourceLineToSliceSpec(job.sourceLineIndex, layout);
+        if (!slice || slice.hideSeparatorRow === true) {
+          continue;
+        }
+
         const svg = renderTableSvgLineSlice(layout, job.sourceLineIndex);
         if (!svg) {
           continue;

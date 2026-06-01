@@ -101,10 +101,9 @@ describe('custom overlay regression: header', () => {
 
   it('renders header labels on the title-line overlay only', () => {
     const headerSvg = sliceSvg(layout, 0);
-    const separatorSvg = sliceSvg(layout, 1);
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
-    expect(separatorSvg).not.toContain('<text');
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
   });
 
   it('uses a title band at least two editor lines tall', () => {
@@ -136,20 +135,15 @@ describe('custom overlay regression: header', () => {
     }
   });
 
-  it('draws the table top rule on the title band, not the thead bottom', () => {
+  it('draws the table top and thead bottom rules on the title band', () => {
     const headerSvg = sliceSvg(layout, 0);
     const bandHeight = parseBandHeight(headerSvg);
     expect(headerSvg).toMatch(/<rect x="0" y="0"[^>]*width="\d+"/);
-    expect(headerSvg).not.toMatch(new RegExp(`y="${bandHeight - 1}"[^>]*width="`));
+    expect(headerSvg).toMatch(new RegExp(`<rect x="0" y="${bandHeight - 1}"[^>]*width="`));
   });
 
-  it('draws the separator hide band with thead fill and the thead bottom rule', () => {
-    const separatorSvg = sliceSvg(layout, 1);
-    const { headerBackground, background } = layout.metrics.colors;
-    expect(separatorSvg).toContain(`fill="${headerBackground}"`);
-    expect(separatorSvg).not.toContain(`fill="${background}"`);
-    expect(separatorSvg).toMatch(/<rect[^>]*fill="[^"]+"/);
-    expect(separatorSvg).toMatch(/<rect x="0" y="17"[^>]*width="/);
+  it('renders no SVG on the separator source line', () => {
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
   });
 });
 

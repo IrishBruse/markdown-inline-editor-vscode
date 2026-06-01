@@ -481,7 +481,7 @@ export function sourceLineToSliceSpec(
       subLineCount: 1,
       sliceHeight: Math.max(theadMinHeight, headerRowHeight),
       mergedHeader: true,
-      bandBorders: { top: true, bottom: false },
+      bandBorders: { top: true, bottom: true },
     };
   }
 
@@ -812,26 +812,6 @@ function renderSvgFromParts(parts: string[], width: number, height: number): str
 }
 
 /**
- * Separator source line: opaque thead fill hides `|---|---|`; thead bottom rule drawn here.
- * Header labels live on the title-line overlay (taller band above).
- */
-function renderSeparatorHideBand(layout: TableLayout, bandHeight: number): string {
-  const w = layout.totalWidth;
-  const edges = { top: false, bottom: true };
-  const { headerBackground } = layout.metrics.colors;
-  const { x, y, width, height } = bandInnerFrame(bandHeight, w, edges);
-  const parts: string[] = [];
-  parts.push(
-    `<defs><clipPath id="band"><rect width="${w}" height="${bandHeight}"/></clipPath></defs>`,
-  );
-  parts.push(`<g clip-path="url(#band)">`);
-  parts.push(`<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${headerBackground}"/>`);
-  appendBandBorderLines(parts, layout, bandHeight, edges);
-  parts.push('</g>');
-  return renderSvgFromParts(parts, w, bandHeight);
-}
-
-/**
  * Render one source-line band of the table (for per-line editor overlays).
  */
 export function renderTableSvgLineSlice(
@@ -843,9 +823,10 @@ export function renderTableSvgLineSlice(
     return null;
   }
 
+  // Separator source line: hide GFM dashes via transparent text only. A second SVG band here
+  // stacks on top of the tall title-line overlay and clips centered header labels.
   if (slice.hideSeparatorRow === true) {
-    const bandHeight = computeBandHeightForSlice(layout, slice);
-    return renderSeparatorHideBand(layout, bandHeight);
+    return null;
   }
 
   const prepared = prepareRowBand(layout, slice.rowLayoutIndex, slice);

@@ -62,11 +62,11 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(apply).toHaveBeenCalled();
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
     const totalDecorations = [...decorationsByKey.values()].reduce((sum, entries) => sum + entries.length, 0);
-    const expectedLines = tableBlocks.reduce(
-      (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
+    const expectedDecorations = tableBlocks.reduce(
+      (sum, block) => sum + Math.max(0, block.numLines * 2 - 1),
       0,
     );
-    expect(totalDecorations).toBe(expectedLines * 2);
+    expect(totalDecorations).toBe(expectedDecorations);
   });
 
   it('keeps early table overlays when the document has many unique tables', async () => {
@@ -119,7 +119,11 @@ describe('CustomTableUpdateCoordinator', () => {
       (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
       0,
     );
-    const expectedYields = Math.max(0, Math.ceil(expectedSliceKeys / 10) - 1);
+    const expectedSvgJobs = tableBlocks.reduce(
+      (sum, block) => sum + Math.max(0, countTableOverlaySourceLines(block.numLines) - 1),
+      0,
+    );
+    const expectedYields = Math.max(0, Math.ceil(expectedSvgJobs / 10) - 1);
     expect(yieldToEventLoop).toHaveBeenCalledTimes(expectedYields);
     expect(apply).toHaveBeenCalledTimes(1);
     const decorationsByKey = apply.mock.calls[0]![1] as Map<string, unknown[]>;
@@ -224,7 +228,7 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(overlay?.range.start).toEqual(overlay?.range.end);
   });
 
-  it('renders an overlay on the separator source line to cover GFM dashes', async () => {
+  it('hides separator source text without an SVG overlay', async () => {
     const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
     const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
@@ -236,10 +240,12 @@ describe('CustomTableUpdateCoordinator', () => {
     await coordinator.updateAsync(editor, tableBlocks, md, document.version);
 
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>;
-    const separatorOptions = [...decorationsByKey.values()].flat().find(
+    const allOptions = [...decorationsByKey.values()].flat();
+    const separatorHide = allOptions.find((opt) => opt.range.start.line === 1);
+    const separatorIcon = allOptions.find(
       (opt) => opt.range.start.line === 1 && opt.renderOptions?.before?.contentIconPath,
     );
-    expect(separatorOptions).toBeDefined();
-    expect(separatorOptions!.renderOptions?.before?.contentIconPath).toBeDefined();
+    expect(separatorHide).toBeDefined();
+    expect(separatorIcon).toBeUndefined();
   });
 });

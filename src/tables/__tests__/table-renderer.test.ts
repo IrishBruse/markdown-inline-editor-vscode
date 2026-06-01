@@ -59,7 +59,7 @@ describe('sourceLineToSliceSpec', () => {
       subLineCount: 1,
       sliceHeight: Math.max(theadMinHeight, layout.rowHeights[0]),
       mergedHeader: true,
-      bandBorders: { top: true, bottom: false },
+      bandBorders: { top: true, bottom: true },
     });
     expect(sourceLineToSliceSpec(1, layout)).toEqual({
       rowLayoutIndex: 0,
@@ -79,13 +79,12 @@ describe('sourceLineToSliceSpec', () => {
 });
 
 describe('multiline header band', () => {
-  it('renders title and separator hide overlays for the thead', () => {
+  it('renders the thead on the title line only (separator line has no SVG)', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
-    const separatorSvg = renderTableSvgLineSlice(layout, 1)!;
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
-    expect(separatorSvg).not.toContain('<text');
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
     const titleHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
     expect(titleHeight).toBeGreaterThanOrEqual(HEADER_SOURCE_LINES * metrics.lineHeight);
   });
@@ -114,11 +113,9 @@ describe('multiline header band', () => {
     expect(strokeRects.length).toBe(0);
   });
 
-  it('fills the separator hide band with header background to hide GFM dashes', () => {
+  it('does not render an SVG band on the separator source line', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
-    const separatorSvg = renderTableSvgLineSlice(layout, 1)!;
-    expect(separatorSvg).toContain('fill="#f3f3f3"');
-    expect(separatorSvg).not.toContain('fill="#ffffff"');
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
   });
 
   it('uses header background for the merged title overlay', () => {
@@ -128,14 +125,12 @@ describe('multiline header band', () => {
     expect(headerSvg).not.toMatch(/fill="#ffffff"/);
   });
 
-  it('draws thead bottom border on the separator hide band only', () => {
+  it('draws thead bottom border on the title band', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
-    const separatorSvg = renderTableSvgLineSlice(layout, 1)!;
     const titleHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
-    expect(headerSvg).not.toMatch(/<rect x="0" y="35"/);
-    const sepHeight = Number(separatorSvg.match(/height="(\d+)px"/)![1]);
-    expect(separatorSvg).toMatch(/<rect x="0" y="17"[^>]*width="/);
+    expect(headerSvg).toMatch(new RegExp(`<rect x="0" y="${titleHeight - 1}"[^>]*width="`));
+    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
   });
 
   it('vertically centers multiline wrapped header text', () => {
@@ -171,6 +166,10 @@ describe('renderTableSvgLineSlice', () => {
         expect(svg).toBeNull();
         continue;
       }
+      if (slice.hideSeparatorRow === true) {
+        expect(svg).toBeNull();
+        continue;
+      }
       const bandHeight = resolveOverlayBandHeight(layout, slice);
       expect(svg).toContain('<svg');
       const heightMatch = svg!.match(/height="(\d+)px"/);
@@ -180,7 +179,10 @@ describe('renderTableSvgLineSlice', () => {
     }
     const expectedTotal = Array.from({ length: basicBlock().numLines }, (_, line) => {
       const slice = sourceLineToSliceSpec(line, layout);
-      return slice ? resolveOverlayBandHeight(layout, slice) : 0;
+      if (!slice || slice.hideSeparatorRow === true) {
+        return 0;
+      }
+      return resolveOverlayBandHeight(layout, slice);
     }).reduce((sum, h) => sum + h, 0);
     expect(totalSliceHeight).toBe(expectedTotal);
   });
