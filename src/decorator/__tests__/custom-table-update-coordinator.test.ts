@@ -63,7 +63,7 @@ describe('CustomTableUpdateCoordinator', () => {
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
     const totalDecorations = [...decorationsByKey.values()].reduce((sum, entries) => sum + entries.length, 0);
     const expectedDecorations = tableBlocks.reduce(
-      (sum, block) => sum + block.numLines * 2 - 2,
+      (sum, block) => sum + block.numLines * 2,
       0,
     );
     expect(totalDecorations).toBe(expectedDecorations);
@@ -120,7 +120,7 @@ describe('CustomTableUpdateCoordinator', () => {
       0,
     );
     const expectedSvgJobs = tableBlocks.reduce(
-      (sum, block) => sum + Math.max(0, countTableOverlaySourceLines(block.numLines) - 2),
+      (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
       0,
     );
     const expectedYields = Math.max(0, Math.ceil(expectedSvgJobs / 10) - 1);
@@ -188,7 +188,7 @@ describe('CustomTableUpdateCoordinator', () => {
 
     const dataOverlay = [...(apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>).values()]
       .flat()
-      .find((opt) => opt.range.start.line === 0 && opt.renderOptions?.before?.contentIconPath);
+      .find((opt) => opt.range.start.line === 2 && opt.renderOptions?.before?.contentIconPath);
     expect(dataOverlay?.renderOptions?.before?.textDecoration).toContain('overflow: visible');
     expect(dataOverlay?.renderOptions?.before?.textDecoration).toContain('max-height: none');
   });
@@ -213,13 +213,13 @@ describe('CustomTableUpdateCoordinator', () => {
       fontSize,
       capToSourceLines: false,
     });
-    const dataSlice = sourceLineToSliceSpec(0, layout)!;
+    const dataSlice = sourceLineToSliceSpec(2, layout)!;
     const expectedBandHeight = resolveOverlayBandHeight(layout, dataSlice);
     expect(expectedBandHeight).toBeGreaterThan(lineHeight);
 
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>;
     const dataRowOptions = [...decorationsByKey.values()].flat().find(
-      (opt) => opt.range.start.line === 0 && opt.renderOptions?.before?.contentIconPath,
+      (opt) => opt.range.start.line === 2 && opt.renderOptions?.before?.contentIconPath,
     );
     expect(dataRowOptions).toBeDefined();
     expect(dataRowOptions!.renderOptions?.before?.height).toBe(`${expectedBandHeight}px`);
@@ -248,7 +248,7 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(overlay?.range.start).toEqual(overlay?.range.end);
   });
 
-  it('hides separator source text and renders the first body row on that line for a short thead', async () => {
+  it('hides separator source text and renders a header bridge for a short thead', async () => {
     const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
     const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
@@ -265,15 +265,15 @@ describe('CustomTableUpdateCoordinator', () => {
     const separatorIcon = allOptions.find(
       (opt) => opt.range.start.line === 1 && opt.renderOptions?.before?.contentIconPath,
     );
-    const trailingRawRowIcon = allOptions.find(
+    const dataRowIcon = allOptions.find(
       (opt) => opt.range.start.line === 2 && opt.renderOptions?.before?.contentIconPath,
     );
     expect(separatorHide).toBeDefined();
-    expect(separatorIcon).toBeUndefined();
-    expect(trailingRawRowIcon).toBeUndefined();
+    expect(separatorIcon).toBeDefined();
+    expect(dataRowIcon).toBeDefined();
   });
 
-  it('does not render a separator overlay when the merged header is taller than two lines', async () => {
+  it('renders a separator bridge overlay when the merged header is taller than two lines', async () => {
     const longHeader = [
       'Detailed Placeholder Content with many additional words to force the header cell to wrap',
       'across at least six or seven lines in the overlay so row height exceeds max band cap',
@@ -293,7 +293,7 @@ describe('CustomTableUpdateCoordinator', () => {
     const separatorOptions = [...(apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>).values()]
       .flat()
       .filter((opt) => opt.range.start.line === 1);
-    expect(separatorOptions.some((opt) => opt.renderOptions?.before?.contentIconPath)).toBe(false);
+    expect(separatorOptions.some((opt) => opt.renderOptions?.before?.contentIconPath)).toBe(true);
     expect(separatorOptions.some((opt) => !opt.renderOptions?.before?.contentIconPath)).toBe(true);
   });
 

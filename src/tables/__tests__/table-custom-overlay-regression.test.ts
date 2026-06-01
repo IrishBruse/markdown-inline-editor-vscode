@@ -110,8 +110,7 @@ describe('custom overlay regression: header', () => {
 
   it('maps title and separator source lines to header slices', () => {
     expect(sourceLineToSliceSpec(0, layout)?.mergedHeader).toBe(true);
-    expect(sourceLineToSliceSpec(0, layout)?.includeFirstBodyRow).toBe(true);
-    expect(sourceLineToSliceSpec(1, layout)?.hideSourceOnly).toBe(true);
+    expect(sourceLineToSliceSpec(1, layout)?.headerBridge).toBe(true);
     expect(sourceLineToSliceSpec(2, layout)?.mergedHeader).toBeUndefined();
   });
 
@@ -119,16 +118,17 @@ describe('custom overlay regression: header', () => {
     const headerSvg = sliceSvg(layout, 0);
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
-    expect(headerSvg).toContain('Ada');
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    expect(headerSvg).not.toContain('Ada');
+    expect(renderTableSvgLineSlice(layout, 1)).not.toBeNull();
   });
 
-  it('uses a title overlay that also covers the separator with the first body row', () => {
+  it('uses a title overlay plus separator bridge for a short thead', () => {
     const headerSvg = sliceSvg(layout, 0);
+    const bridgeSvg = sliceSvg(layout, 1);
     const titleSlice = sourceLineToSliceSpec(0, layout)!;
     expect(parseBandHeight(headerSvg)).toBe(resolveOverlayBandHeight(layout, titleSlice));
-    expect(headerSvg).toContain('Ada');
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    expect(bridgeSvg).toContain(layout.metrics.colors.headerBackground);
+    expect(bridgeSvg).not.toContain('Ada');
   });
 
   it('top-aligns single-line header labels in the title band', () => {
@@ -159,15 +159,15 @@ describe('custom overlay regression: header', () => {
     const headerSvg = sliceSvg(wrappedLayout, 0);
     const bandHeight = resolveOverlayBandHeight(wrappedLayout, sourceLineToSliceSpec(0, wrappedLayout)!);
     const firstBaseline = labelBaselineY(headerSvg, 'Detailed');
-    expect(firstBaseline).toBeLessThan(bandHeight * 0.35);
+    expect(firstBaseline).toBeLessThan(bandHeight * 0.85);
     expect((headerSvg.match(/<tspan/g) ?? []).length).toBeGreaterThan(1);
   });
 
-  it('paints the header band with header background and first body row with body background', () => {
+  it('paints the header band with header background only', () => {
     const headerSvg = sliceSvg(layout, 0);
     const { headerBackground, background } = layout.metrics.colors;
     expect(headerSvg).toContain(`fill="${headerBackground}"`);
-    expect(headerSvg).toContain(`fill="${background}"`);
+    expect(headerSvg).not.toContain(`fill="${background}"`);
     for (const rect of cellFillRects(headerSvg)) {
       if (rect.fill === headerBackground) {
         expect(rect.hasStroke).toBe(false);
@@ -175,18 +175,20 @@ describe('custom overlay regression: header', () => {
     }
   });
 
-  it('draws the table top and thead bottom on the title band', () => {
+  it('draws the table top on the title band and thead bottom on the separator bridge', () => {
     const headerSvg = sliceSvg(layout, 0);
-    const headerHeight = parseBandHeight(headerSvg);
+    const bridgeSvg = sliceSvg(layout, 1);
+    const bridgeHeight = parseBandHeight(bridgeSvg);
     expect(headerSvg).toMatch(/<rect x="0" y="0"[^>]*width="\d+"/);
-    expect(headerSvg).toMatch(new RegExp(`<rect x="0" y="${headerHeight - 1}"[^>]*width="`));
+    expect(headerSvg).not.toMatch(new RegExp(`<rect x="0" y="${parseBandHeight(headerSvg) - 1}"[^>]*width="`));
+    expect(bridgeSvg).toMatch(new RegExp(`<rect x="0" y="${bridgeHeight - 1}"[^>]*width="`));
   });
 
-  it('renders the first body row inside the title overlay for every short thead table', () => {
-    const headerSvg = sliceSvg(layout, 0);
-    expect(headerSvg).toContain('Ada');
-    expect(headerSvg).toContain(layout.metrics.colors.background);
-    expect(headerSvg).toContain(layout.metrics.colors.border);
+  it('renders the first body row on the first data source line for every short thead table', () => {
+    const dataSvg = sliceSvg(layout, 2);
+    expect(dataSvg).toContain('Ada');
+    expect(dataSvg).toContain(layout.metrics.colors.background);
+    expect(dataSvg).toContain(layout.metrics.colors.border);
   });
 });
 

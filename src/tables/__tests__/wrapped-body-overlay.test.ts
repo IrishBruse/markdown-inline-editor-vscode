@@ -58,14 +58,12 @@ describe('wrapped body cell overlays (05-tables long cell text)', () => {
     const layout = buildTableLayout(docsLongBodyBlock(), { ...metrics, capToSourceLines: false });
     const slice = sourceLineToSliceSpec(2, layout)!;
     const bandHeight = resolveOverlayBandHeight(layout, slice);
-    expect(bandHeight).toBeGreaterThan(maxBandHeightPx(layout.metrics));
+    expect(bandHeight).toBe(maxBandHeightPx(layout.metrics));
 
     const svg = renderTableSvgLineSlice(layout, 2)!;
     expect(svg.match(/height="(\d+)"/)?.[1]).toBe(String(bandHeight));
     expect(svg).toMatch(/&#x2026;|…/);
-    expect((svg.match(/<tspan/g) ?? []).length).toBeLessThanOrEqual(
-      MAX_BAND_LINES + layout.block.header.length,
-    );
+    expect((svg.match(/<tspan/g) ?? []).length).toBeLessThanOrEqual(MAX_BAND_LINES);
   });
 
   it('vertically centers the row label beside wrapped content', () => {
@@ -112,11 +110,11 @@ describe('wrapped body cell overlays (05-tables long cell text)', () => {
 
   it('matches the custom-long visual fixture derived from 05-tables.md', () => {
     const layout = parseLayout(readFileSync(docsLongCellFixture, 'utf8'));
-    const slice = sourceLineToSliceSpec(0, layout)!;
+    const slice = sourceLineToSliceSpec(2, layout)!;
     const bandHeight = resolveOverlayBandHeight(layout, slice);
     expect(bandHeight).toBeGreaterThan(metrics.lineHeight);
 
-    const svg = renderTableSvgLineSlice(layout, 0)!;
+    const svg = renderTableSvgLineSlice(layout, 2)!;
     const row1Y = svg.match(/<tspan x="[^"]*" y="([\d.]+)">Row 1<\/tspan>/)?.[1];
     expect(row1Y).toBeDefined();
     const baseline = Number(row1Y);

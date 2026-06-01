@@ -473,13 +473,6 @@ export function rowOverlayExceedsSourceLine(
   return resolveOverlayBandHeight(layout, slice) > lineHeight;
 }
 
-function headerContinuationInsetPx(layout: TableLayout): number {
-  const { lineHeight } = layout.metrics;
-  const theadMinHeight = HEADER_SOURCE_LINES * lineHeight;
-  const headerHeight = layout.rowHeights[0] ?? theadMinHeight;
-  return Math.max(0, headerHeight - theadMinHeight);
-}
-
 export function bodyBandHeaderInsetPx(layout: TableLayout, rowLayoutIndex: number): number {
   void layout;
   void rowLayoutIndex;
@@ -526,8 +519,8 @@ export function sourceLineToSliceSpec(
   const sliceHeight = layout.rowHeights[rowLayoutIndex] ?? lineHeight;
   // When the previous row's band overflows, its bottom rule sits below this source line.
   // Draw a top rule here only in that case; otherwise the previous row's bottom rule suffices.
-  const needsTopBorder = (rowLayoutIndex === 1 && headerContinuationInsetPx(layout) > 0)
-    || (rowLayoutIndex > 1 && rowOverlayExceedsSourceLine(layout, rowLayoutIndex - 1));
+  const needsTopBorder = rowLayoutIndex > 1
+    && rowOverlayExceedsSourceLine(layout, rowLayoutIndex - 1);
   return {
     rowLayoutIndex,
     subLine: 0,
