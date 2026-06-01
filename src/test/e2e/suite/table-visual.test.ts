@@ -11,11 +11,84 @@ const VISUAL_E2E_ENABLED = process.env.MD_INLINE_VISUAL_E2E === '1'
 const UPDATE_BASELINES = process.env.UPDATE_VISUAL_BASELINES === '1';
 const REMOTE_DEBUGGING_PORT = Number(process.env.VSCODE_REMOTE_DEBUGGING_PORT ?? '9333');
 const REPO_ROOT = path.resolve(__dirname, '../../../..');
+const FIXTURE_DIR = path.join(REPO_ROOT, 'src/test/e2e/fixtures/tables-visual');
 const BASELINE_DIR = path.join(REPO_ROOT, 'src/test/e2e/visual-baselines');
 const OUTPUT_DIR = path.join(REPO_ROOT, 'dist/visual-regression');
-const BASELINE_PATH = path.join(BASELINE_DIR, 'table-custom-linux.png');
-const ACTUAL_PATH = path.join(OUTPUT_DIR, 'table-custom-linux.actual.png');
-const DIFF_PATH = path.join(OUTPUT_DIR, 'table-custom-linux.diff.png');
+const RENDER_SETTLE_MS = 1800;
+
+type TableRenderingMode = 'inline' | 'custom';
+
+type TableVisualScenario = {
+  /** Baseline file slug: `{id}-linux.png` */
+  id: string;
+  renderingMode: TableRenderingMode;
+  /** Markdown file under `fixtures/tables-visual/`. */
+  fixture: string;
+  /** First visible table line in the clip. */
+  headerNeedle: string;
+  /** Last table body line included in the clip. */
+  lastRowNeedle: string;
+  cursor: { line: number; character: number };
+};
+
+const SCENARIOS: TableVisualScenario[] = [
+  {
+    id: 'custom-long-rendered',
+    renderingMode: 'custom',
+    fixture: 'custom-long.md',
+    headerNeedle: 'Section Header',
+    lastRowNeedle: 'Row 3',
+    cursor: { line: 0, character: 0 },
+  },
+  {
+    id: 'custom-long-raw',
+    renderingMode: 'custom',
+    fixture: 'custom-long.md',
+    headerNeedle: 'Section Header',
+    lastRowNeedle: 'Row 3',
+    cursor: { line: 6, character: 4 },
+  },
+  {
+    id: 'inline-basic-rendered',
+    renderingMode: 'inline',
+    fixture: 'inline-basic.md',
+    headerNeedle: '| Name | Role |',
+    lastRowNeedle: '| Bob  | Dev  |',
+    cursor: { line: 0, character: 0 },
+  },
+  {
+    id: 'inline-basic-raw',
+    renderingMode: 'inline',
+    fixture: 'inline-basic.md',
+    headerNeedle: '| Name | Role |',
+    lastRowNeedle: '| Bob  | Dev  |',
+    cursor: { line: 3, character: 3 },
+  },
+  {
+    id: 'custom-alignment-rendered',
+    renderingMode: 'custom',
+    fixture: 'custom-alignment.md',
+    headerNeedle: '|:-----|:------:|------:|',
+    lastRowNeedle: '| long |  mid   |   1.0 |',
+    cursor: { line: 0, character: 0 },
+  },
+  {
+    id: 'custom-cjk-rendered',
+    renderingMode: 'custom',
+    fixture: 'custom-cjk.md',
+    headerNeedle: '| Name | CJK  | Emoji |',
+    lastRowNeedle: '| CD   | 世界 | 🚀    |',
+    cursor: { line: 0, character: 0 },
+  },
+  {
+    id: 'inline-formatting-rendered',
+    renderingMode: 'inline',
+    fixture: 'inline-formatting.md',
+    headerNeedle: '| Plain | **Bold** | *Italic* | `code` |',
+    lastRowNeedle: '| ok    | loud     | soft     | mono   |',
+    cursor: { line: 0, character: 0 },
+  },
+];
 
 type CdpResponse<T> = {
   id: number;
@@ -49,49 +122,63 @@ suite('Table visual e2e', function () {
     await configureStableEditor();
   });
 
-  test('custom table rendering matches the approved PNG baseline', async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      language: 'markdown',
-      content: [
-        '# Visual table fixture',
-        '',
-        '| Section Header | Detailed Placeholder Content |',
-        '| -------------- | ---------------------------- |',
-        '| Row 1 | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. |',
-        '| Row 2 | Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. |',
-        '| Row 3 | abcdefghijklmnopqrstuvwxyz0123456789 |',
-        '',
-      ].join('\n'),
+  for (const scenario of SCENARIOS) {
+    test(`${scenario.id} matches the approved PNG baseline`, async () => {
+      const fixturePath = path.join(FIXTURE_DIR, scenario.fixture);
+      assert.ok(fs.existsSync(fixturePath), `Missing fixture: ${fixturePath}`);
+
+      await vscode.workspace.getConfiguration('markdownInlineEditor.tables').update(
+        'renderingMode',
+        scenario.renderingMode,
+        vscode.ConfigurationTarget.Global,
+      );
+
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.file(fixturePath));
+      const editor = await vscode.window.showTextDocument(document, {
+        preview: false,
+        viewColumn: vscode.ViewColumn.One,
+      });
+
+      const cursorPosition = new vscode.Position(scenario.cursor.line, scenario.cursor.character);
+      editor.selection = new vscode.Selection(cursorPosition, cursorPosition);
+      editor.revealRange(
+        new vscode.Range(0, 0, document.lineCount, 0),
+        vscode.TextEditorRevealType.AtTop,
+      );
+      await delay(RENDER_SETTLE_MS);
+
+      const baselinePath = path.join(BASELINE_DIR, `${scenario.id}-linux.png`);
+      const actualPath = path.join(OUTPUT_DIR, `${scenario.id}-linux.actual.png`);
+      const diffPath = path.join(OUTPUT_DIR, `${scenario.id}-linux.diff.png`);
+
+      const actualPng = await captureTablePng(scenario.headerNeedle, scenario.lastRowNeedle);
+      fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+      fs.writeFileSync(actualPath, actualPng);
+
+      if (UPDATE_BASELINES) {
+        fs.mkdirSync(BASELINE_DIR, { recursive: true });
+        fs.writeFileSync(baselinePath, actualPng);
+        return;
+      }
+
+      assert.ok(
+        fs.existsSync(baselinePath),
+        `Missing visual baseline: ${baselinePath}. Run npm run test:e2e:visual:update to create it.`,
+      );
+
+      const diffRatio = comparePngs(
+        fs.readFileSync(baselinePath),
+        actualPng,
+        diffPath,
+      );
+      const maxDiffRatio = process.env.CI === 'true' ? 0.01 : 0.02;
+      assert.ok(
+        diffRatio <= maxDiffRatio,
+        `${scenario.id} PNG visual diff ${formatPercent(diffRatio)} exceeded ${formatPercent(maxDiffRatio)}. `
+        + `Actual: ${actualPath}. Diff: ${diffPath}.`,
+      );
     });
-
-    const editor = await vscode.window.showTextDocument(doc, { preview: false });
-    editor.selection = new vscode.Selection(new vscode.Position(0, 0), new vscode.Position(0, 0));
-    editor.revealRange(new vscode.Range(0, 0, 6, 0), vscode.TextEditorRevealType.AtTop);
-    await delay(1800);
-
-    const actualPng = await captureTablePng();
-    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-    fs.writeFileSync(ACTUAL_PATH, actualPng);
-
-    if (UPDATE_BASELINES) {
-      fs.mkdirSync(BASELINE_DIR, { recursive: true });
-      fs.writeFileSync(BASELINE_PATH, actualPng);
-      return;
-    }
-
-    assert.ok(
-      fs.existsSync(BASELINE_PATH),
-      `Missing visual baseline: ${BASELINE_PATH}. Run npm run test:e2e:visual:update to create it.`,
-    );
-
-    const diffRatio = comparePngs(fs.readFileSync(BASELINE_PATH), actualPng);
-    const maxDiffRatio = process.env.CI === 'true' ? 0.01 : 0.02;
-    assert.ok(
-      diffRatio <= maxDiffRatio,
-      `Table PNG visual diff ${formatPercent(diffRatio)} exceeded ${formatPercent(maxDiffRatio)}. `
-      + `Actual: ${ACTUAL_PATH}. Diff: ${DIFF_PATH}.`,
-    );
-  });
+  }
 });
 
 async function configureStableEditor(): Promise<void> {
@@ -105,20 +192,19 @@ async function configureStableEditor(): Promise<void> {
   await vscode.workspace.getConfiguration('editor').update('folding', false, vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('editor').update('minimap.enabled', false, vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('editor').update('cursorBlinking', 'solid', vscode.ConfigurationTarget.Global);
-  await vscode.workspace.getConfiguration('markdownInlineEditor.tables').update('renderingMode', 'custom', vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableBackground', '#111111', vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableHeaderBackground', '#222222', vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableBorder', '#666666', vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration('markdownInlineEditor.colors').update('tableText', '#eeeeee', vscode.ConfigurationTarget.Global);
 }
 
-async function captureTablePng(): Promise<Buffer> {
+async function captureTablePng(headerNeedle: string, lastRowNeedle: string): Promise<Buffer> {
   const target = await findWorkbenchTarget();
   assert.ok(target.webSocketDebuggerUrl, 'VS Code remote debugging target did not expose a WebSocket URL');
 
   const client = await CdpClient.connect(target.webSocketDebuggerUrl);
   try {
-    const clip = await waitForTableClip(client);
+    const clip = await waitForTableClip(client, headerNeedle, lastRowNeedle);
     const capture = await client.send<{ data: string }>('Page.captureScreenshot', {
       format: 'png',
       fromSurface: true,
@@ -153,12 +239,18 @@ async function findWorkbenchTarget(): Promise<CdpPageTarget> {
   throw new Error(`Could not find VS Code CDP target on port ${REMOTE_DEBUGGING_PORT}`);
 }
 
-async function waitForTableClip(client: CdpClient): Promise<CdpClip> {
+async function waitForTableClip(
+  client: CdpClient,
+  headerNeedle: string,
+  lastRowNeedle: string,
+): Promise<CdpClip> {
   const expression = `(() => {
+    const headerNeedle = ${JSON.stringify(headerNeedle)};
+    const lastRowNeedle = ${JSON.stringify(lastRowNeedle)};
     const editor = document.querySelector('.monaco-editor');
     const lines = Array.from(document.querySelectorAll('.monaco-editor .view-line'));
-    const headerLine = lines.find((line) => (line.textContent || '').includes('Section Header'));
-    const lastLine = lines.find((line) => (line.textContent || '').includes('Row 3'));
+    const headerLine = lines.find((line) => (line.textContent || '').includes(headerNeedle));
+    const lastLine = lines.find((line) => (line.textContent || '').includes(lastRowNeedle));
     if (!editor || !headerLine || !lastLine) {
       if (!editor) {
         return null;
@@ -193,10 +285,10 @@ async function waitForTableClip(client: CdpClient): Promise<CdpClip> {
     await delay(250);
   }
 
-  throw new Error('Could not locate rendered table lines in VS Code DOM');
+  throw new Error(`Could not locate rendered table lines for ${headerNeedle} / ${lastRowNeedle}`);
 }
 
-function comparePngs(expectedBytes: Buffer, actualBytes: Buffer): number {
+function comparePngs(expectedBytes: Buffer, actualBytes: Buffer, diffPath: string): number {
   const expected = PNG.sync.read(expectedBytes);
   const actual = PNG.sync.read(actualBytes);
   assert.strictEqual(actual.width, expected.width, 'Actual PNG width must match the baseline');
@@ -211,7 +303,7 @@ function comparePngs(expectedBytes: Buffer, actualBytes: Buffer): number {
     expected.height,
     { threshold: 0.1, includeAA: false },
   );
-  fs.writeFileSync(DIFF_PATH, PNG.sync.write(diff));
+  fs.writeFileSync(diffPath, PNG.sync.write(diff));
   return mismatchedPixels / (expected.width * expected.height);
 }
 

@@ -73,7 +73,7 @@ npm run test:e2e:visual  # PNG visual regression for custom table rendering
 - Place tests beside modules: `src/<module>/__tests__/<module>.test.ts`
 - Mock the VS Code API following existing patterns
 - For UI-visible behavior, update or add a fixture under `docs/tests/`
-- For custom table rendering changes, run `xvfb-run -a npm run test:e2e:visual` to verify the VS Code PNG baseline does not regress. If the visual change is intentional, update the approved baseline with `xvfb-run -a npm run test:e2e:visual:update`.
+- For custom table rendering changes, run `xvfb-run -a npm run test:e2e:visual` to verify the VS Code PNG baseline does not regress. Fixtures live under `src/test/e2e/fixtures/tables-visual/`; if the visual change is intentional, update baselines with `xvfb-run -a npm run test:e2e:visual:update`.
 
 ## Commit messages
 
