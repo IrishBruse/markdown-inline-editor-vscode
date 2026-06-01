@@ -248,7 +248,7 @@ describe('table SVG scene snapshots', () => {
       rect x=- y=- w=523 h=79 fill=- stroke=-
       rect x=1 y=0 w=521 h=78 fill=#111111 stroke=-
       rect x=1 y=0 w=120 h=78 fill=#111111 stroke=-
-      text x=6 y=14.05 dy=- fill=#eeeeee size=13 Row 1
+      text x=6 y=44.05 dy=- fill=#eeeeee size=13 Row 1
       rect x=122 y=0 w=400 h=78 fill=#111111 stroke=-
       text x=127 y=14.05 dy=- fill=#eeeeee size=13 Lorem ipsum dolor sit amet, consectetur adipiscing
       text x=127 y=- dy=16.56 fill=#eeeeee size=13 elit, sed do eiusmod tempor incididunt ut labore

@@ -194,7 +194,7 @@ describe('renderTableSvgLineSlice', () => {
     expect(totalSliceHeight).toBe(expectedTotal);
   });
 
-  it('top-aligns body cell text beside a taller wrapped cell', () => {
+  it('vertically centers a short body cell beside a taller wrapped cell', () => {
     const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
     const block: TableBlock = {
       startPos: 0,
@@ -210,7 +210,35 @@ describe('renderTableSvgLineSlice', () => {
     const bandHeight = resolveOverlayBandHeight(layout, slice);
     const yMatch = svg.match(/<tspan x="[^"]*" y="([\d.]+)">x<\/tspan>/);
     expect(yMatch).not.toBeNull();
-    expect(Number(yMatch![1])).toBeLessThan(bandHeight * 0.45);
+    const baseline = Number(yMatch![1]);
+    const { fontSize } = layout.metrics;
+    expect(baseline).toBeGreaterThan(bandHeight * 0.28);
+    expect(baseline).toBeLessThan(bandHeight * 0.65 + fontSize);
+  });
+
+  it('vertically centers a row label beside a taller wrapped cell', () => {
+    const longText = [
+      'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore',
+      'et dolore magna aliqua.',
+    ].join(' ');
+    const block: TableBlock = {
+      startPos: 0,
+      endPos: 120,
+      numLines: 3,
+      header: ['Label', 'Content'],
+      rows: [['Row 1', longText]],
+      align: [null, null],
+    };
+    const layout = buildTableLayout(block, { isDark: false, ...metrics });
+    const slice = sourceLineToSliceSpec(2, layout)!;
+    const svg = renderTableSvgLineSlice(layout, 2)!;
+    const bandHeight = resolveOverlayBandHeight(layout, slice);
+    const yMatch = svg.match(/<tspan x="[^"]*" y="([\d.]+)">Row 1<\/tspan>/);
+    expect(yMatch).not.toBeNull();
+    const baseline = Number(yMatch![1]);
+    const { fontSize } = layout.metrics;
+    expect(baseline).toBeGreaterThan(bandHeight * 0.28);
+    expect(baseline).toBeLessThan(bandHeight * 0.65 + fontSize);
   });
 
   it('insets cell fills below the bottom grid line on tall data bands', () => {

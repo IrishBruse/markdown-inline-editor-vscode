@@ -234,14 +234,15 @@ describe('custom overlay regression: body', () => {
     expect(heights.filter((h) => h === fillHeight).length).toBeGreaterThanOrEqual(2);
   });
 
-  it('top-aligns short body text beside a taller wrapped cell', () => {
+  it('vertically centers short body text beside a taller wrapped cell', () => {
     const layout = layoutFor(wrappedBodyTable());
     const slice = sourceLineToSliceSpec(2, layout)!;
     const svg = sliceSvg(layout, 2);
     const bandHeight = resolveOverlayBandHeight(layout, slice);
     const baseline = labelBaselineY(svg, 'x');
     expect(bandHeight).toBeGreaterThan(metrics.lineHeight);
-    expect(baseline).toBeLessThan(bandHeight * 0.45);
+    expect(baseline).toBeGreaterThan(bandHeight * 0.28);
+    expect(baseline).toBeLessThan(bandHeight * 0.65 + layout.metrics.fontSize);
   });
 
   it('uses fill-only cells on header and data overlays', () => {

@@ -538,6 +538,18 @@ function mergedHeaderLabelBaselineY(
   return firstLineBaselineY(0, centerHeight, fontSize, wrapLines, cellPadY, lineStep, true);
 }
 
+/** True when a cell has fewer visible lines than the band and should center in the row. */
+function shouldVerticallyCenterCellInBand(
+  lineCount: number,
+  bandWrapLines: number,
+  mergedHeader: boolean,
+): boolean {
+  if (mergedHeader) {
+    return false;
+  }
+  return lineCount < bandWrapLines;
+}
+
 /** SVG text y is the baseline; optionally center the text block vertically in the row. */
 function firstLineBaselineY(
   rowY: number,
@@ -750,7 +762,7 @@ function renderRowBand(
   const { colWidths, block, metrics } = layout;
   const { fontSize, charWidth, cellPadX, cellPadY, fontFamily, colors } = metrics;
   const { background: bg, headerBackground: headerBg, text: textColor } = colors;
-  const { cellLines, rowHeight, lineStep } = prepared;
+  const { cellLines, visibleWrapLines, rowHeight, lineStep } = prepared;
   const edges = slice.bandBorders ?? { top: false, bottom: true };
   const { y: fillY, height: fillHeight } = bandInnerFrame(rowHeight, layout.totalWidth, edges);
 
@@ -759,16 +771,17 @@ function renderRowBand(
     const colWidth = colWidths[colIdx];
     const align = colIdx < block.align.length ? block.align[colIdx] : null;
     const lines = cellLines[colIdx] ?? [''];
+    const lineCount = lines.length;
     const cellFirstY = slice.mergedHeader === true
-      ? mergedHeaderLabelBaselineY(rowHeight, fontSize, cellPadY, layout.metrics.lineHeight, lines.length, lineStep)
+      ? mergedHeaderLabelBaselineY(rowHeight, fontSize, cellPadY, layout.metrics.lineHeight, lineCount, lineStep)
       : firstLineBaselineY(
         0,
         rowHeight,
         fontSize,
-        lines.length,
+        lineCount,
         cellPadY,
         lineStep,
-        false,
+        shouldVerticallyCenterCellInBand(lineCount, visibleWrapLines, false),
       );
 
     const fill = rowLayout.isHeader ? headerBg : bg;
@@ -902,21 +915,24 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
     const rowLayout = layout.rowLayouts[rowIdx];
     const rowHeight = layout.rowHeights[rowIdx];
     const lineStep = wrappedLineStep(lineHeight, fontSize);
-    const firstLineY = firstLineBaselineY(
-      y,
-      rowHeight,
-      fontSize,
-      rowLayout.maxWrapLines,
-      cellPadY,
-      lineStep,
-      rowLayout.isHeader,
-    );
 
     let x = BORDER_WIDTH;
     for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
       const colWidth = layout.colWidths[colIdx];
       const align = colIdx < block.align.length ? block.align[colIdx] : null;
       const lines = rowLayout.wrappedCells[colIdx] ?? [''];
+      const lineCount = lines.length;
+      const verticalCenter = rowLayout.isHeader
+        || shouldVerticallyCenterCellInBand(lineCount, rowLayout.maxWrapLines, false);
+      const cellFirstY = firstLineBaselineY(
+        y,
+        rowHeight,
+        fontSize,
+        lineCount,
+        cellPadY,
+        lineStep,
+        verticalCenter,
+      );
 
       parts.push(
         `<rect x="${x}" y="${y}" width="${colWidth}" height="${rowHeight}" fill="${rowLayout.isHeader ? headerBg : bg}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
@@ -928,7 +944,7 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
         align,
         x,
         colWidth,
-        firstLineY,
+        cellFirstY,
         lineStep,
         textColor,
         fontFamily,

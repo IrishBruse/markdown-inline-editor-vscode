@@ -10,6 +10,7 @@
     "**/*.test.ts",
     "**/__mocks__/**",
     "examples/**",
+    "src/test/**",
     "node_modules/**",
     "dist/**"
   ]
