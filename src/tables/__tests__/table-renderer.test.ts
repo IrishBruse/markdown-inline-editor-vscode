@@ -64,7 +64,7 @@ describe('sourceLineToSliceSpec', () => {
       subLine: 0,
       subLineCount: 1,
       sliceHeight: metrics.lineHeight,
-      hideSourceOnly: true,
+      separatorColumnBridge: true,
     });
     expect(sourceLineToSliceSpec(2, layout)).toEqual({
       rowLayoutIndex: 1,
@@ -90,7 +90,7 @@ describe('multiline header band', () => {
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
     expect(headerSvg).not.toContain('Ada');
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    expect(renderTableSvgLineSlice(layout, 1)).toContain(layout.metrics.colors.border);
     const titleSlice = sourceLineToSliceSpec(0, layout)!;
     expect(Number(headerSvg.match(/height="(\d+)px"/)![1])).toBe(
       resolveOverlayBandHeight(layout, titleSlice),
@@ -169,6 +169,9 @@ describe('renderTableSvgLineSlice', () => {
       if (slice.hideSourceOnly === true) {
         expect(svg).toBeNull();
         continue;
+      }
+      if (slice.separatorColumnBridge === true) {
+        expect(svg).toContain(layout.metrics.colors.border);
       }
       const bandHeight = resolveOverlayBandHeight(layout, slice);
       expect(svg).toContain('<svg');

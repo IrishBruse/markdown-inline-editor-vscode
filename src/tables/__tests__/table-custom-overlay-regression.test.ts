@@ -110,7 +110,7 @@ describe('custom overlay regression: header', () => {
 
   it('maps title and separator source lines to header slices', () => {
     expect(sourceLineToSliceSpec(0, layout)?.mergedHeader).toBe(true);
-    expect(sourceLineToSliceSpec(1, layout)?.hideSourceOnly).toBe(true);
+    expect(sourceLineToSliceSpec(1, layout)?.separatorColumnBridge).toBe(true);
     expect(sourceLineToSliceSpec(2, layout)?.mergedHeader).toBeUndefined();
   });
 
@@ -119,13 +119,13 @@ describe('custom overlay regression: header', () => {
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
     expect(headerSvg).not.toContain('Ada');
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    expect(renderTableSvgLineSlice(layout, 1)).toContain(layout.metrics.colors.border);
   });
 
   it('uses a single title overlay spanning the thead plus a hidden separator line', () => {
     const headerSvg = sliceSvg(layout, 0);
     const titleSlice = sourceLineToSliceSpec(0, layout)!;
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    expect(renderTableSvgLineSlice(layout, 1)).toContain(layout.metrics.colors.border);
     expect(parseBandHeight(headerSvg)).toBe(resolveOverlayBandHeight(layout, titleSlice));
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toMatch(new RegExp(`<rect x="0" y="${parseBandHeight(headerSvg) - 1}"[^>]*width="`));
@@ -182,6 +182,13 @@ describe('custom overlay regression: header', () => {
     expect(headerSvg).toMatch(new RegExp(`<rect x="0" y="${titleHeight - 1}"[^>]*width="`));
   });
 
+  it('draws column rules on the separator source line between thead and body', () => {
+    const bridgeSvg = sliceSvg(layout, 1);
+    const junction = 1 + layout.colWidths[0];
+    expect(bridgeSvg).toContain(`<rect x="${junction}" y="0" width="1" height="${metrics.lineHeight}"`);
+    expect(bridgeSvg).not.toContain('Name');
+  });
+
   it('spans column rules across the full merged header overlay when the header wraps', () => {
     const wrappedLayout = layoutFor({
       startPos: 0,
@@ -196,7 +203,7 @@ describe('custom overlay regression: header', () => {
     const junction = 1 + wrappedLayout.colWidths[0];
     expect(titleBand).toBe(HEADER_SOURCE_LINES * wrappedLayout.metrics.lineHeight);
     expect(headerSvg).toContain(`<rect x="${junction}" y="0" width="1" height="${titleBand}"`);
-    expect(renderTableSvgLineSlice(wrappedLayout, 1)).toBeNull();
+    expect(renderTableSvgLineSlice(wrappedLayout, 1)).toContain(wrappedLayout.metrics.colors.border);
   });
 
   it('matches column divider height to the title overlay band for wrapped header cells', () => {
@@ -347,7 +354,7 @@ describe('custom overlay regression: body', () => {
 describe('custom overlay regression: overlay count', () => {
   it('counts one overlay per table source line', () => {
     const block = basicTable();
-    expect(countTableOverlaySourceLines(block.numLines)).toBe(block.numLines - 1);
+    expect(countTableOverlaySourceLines(block.numLines)).toBe(block.numLines);
   });
 
   it('parses a GFM table with overlays on the title and data source lines', () => {
@@ -359,6 +366,6 @@ describe('custom overlay regression: overlay count', () => {
       (line) => sourceLineToSliceSpec(line, layout) !== null
         && sourceLineToSliceSpec(line, layout)?.hideSourceOnly !== true,
     );
-    expect(overlayLines).toEqual([0, 2, 3]);
+    expect(overlayLines).toEqual([0, 1, 2, 3]);
   });
 });

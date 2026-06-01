@@ -42,16 +42,19 @@ describe('wrapped merged header overlays', () => {
     expect(headerBand).toBe(mergedHeaderBandBudgetPx(layout.metrics));
 
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
-    expect(headerSvg.match(/height="(\d+)"/)?.[1]).toBe(String(headerBand));
+    expect(headerSvg.match(/<svg[^>]*height="(\d+)px"/)?.[1]).toBe(String(headerBand));
     expect((headerSvg.match(/<tspan/g) ?? []).length).toBeGreaterThan(1);
     expect(headerSvg).toMatch(/&#x2026;|…/);
   });
 
-  it('hides the separator source line without a bridge overlay', () => {
+  it('renders column rules on the separator source line to bridge header and body', () => {
     const layout = buildTableLayout(tallWrappedHeaderBlock(), { ...metrics, capToSourceLines: false });
-    expect(renderHeaderSeparatorBridge(layout)).toBeNull();
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
-    expect(sourceLineToSliceSpec(1, layout)?.hideSourceOnly).toBe(true);
+    const bridgeSvg = renderHeaderSeparatorBridge(layout)!;
+    expect(bridgeSvg).toContain(layout.metrics.colors.border);
+    expect(bridgeSvg).not.toContain('Section Header');
+    expect(sourceLineToSliceSpec(1, layout)?.separatorColumnBridge).toBe(true);
+    const junction = 1 + layout.colWidths[0];
+    expect(bridgeSvg).toContain(`<rect x="${junction}" y="0" width="1" height="${metrics.lineHeight}"`);
   });
 
   it('puts the thead bottom rule on the merged title overlay', () => {
@@ -76,6 +79,6 @@ describe('wrapped merged header overlays', () => {
     const layout = buildTableLayout(tableBlocks[0], { ...metrics, capToSourceLines: false });
     expect(layout.rowHeights[0]).toBe(HEADER_SOURCE_LINES * metrics.lineHeight);
     expect(renderTableSvgLineSlice(layout, 0)).toContain(layout.metrics.colors.headerBackground);
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    expect(renderTableSvgLineSlice(layout, 1)).toContain(layout.metrics.colors.border);
   });
 });
