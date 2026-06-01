@@ -63,7 +63,7 @@ describe('CustomTableUpdateCoordinator', () => {
     const decorationsByKey = apply.mock.calls.at(-1)![1] as Map<string, unknown[]>;
     const totalDecorations = [...decorationsByKey.values()].reduce((sum, entries) => sum + entries.length, 0);
     const expectedDecorations = tableBlocks.reduce(
-      (sum, block) => sum + Math.max(0, block.numLines * 2 - 1),
+      (sum, block) => sum + block.numLines * 2,
       0,
     );
     expect(totalDecorations).toBe(expectedDecorations);
@@ -120,7 +120,7 @@ describe('CustomTableUpdateCoordinator', () => {
       0,
     );
     const expectedSvgJobs = tableBlocks.reduce(
-      (sum, block) => sum + Math.max(0, countTableOverlaySourceLines(block.numLines) - 1),
+      (sum, block) => sum + countTableOverlaySourceLines(block.numLines),
       0,
     );
     const expectedYields = Math.max(0, Math.ceil(expectedSvgJobs / 10) - 1);
@@ -248,7 +248,7 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(overlay?.range.start).toEqual(overlay?.range.end);
   });
 
-  it('hides separator source text without an SVG overlay', async () => {
+  it('hides separator source text and renders a bridge overlay for a short thead', async () => {
     const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
     const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
@@ -266,7 +266,32 @@ describe('CustomTableUpdateCoordinator', () => {
       (opt) => opt.range.start.line === 1 && opt.renderOptions?.before?.contentIconPath,
     );
     expect(separatorHide).toBeDefined();
-    expect(separatorIcon).toBeUndefined();
+    expect(separatorIcon).toBeDefined();
+    expect(separatorIcon?.renderOptions?.before?.height).toBe(`${getEditorLineMetrics().lineHeight}px`);
+  });
+
+  it('renders a separator bridge overlay when the merged header is taller than two lines', async () => {
+    const longHeader = [
+      'Detailed Placeholder Content with many additional words to force the header cell to wrap',
+      'across at least six or seven lines in the overlay so row height exceeds max band cap',
+      'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore',
+      'et dolore magna aliqua ut enim ad minim veniam quis nostrud exercitation ullamco laboris',
+    ].join(' ');
+    const md = `| Section Header | ${longHeader} |\n| --- | --- |\n| Row 1 | short |\n\nAfter.`;
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
+    const outside = document.positionAt(md.indexOf('After'));
+    const editor = new TextEditor(document, [new Selection(outside, outside)]);
+
+    const apply = vi.fn();
+    const coordinator = makeCoordinator(apply);
+    await coordinator.updateAsync(editor, tableBlocks, md, document.version);
+
+    const separatorIcon = [...(apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>).values()]
+      .flat()
+      .find((opt) => opt.range.start.line === 1 && opt.renderOptions?.before?.contentIconPath);
+    expect(separatorIcon).toBeDefined();
+    expect(separatorIcon?.renderOptions?.before?.height).toBe(`${getEditorLineMetrics().lineHeight}px`);
   });
 
   it('allows merged header overlays to overflow into the separator source line', async () => {

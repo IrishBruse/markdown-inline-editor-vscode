@@ -5,5 +5,5 @@ export const SCENARIO: TableVisualScenario = {
   mode: "rendered",
   cursor: { line: 0, character: 0 },
   captureWidth: 700,
-  captureHeight: 300
+  captureHeight: 400
 };

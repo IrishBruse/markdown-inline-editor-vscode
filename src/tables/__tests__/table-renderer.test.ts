@@ -57,9 +57,9 @@ describe('sourceLineToSliceSpec', () => {
       rowLayoutIndex: 0,
       subLine: 0,
       subLineCount: 1,
-      sliceHeight: Math.max(theadMinHeight, layout.rowHeights[0]),
+      sliceHeight: metrics.lineHeight,
       mergedHeader: true,
-      bandBorders: { top: true, bottom: true },
+      bandBorders: { top: true, bottom: false },
     });
     expect(sourceLineToSliceSpec(1, layout)).toEqual({
       rowLayoutIndex: 0,
@@ -86,17 +86,20 @@ describe('sourceLineToSliceSpec', () => {
 });
 
 describe('multiline header band', () => {
-  it('renders the thead on the title line only (separator line has no SVG)', () => {
+  it('renders the thead on the title line and a bridge on the separator line', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
+    const bridgeSvg = renderTableSvgLineSlice(layout, 1)!;
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
-    const titleHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
-    expect(titleHeight).toBeGreaterThanOrEqual(HEADER_SOURCE_LINES * metrics.lineHeight);
+    expect(bridgeSvg).toContain('#f3f3f3');
+    const titleSlice = sourceLineToSliceSpec(0, layout)!;
+    expect(Number(headerSvg.match(/height="(\d+)px"/)![1])).toBe(
+      resolveOverlayBandHeight(layout, titleSlice),
+    );
   });
 
-  it('vertically centers simple header labels in the two-line thead band', () => {
+  it('top-aligns simple header labels in the one-line title band', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const slice = sourceLineToSliceSpec(0, layout)!;
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
@@ -105,9 +108,7 @@ describe('multiline header band', () => {
     expect(yMatch).not.toBeNull();
     const baseline = Number(yMatch![1]);
     const { fontSize } = layout.metrics;
-    const topAlignedMax = bandHeight * 0.28;
-    expect(baseline).toBeGreaterThan(topAlignedMax);
-    expect(baseline).toBeLessThan(bandHeight * 0.65 + fontSize);
+    expect(baseline).toBeLessThan(bandHeight * 0.85);
   });
 
   it('draws rect borders on data row overlays (not stroked cell rects)', () => {
@@ -120,9 +121,11 @@ describe('multiline header band', () => {
     expect(strokeRects.length).toBe(0);
   });
 
-  it('does not render an SVG band on the separator source line', () => {
+  it('renders a separator bridge SVG on the separator source line', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    const bridgeSvg = renderTableSvgLineSlice(layout, 1)!;
+    expect(bridgeSvg).toContain('#f3f3f3');
+    expect(bridgeSvg).toMatch(/<rect x="0" y="\d+"[^>]*height="1"/);
   });
 
   it('uses header background for the merged title overlay', () => {
@@ -132,12 +135,13 @@ describe('multiline header band', () => {
     expect(headerSvg).not.toMatch(/fill="#ffffff"/);
   });
 
-  it('draws thead bottom border on the title band', () => {
+  it('draws thead bottom border on the separator bridge for a short thead', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     const titleHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
-    expect(headerSvg).toMatch(new RegExp(`<rect x="0" y="${titleHeight - 1}"[^>]*width="`));
-    expect(renderTableSvgLineSlice(layout, 1)).toBeNull();
+    expect(headerSvg).not.toMatch(new RegExp(`<rect x="0" y="${titleHeight - 1}"[^>]*width="`));
+    const bridgeSvg = renderTableSvgLineSlice(layout, 1)!;
+    expect(bridgeSvg).toMatch(new RegExp(`<rect x="0" y="${metrics.lineHeight - 1}"[^>]*width="`));
   });
 
   it('vertically centers multiline wrapped header text', () => {
@@ -173,11 +177,9 @@ describe('renderTableSvgLineSlice', () => {
         expect(svg).toBeNull();
         continue;
       }
-      if (slice.hideSeparatorRow === true) {
-        expect(svg).toBeNull();
-        continue;
-      }
-      const bandHeight = resolveOverlayBandHeight(layout, slice);
+      const bandHeight = slice.hideSeparatorRow === true
+        ? metrics.lineHeight
+        : resolveOverlayBandHeight(layout, slice);
       expect(svg).toContain('<svg');
       const heightMatch = svg!.match(/height="(\d+)px"/);
       expect(heightMatch).not.toBeNull();
@@ -186,8 +188,11 @@ describe('renderTableSvgLineSlice', () => {
     }
     const expectedTotal = Array.from({ length: basicBlock().numLines }, (_, line) => {
       const slice = sourceLineToSliceSpec(line, layout);
-      if (!slice || slice.hideSeparatorRow === true) {
+      if (!slice) {
         return 0;
+      }
+      if (slice.hideSeparatorRow === true) {
+        return metrics.lineHeight;
       }
       return resolveOverlayBandHeight(layout, slice);
     }).reduce((sum, h) => sum + h, 0);
@@ -241,7 +246,7 @@ describe('renderTableSvgLineSlice', () => {
     expect(baseline).toBeLessThan(bandHeight * 0.65 + fontSize);
   });
 
-  it('insets cell fills below the bottom grid line on tall data bands', () => {
+  it('insets the band fill below the bottom grid line on tall data bands', () => {
     const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
     const block: TableBlock = {
       startPos: 0,
@@ -258,9 +263,10 @@ describe('renderTableSvgLineSlice', () => {
     const bandHeight = Number(bandMatch![1]);
     expect(bandHeight).toBeGreaterThan(metrics.lineHeight);
     const fillHeight = bandHeight - 1;
-    const cellHeights = [...svg.matchAll(/<rect[^>]*height="(\d+)"/g)].map((m) => Number(m[1]));
-    const rowRects = cellHeights.filter((h) => h === fillHeight);
-    expect(rowRects.length).toBeGreaterThanOrEqual(2);
+    const bandFillHeights = [...svg.matchAll(/<rect[^>]*height="(\d+)"[^>]*fill="#/g)]
+      .map((m) => Number(m[1]))
+      .filter((h) => h > 1);
+    expect(bandFillHeights).toContain(fillHeight);
   });
 
   it('uses full wrapped height for a long cell on one source line', () => {

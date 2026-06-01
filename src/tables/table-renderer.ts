@@ -662,6 +662,7 @@ function bandInnerFrame(
 function appendBandBorderLines(
   parts: string[],
   layout: TableLayout,
+  bandTop: number,
   bandHeight: number,
   edges: { top: boolean; bottom: boolean },
 ): void {
@@ -670,22 +671,21 @@ function appendBandBorderLines(
   const tableWidth = layout.totalWidth;
 
   if (edges.top) {
-    appendBorderRect(parts, 0, 0, tableWidth, BORDER_WIDTH, border);
+    appendBorderRect(parts, 0, bandTop, tableWidth, BORDER_WIDTH, border);
   }
   if (edges.bottom) {
-    appendBorderRect(parts, 0, bandHeight - BORDER_WIDTH, tableWidth, BORDER_WIDTH, border);
+    appendBorderRect(parts, 0, bandTop + bandHeight - BORDER_WIDTH, tableWidth, BORDER_WIDTH, border);
   }
 
-  appendBorderRect(parts, 0, 0, BORDER_WIDTH, bandHeight, border);
+  appendBorderRect(parts, 0, bandTop, BORDER_WIDTH, bandHeight, border);
   let x = BORDER_WIDTH;
   for (let colIdx = 0; colIdx < colWidths.length; colIdx++) {
     x += colWidths[colIdx];
     if (colIdx < colWidths.length - 1) {
-      appendBorderRect(parts, x, 0, BORDER_WIDTH, bandHeight, border);
-      x += BORDER_WIDTH;
+      appendBorderRect(parts, x, bandTop, BORDER_WIDTH, bandHeight, border);
     }
   }
-  appendBorderRect(parts, tableWidth - BORDER_WIDTH, 0, BORDER_WIDTH, bandHeight, border);
+  appendBorderRect(parts, tableWidth - BORDER_WIDTH, bandTop, BORDER_WIDTH, bandHeight, border);
 }
 
 type PreparedRowBand = {
@@ -761,10 +761,9 @@ function renderRowBand(
 
   const { colWidths, block, metrics } = layout;
   const { fontSize, charWidth, cellPadX, cellPadY, fontFamily, colors } = metrics;
-  const { background: bg, headerBackground: headerBg, text: textColor } = colors;
+  const { text: textColor } = colors;
   const { cellLines, visibleWrapLines, rowHeight, lineStep } = prepared;
   const edges = slice.bandBorders ?? { top: false, bottom: true };
-  const { y: fillY, height: fillHeight } = bandInnerFrame(rowHeight, layout.totalWidth, edges);
 
   let x = BORDER_WIDTH;
   for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
@@ -784,11 +783,6 @@ function renderRowBand(
         shouldVerticallyCenterCellInBand(lineCount, visibleWrapLines, false),
       );
 
-    const fill = rowLayout.isHeader ? headerBg : bg;
-    parts.push(
-      `<rect x="${x}" y="${fillY}" width="${colWidth}" height="${fillHeight}" fill="${fill}"/>`,
-    );
-
     appendWrappedCellText(
       parts,
       lines,
@@ -804,10 +798,10 @@ function renderRowBand(
       cellPadX,
     );
 
-    x += colWidth + BORDER_WIDTH;
+    x += colWidth;
   }
 
-  appendBandBorderLines(parts, layout, rowHeight, edges);
+  appendBandBorderLines(parts, layout, 0, rowHeight, edges);
 }
 
 /**
@@ -826,7 +820,7 @@ export function buildTableLayout(block: TableBlock, options: TableRenderOptions)
   const rowHeights = rowLayouts.map((layout) =>
     computeRowHeight(layout, metrics, capToSourceLines),
   );
-  const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + BORDER_WIDTH * (colWidths.length + 1);
+  const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + BORDER_WIDTH * 2;
   const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0);
 
   return {
@@ -911,7 +905,7 @@ export function renderTableSvgLineSlice(
  */
 export function renderTableSvg(block: TableBlock, options: TableRenderOptions): string {
   const layout = buildTableLayout(block, options);
-  const { background: bg, headerBackground: headerBg, border, text: textColor } = layout.metrics.colors;
+  const { background: bg, headerBackground: headerBg, text: textColor } = layout.metrics.colors;
   const { lineHeight, fontSize, charWidth, cellPadX, cellPadY, fontFamily } = layout.metrics;
 
   const parts: string[] = [];
@@ -922,6 +916,11 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
     const rowLayout = layout.rowLayouts[rowIdx];
     const rowHeight = layout.rowHeights[rowIdx];
     const lineStep = wrappedLineStep(lineHeight, fontSize);
+
+    const rowFill = rowLayout.isHeader ? headerBg : bg;
+    parts.push(
+      `<rect x="${BORDER_WIDTH}" y="${y}" width="${layout.totalWidth - BORDER_WIDTH * 2}" height="${rowHeight}" fill="${rowFill}"/>`,
+    );
 
     let x = BORDER_WIDTH;
     for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
@@ -941,10 +940,6 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
         verticalCenter,
       );
 
-      parts.push(
-        `<rect x="${x}" y="${y}" width="${colWidth}" height="${rowHeight}" fill="${rowLayout.isHeader ? headerBg : bg}" stroke="${border}" stroke-width="${BORDER_WIDTH}"/>`,
-      );
-
       appendWrappedCellText(
         parts,
         lines,
@@ -960,9 +955,10 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
         cellPadX,
       );
 
-      x += colWidth + BORDER_WIDTH;
+      x += colWidth;
     }
 
+    appendBandBorderLines(parts, layout, y, rowHeight, { top: rowIdx === 0, bottom: true });
     y += rowHeight;
   }
 

@@ -112,32 +112,45 @@ describe('table SVG scene snapshots', () => {
     const svg = renderTableSvg(tableBlock(), { isDark: false, ...metrics });
 
     expect(svgVisualScene(svg)).toMatchInlineSnapshot(`
-      "svg width=471px height=90px viewBox=0 0 471 90
-      rect x=- y=- w=471 h=90 fill=#111111 stroke=-
-      rect x=1 y=0 w=88 h=36 fill=#222222 stroke=#333333
+      "svg width=469px height=90px viewBox=0 0 469 90
+      rect x=- y=- w=469 h=90 fill=#111111 stroke=-
+      rect x=1 y=0 w=467 h=36 fill=#222222 stroke=-
       text x=6 y=22.55 dy=- fill=#eeeeee size=13 Left
-      rect x=90 y=0 w=330 h=36 fill=#222222 stroke=#333333
-      text x=231.6 y=22.55 dy=- fill=#eeeeee size=13 Center
-      rect x=421 y=0 w=49 h=36 fill=#222222 stroke=#333333
-      text x=426 y=22.55 dy=- fill=#eeeeee size=13 Right
-      rect x=1 y=36 w=88 h=18 fill=#111111 stroke=#333333
+      text x=230.6 y=22.55 dy=- fill=#eeeeee size=13 Center
+      text x=424 y=22.55 dy=- fill=#eeeeee size=13 Right
+      rect x=0 y=0 w=469 h=1 fill=#333333 stroke=-
+      rect x=0 y=35 w=469 h=1 fill=#333333 stroke=-
+      rect x=0 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=89 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=419 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=468 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=1 y=36 w=467 h=18 fill=#111111 stroke=-
       text x=6 y=50.05 dy=- fill=#eeeeee size=13 plain
-      rect x=90 y=36 w=330 h=18 fill=#111111 stroke=#333333
-      text x=243.3 y=50.05 dy=- fill=#eeeeee size=13 mid
-      rect x=421 y=36 w=49 h=18 fill=#111111 stroke=#333333
-      text x=441.6 y=50.05 dy=- fill=#eeeeee size=13 1.0
-      rect x=1 y=54 w=88 h=18 fill=#111111 stroke=#333333
+      text x=242.3 y=50.05 dy=- fill=#eeeeee size=13 mid
+      text x=439.6 y=50.05 dy=- fill=#eeeeee size=13 1.0
+      rect x=0 y=53 w=469 h=1 fill=#333333 stroke=-
+      rect x=0 y=36 w=1 h=18 fill=#333333 stroke=-
+      rect x=89 y=36 w=1 h=18 fill=#333333 stroke=-
+      rect x=419 y=36 w=1 h=18 fill=#333333 stroke=-
+      rect x=468 y=36 w=1 h=18 fill=#333333 stroke=-
+      rect x=1 y=54 w=467 h=18 fill=#111111 stroke=-
       text x=6 y=68.05 dy=- fill=#eeeeee size=13 wide label
-      rect x=90 y=54 w=330 h=18 fill=#111111 stroke=#333333
-      text x=95.1 y=68.05 dy=- fill=#eeeeee size=13 long wrapping content for visual snapshot
-      rect x=421 y=54 w=49 h=18 fill=#111111 stroke=#333333
-      text x=449.4 y=68.05 dy=- fill=#eeeeee size=13 99
-      rect x=1 y=72 w=88 h=18 fill=#111111 stroke=#333333
+      text x=94.1 y=68.05 dy=- fill=#eeeeee size=13 long wrapping content for visual snapshot
+      text x=447.4 y=68.05 dy=- fill=#eeeeee size=13 99
+      rect x=0 y=71 w=469 h=1 fill=#333333 stroke=-
+      rect x=0 y=54 w=1 h=18 fill=#333333 stroke=-
+      rect x=89 y=54 w=1 h=18 fill=#333333 stroke=-
+      rect x=419 y=54 w=1 h=18 fill=#333333 stroke=-
+      rect x=468 y=54 w=1 h=18 fill=#333333 stroke=-
+      rect x=1 y=72 w=467 h=18 fill=#111111 stroke=-
       text x=6 y=86.05 dy=- fill=#eeeeee size=13 last
-      rect x=90 y=72 w=330 h=18 fill=#111111 stroke=#333333
-      text x=239.4 y=86.05 dy=- fill=#eeeeee size=13 cell
-      rect x=421 y=72 w=49 h=18 fill=#111111 stroke=#333333
-      text x=433.8 y=86.05 dy=- fill=#eeeeee size=13 1000"
+      text x=238.4 y=86.05 dy=- fill=#eeeeee size=13 cell
+      text x=431.8 y=86.05 dy=- fill=#eeeeee size=13 1000
+      rect x=0 y=89 w=469 h=1 fill=#333333 stroke=-
+      rect x=0 y=72 w=1 h=18 fill=#333333 stroke=-
+      rect x=89 y=72 w=1 h=18 fill=#333333 stroke=-
+      rect x=419 y=72 w=1 h=18 fill=#333333 stroke=-
+      rect x=468 y=72 w=1 h=18 fill=#333333 stroke=-"
     `);
   });
 
@@ -152,71 +165,59 @@ describe('table SVG scene snapshots', () => {
 
     expect(scenes).toMatchInlineSnapshot(`
       "line 0:
-      svg width=471px height=36px viewBox=0 0 471 36
-      rect x=- y=- w=471 h=36 fill=- stroke=-
-      rect x=1 y=1 w=469 h=34 fill=#222222 stroke=-
-      rect x=1 y=1 w=88 h=34 fill=#222222 stroke=-
+      svg width=469px height=36px viewBox=0 0 469 36
+      rect x=- y=- w=469 h=36 fill=- stroke=-
+      rect x=1 y=1 w=467 h=34 fill=#222222 stroke=-
       text x=6 y=22.55 dy=- fill=#eeeeee size=13 Left
-      rect x=90 y=1 w=330 h=34 fill=#222222 stroke=-
-      text x=231.6 y=22.55 dy=- fill=#eeeeee size=13 Center
-      rect x=421 y=1 w=49 h=34 fill=#222222 stroke=-
-      text x=426 y=22.55 dy=- fill=#eeeeee size=13 Right
-      rect x=0 y=0 w=471 h=1 fill=#333333 stroke=-
-      rect x=0 y=35 w=471 h=1 fill=#333333 stroke=-
+      text x=230.6 y=22.55 dy=- fill=#eeeeee size=13 Center
+      text x=424 y=22.55 dy=- fill=#eeeeee size=13 Right
+      rect x=0 y=0 w=469 h=1 fill=#333333 stroke=-
+      rect x=0 y=35 w=469 h=1 fill=#333333 stroke=-
       rect x=0 y=0 w=1 h=36 fill=#333333 stroke=-
       rect x=89 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=420 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=470 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=419 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=468 y=0 w=1 h=36 fill=#333333 stroke=-
       ---
       line 1: <no overlay>
       ---
       line 2:
-      svg width=471px height=18px viewBox=0 0 471 18
-      rect x=- y=- w=471 h=18 fill=- stroke=-
-      rect x=1 y=0 w=469 h=17 fill=#111111 stroke=-
-      rect x=1 y=0 w=88 h=17 fill=#111111 stroke=-
+      svg width=469px height=18px viewBox=0 0 469 18
+      rect x=- y=- w=469 h=18 fill=- stroke=-
+      rect x=1 y=0 w=467 h=17 fill=#111111 stroke=-
       text x=6 y=14.05 dy=- fill=#eeeeee size=13 plain
-      rect x=90 y=0 w=330 h=17 fill=#111111 stroke=-
-      text x=243.3 y=14.05 dy=- fill=#eeeeee size=13 mid
-      rect x=421 y=0 w=49 h=17 fill=#111111 stroke=-
-      text x=441.6 y=14.05 dy=- fill=#eeeeee size=13 1.0
-      rect x=0 y=17 w=471 h=1 fill=#333333 stroke=-
+      text x=242.3 y=14.05 dy=- fill=#eeeeee size=13 mid
+      text x=439.6 y=14.05 dy=- fill=#eeeeee size=13 1.0
+      rect x=0 y=17 w=469 h=1 fill=#333333 stroke=-
       rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
       rect x=89 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=420 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=470 y=0 w=1 h=18 fill=#333333 stroke=-
+      rect x=419 y=0 w=1 h=18 fill=#333333 stroke=-
+      rect x=468 y=0 w=1 h=18 fill=#333333 stroke=-
       ---
       line 3:
-      svg width=471px height=18px viewBox=0 0 471 18
-      rect x=- y=- w=471 h=18 fill=- stroke=-
-      rect x=1 y=0 w=469 h=17 fill=#111111 stroke=-
-      rect x=1 y=0 w=88 h=17 fill=#111111 stroke=-
+      svg width=469px height=18px viewBox=0 0 469 18
+      rect x=- y=- w=469 h=18 fill=- stroke=-
+      rect x=1 y=0 w=467 h=17 fill=#111111 stroke=-
       text x=6 y=14.05 dy=- fill=#eeeeee size=13 wide label
-      rect x=90 y=0 w=330 h=17 fill=#111111 stroke=-
-      text x=95.1 y=14.05 dy=- fill=#eeeeee size=13 long wrapping content for visual snapshot
-      rect x=421 y=0 w=49 h=17 fill=#111111 stroke=-
-      text x=449.4 y=14.05 dy=- fill=#eeeeee size=13 99
-      rect x=0 y=17 w=471 h=1 fill=#333333 stroke=-
+      text x=94.1 y=14.05 dy=- fill=#eeeeee size=13 long wrapping content for visual snapshot
+      text x=447.4 y=14.05 dy=- fill=#eeeeee size=13 99
+      rect x=0 y=17 w=469 h=1 fill=#333333 stroke=-
       rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
       rect x=89 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=420 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=470 y=0 w=1 h=18 fill=#333333 stroke=-
+      rect x=419 y=0 w=1 h=18 fill=#333333 stroke=-
+      rect x=468 y=0 w=1 h=18 fill=#333333 stroke=-
       ---
       line 4:
-      svg width=471px height=18px viewBox=0 0 471 18
-      rect x=- y=- w=471 h=18 fill=- stroke=-
-      rect x=1 y=0 w=469 h=17 fill=#111111 stroke=-
-      rect x=1 y=0 w=88 h=17 fill=#111111 stroke=-
+      svg width=469px height=18px viewBox=0 0 469 18
+      rect x=- y=- w=469 h=18 fill=- stroke=-
+      rect x=1 y=0 w=467 h=17 fill=#111111 stroke=-
       text x=6 y=14.05 dy=- fill=#eeeeee size=13 last
-      rect x=90 y=0 w=330 h=17 fill=#111111 stroke=-
-      text x=239.4 y=14.05 dy=- fill=#eeeeee size=13 cell
-      rect x=421 y=0 w=49 h=17 fill=#111111 stroke=-
-      text x=433.8 y=14.05 dy=- fill=#eeeeee size=13 1000
-      rect x=0 y=17 w=471 h=1 fill=#333333 stroke=-
+      text x=238.4 y=14.05 dy=- fill=#eeeeee size=13 cell
+      text x=431.8 y=14.05 dy=- fill=#eeeeee size=13 1000
+      rect x=0 y=17 w=469 h=1 fill=#333333 stroke=-
       rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
       rect x=89 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=420 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=470 y=0 w=1 h=18 fill=#333333 stroke=-"
+      rect x=419 y=0 w=1 h=18 fill=#333333 stroke=-
+      rect x=468 y=0 w=1 h=18 fill=#333333 stroke=-"
     `);
   });
 
@@ -230,48 +231,42 @@ describe('table SVG scene snapshots', () => {
 
     expect(rowScenes).toMatchInlineSnapshot(`
       "line 0:
-      svg width=523px height=36px viewBox=0 0 523 36
-      rect x=- y=- w=523 h=36 fill=- stroke=-
-      rect x=1 y=1 w=521 h=34 fill=#222222 stroke=-
-      rect x=1 y=1 w=120 h=34 fill=#222222 stroke=-
+      svg width=522px height=36px viewBox=0 0 522 36
+      rect x=- y=- w=522 h=36 fill=- stroke=-
+      rect x=1 y=1 w=520 h=34 fill=#222222 stroke=-
       text x=6 y=22.55 dy=- fill=#eeeeee size=13 Section Header
-      rect x=122 y=1 w=400 h=34 fill=#222222 stroke=-
-      text x=127 y=22.55 dy=- fill=#eeeeee size=13 Detailed Placeholder Content
-      rect x=0 y=0 w=523 h=1 fill=#333333 stroke=-
-      rect x=0 y=35 w=523 h=1 fill=#333333 stroke=-
+      text x=126 y=22.55 dy=- fill=#eeeeee size=13 Detailed Placeholder Content
+      rect x=0 y=0 w=522 h=1 fill=#333333 stroke=-
+      rect x=0 y=35 w=522 h=1 fill=#333333 stroke=-
       rect x=0 y=0 w=1 h=36 fill=#333333 stroke=-
       rect x=121 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=522 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=521 y=0 w=1 h=36 fill=#333333 stroke=-
       ---
       line 2:
-      svg width=523px height=79px viewBox=0 0 523 79
-      rect x=- y=- w=523 h=79 fill=- stroke=-
-      rect x=1 y=0 w=521 h=78 fill=#111111 stroke=-
-      rect x=1 y=0 w=120 h=78 fill=#111111 stroke=-
+      svg width=522px height=79px viewBox=0 0 522 79
+      rect x=- y=- w=522 h=79 fill=- stroke=-
+      rect x=1 y=0 w=520 h=78 fill=#111111 stroke=-
       text x=6 y=44.05 dy=- fill=#eeeeee size=13 Row 1
-      rect x=122 y=0 w=400 h=78 fill=#111111 stroke=-
-      text x=127 y=14.05 dy=- fill=#eeeeee size=13 Lorem ipsum dolor sit amet, consectetur adipiscing
-      text x=127 y=- dy=16.56 fill=#eeeeee size=13 elit, sed do eiusmod tempor incididunt ut labore
-      text x=127 y=- dy=16.56 fill=#eeeeee size=13 et dolore magna aliqua. Ut enim ad minim veniam,
-      text x=127 y=- dy=16.56 fill=#eeeeee size=13 quis nostrud exercitation ullamco laboris nisi u[ellipsis]
-      rect x=0 y=78 w=523 h=1 fill=#333333 stroke=-
+      text x=126 y=14.05 dy=- fill=#eeeeee size=13 Lorem ipsum dolor sit amet, consectetur adipiscing
+      text x=126 y=- dy=16.56 fill=#eeeeee size=13 elit, sed do eiusmod tempor incididunt ut labore
+      text x=126 y=- dy=16.56 fill=#eeeeee size=13 et dolore magna aliqua. Ut enim ad minim veniam,
+      text x=126 y=- dy=16.56 fill=#eeeeee size=13 quis nostrud exercitation ullamco laboris nisi u[ellipsis]
+      rect x=0 y=78 w=522 h=1 fill=#333333 stroke=-
       rect x=0 y=0 w=1 h=79 fill=#333333 stroke=-
       rect x=121 y=0 w=1 h=79 fill=#333333 stroke=-
-      rect x=522 y=0 w=1 h=79 fill=#333333 stroke=-
+      rect x=521 y=0 w=1 h=79 fill=#333333 stroke=-
       ---
       line 3:
-      svg width=523px height=18px viewBox=0 0 523 18
-      rect x=- y=- w=523 h=18 fill=- stroke=-
-      rect x=1 y=1 w=521 h=16 fill=#111111 stroke=-
-      rect x=1 y=1 w=120 h=16 fill=#111111 stroke=-
+      svg width=522px height=18px viewBox=0 0 522 18
+      rect x=- y=- w=522 h=18 fill=- stroke=-
+      rect x=1 y=1 w=520 h=16 fill=#111111 stroke=-
       text x=6 y=14.05 dy=- fill=#eeeeee size=13 Row 2
-      rect x=122 y=1 w=400 h=16 fill=#111111 stroke=-
-      text x=127 y=14.05 dy=- fill=#eeeeee size=13 abcdefghijklmnopqrstuvwxyz0123456789
-      rect x=0 y=0 w=523 h=1 fill=#333333 stroke=-
-      rect x=0 y=17 w=523 h=1 fill=#333333 stroke=-
+      text x=126 y=14.05 dy=- fill=#eeeeee size=13 abcdefghijklmnopqrstuvwxyz0123456789
+      rect x=0 y=0 w=522 h=1 fill=#333333 stroke=-
+      rect x=0 y=17 w=522 h=1 fill=#333333 stroke=-
       rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
       rect x=121 y=0 w=1 h=18 fill=#333333 stroke=-
-      rect x=522 y=0 w=1 h=18 fill=#333333 stroke=-"
+      rect x=521 y=0 w=1 h=18 fill=#333333 stroke=-"
     `);
   });
 
@@ -282,7 +277,8 @@ describe('table SVG scene snapshots', () => {
     const wrappedSvg = renderTableSvgLineSlice(layout, 2);
 
     expect(headerSvg).toContain('Section Header');
-    expect(separatorSvg).toBeNull();
+    expect(separatorSvg).not.toBeNull();
+    expect(separatorSvg!).not.toContain('Section Header');
     expect(wrappedSvg).toContain('&#x2026;');
     expect(wrappedSvg).toContain('shape-rendering="crispEdges"');
   });
