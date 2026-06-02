@@ -208,7 +208,7 @@ describe('custom overlay regression: header', () => {
     const headerSvg = sliceSvg(wrappedLayout, 0);
     const titleBand = parseBandHeight(headerSvg);
     const junction = 1 + wrappedLayout.colWidths[0];
-    expect(titleBand).toBe(HEADER_SOURCE_LINES * wrappedLayout.metrics.lineHeight);
+    expect(titleBand).toBe(wrappedLayout.metrics.lineHeight);
     expect(headerSvg).toContain(`<rect x="${junction}" y="0" width="1" height="${titleBand}"`);
     expect(renderTableSvgLineSlice(wrappedLayout, 1)).toContain(wrappedLayout.metrics.colors.headerBackground);
   });
@@ -237,7 +237,7 @@ describe('custom overlay regression: header', () => {
     );
     expect(dividerMatch).not.toBeNull();
     expect(Number(dividerMatch![1])).toBe(titleBand);
-    expect(titleBand).toBeGreaterThanOrEqual(HEADER_SOURCE_LINES * wrappedLayout.metrics.lineHeight);
+    expect(titleBand).toBe(wrappedLayout.metrics.lineHeight);
   });
 
   it('renders the first body row on the first data source line for every short thead table', () => {

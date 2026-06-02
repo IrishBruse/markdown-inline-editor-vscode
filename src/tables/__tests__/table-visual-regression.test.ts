@@ -165,16 +165,16 @@ describe('table SVG scene snapshots', () => {
 
     expect(scenes).toMatchInlineSnapshot(`
       "line 0:
-      svg width=469px height=36px viewBox=0 0 469 36
-      rect x=1 y=1 w=467 h=35 fill=#222222 stroke=-
+      svg width=469px height=18px viewBox=0 0 469 18
+      rect x=1 y=0 w=467 h=18 fill=#222222 stroke=-
       text x=6 y=14.05 dy=- fill=#eeeeee size=13 Left
       text x=230.6 y=14.05 dy=- fill=#eeeeee size=13 Center
       text x=424 y=14.05 dy=- fill=#eeeeee size=13 Right
       rect x=0 y=0 w=469 h=1 fill=#333333 stroke=-
-      rect x=0 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=89 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=419 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=468 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
+      rect x=89 y=0 w=1 h=18 fill=#333333 stroke=-
+      rect x=419 y=0 w=1 h=18 fill=#333333 stroke=-
+      rect x=468 y=0 w=1 h=18 fill=#333333 stroke=-
       ---
       line 1:
       svg width=469px height=18px viewBox=0 0 469 18
@@ -236,14 +236,14 @@ describe('table SVG scene snapshots', () => {
 
     expect(rowScenes).toMatchInlineSnapshot(`
       "line 0:
-      svg width=522px height=36px viewBox=0 0 522 36
-      rect x=1 y=1 w=520 h=35 fill=#222222 stroke=-
+      svg width=522px height=18px viewBox=0 0 522 18
+      rect x=1 y=0 w=520 h=18 fill=#222222 stroke=-
       text x=6 y=14.05 dy=- fill=#eeeeee size=13 Section Header
       text x=126 y=14.05 dy=- fill=#eeeeee size=13 Detailed Placeholder Content
       rect x=0 y=0 w=522 h=1 fill=#333333 stroke=-
-      rect x=0 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=121 y=0 w=1 h=36 fill=#333333 stroke=-
-      rect x=521 y=0 w=1 h=36 fill=#333333 stroke=-
+      rect x=0 y=0 w=1 h=18 fill=#333333 stroke=-
+      rect x=121 y=0 w=1 h=18 fill=#333333 stroke=-
+      rect x=521 y=0 w=1 h=18 fill=#333333 stroke=-
       ---
       line 2:
       svg width=522px height=79px viewBox=0 0 522 79

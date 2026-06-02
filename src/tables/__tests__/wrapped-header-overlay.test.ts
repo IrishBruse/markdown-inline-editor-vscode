@@ -4,11 +4,11 @@ import type { TableBlock } from '../../parser';
 import {
   buildTableLayout,
   HEADER_SOURCE_LINES,
-  mergedHeaderBandBudgetPx,
   renderHeaderSeparatorBridge,
   renderTableSvgLineSlice,
   resolveOverlayBandHeight,
   sourceLineToSliceSpec,
+  theadSourceLineBandPx,
 } from '../table-renderer';
 
 const metrics = { isDark: false, lineHeight: 18, fontSize: 13 };
@@ -39,7 +39,7 @@ describe('wrapped merged header overlays', () => {
 
     const headerSlice = sourceLineToSliceSpec(0, layout)!;
     const headerBand = resolveOverlayBandHeight(layout, headerSlice);
-    expect(headerBand).toBe(mergedHeaderBandBudgetPx(layout.metrics));
+    expect(headerBand).toBe(theadSourceLineBandPx(layout.metrics));
 
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     expect(headerSvg.match(/<svg[^>]*height="(\d+)px"/)?.[1]).toBe(String(headerBand));
@@ -52,7 +52,7 @@ describe('wrapped merged header overlays', () => {
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     expect(renderHeaderSeparatorBridge(layout)).not.toBeNull();
     expect(sourceLineToSliceSpec(1, layout)?.separatorColumnBridge).toBe(true);
-    const titleBand = mergedHeaderBandBudgetPx(layout.metrics);
+    const titleBand = theadSourceLineBandPx(layout.metrics);
     const junction = 1 + layout.colWidths[0];
     expect(headerSvg).toContain(`<rect x="${junction}" y="0" width="1" height="${titleBand}"`);
   });
@@ -84,12 +84,12 @@ describe('wrapped merged header overlays', () => {
 
   it('extends merged header fill through the separator source line', () => {
     const layout = buildTableLayout(tallWrappedHeaderBlock(), { ...metrics, capToSourceLines: false });
-    const headerBand = mergedHeaderBandBudgetPx(layout.metrics);
+    const headerBand = theadSourceLineBandPx(layout.metrics);
     const headerSvg = renderTableSvgLineSlice(layout, 0)!;
     const { headerBackground } = layout.metrics.colors;
     expect(headerSvg).toContain(`fill="${headerBackground}"`);
     expect(headerSvg).toMatch(
-      new RegExp(`<rect x="1" y="1"[^>]*height="${headerBand - 1}"[^>]*fill="${headerBackground.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
+      new RegExp(`<rect x="1" y="0"[^>]*height="${headerBand}"[^>]*fill="${headerBackground.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
     );
     expect(renderHeaderSeparatorBridge(layout)).not.toBeNull();
   });

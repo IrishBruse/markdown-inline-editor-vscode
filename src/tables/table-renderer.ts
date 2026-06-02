@@ -37,6 +37,7 @@ export {
   HEADER_SOURCE_LINES,
   mergedHeaderBandBudgetPx,
   mergedHeaderOverlayBandPx,
+  theadSourceLineBandPx,
 } from './table-header-renderer';
 
 export type TableRenderOptions = {
@@ -873,7 +874,7 @@ function renderRowBand(
   }
 
   const borderBandHeight = slice.mergedHeader === true
-    ? (overlayBandHeight ?? mergedHeaderOverlayBandPx(layout) + bodyBandHeaderInsetPx(layout, 0))
+    ? (overlayBandHeight ?? layout.metrics.lineHeight + bodyBandHeaderInsetPx(layout, 0))
     : rowHeight;
   appendBandBorderLines(parts, layout, bandTop, borderBandHeight, edges);
 }
@@ -977,7 +978,7 @@ export function renderTableSvgLineSlice(
   const bodyTopInset = bodyBandHeaderInsetPx(layout, slice.rowLayoutIndex);
   const { rowHeight } = prepared;
   const contentSpan = slice.mergedHeader === true
-    ? mergedHeaderOverlayBandPx(layout)
+    ? layout.metrics.lineHeight
     : rowHeight;
   const bandHeight = contentSpan + bodyTopInset;
   const rowLayout = layout.rowLayouts[slice.rowLayoutIndex];
@@ -1040,7 +1041,7 @@ export function renderTableSvg(block: TableBlock, options: TableRenderOptions): 
       const lines = rowLayout.wrappedCells[colIdx] ?? [''];
       const lineCount = lines.length;
       const verticalCenter = rowLayout.isHeader
-        || shouldVerticallyCenterCellInBand(lineCount, rowLayout.maxWrapLines, false);
+        || shouldVerticallyCenterCellInBand(lineCount, rowLayout.maxWrapLines, false, rowIdx);
       const cellFirstY = firstLineBaselineY(
         y,
         rowHeight,

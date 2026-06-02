@@ -221,7 +221,7 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(dataRowOptions!.renderOptions?.before?.textDecoration).toContain('max-height: none');
   });
 
-  it('hides GFM source on the full line and anchors the SVG on a collapsed range', async () => {
+  it('hides GFM source on the full line and anchors the SVG on the same line range', async () => {
     const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
     const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
@@ -239,7 +239,8 @@ describe('CustomTableUpdateCoordinator', () => {
     const hide = lineOptions.find((opt) => !opt.renderOptions?.before?.contentIconPath);
     const overlay = lineOptions.find((opt) => opt.renderOptions?.before?.contentIconPath);
     expect(hide?.range.end.character).toBeGreaterThan(0);
-    expect(overlay?.range.start).toEqual(overlay?.range.end);
+    expect(hide?.range).toEqual(overlay?.range);
+    expect(overlay?.renderOptions?.before?.textDecoration).toContain('overflow: hidden');
   });
 
   it('hides separator source text and uses only the merged title overlay for a short thead', async () => {
@@ -301,7 +302,7 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(separatorOptions.some((opt) => !opt.renderOptions?.before?.contentIconPath)).toBe(true);
   });
 
-  it('allows merged thead title overlays to overflow into the separator source line', async () => {
+  it('clips merged thead title overlays to one editor line height', async () => {
     const md = [
       '| Section Header | Detailed Placeholder Content with enough words to wrap |',
       '| --- | --- |',
@@ -321,7 +322,8 @@ describe('CustomTableUpdateCoordinator', () => {
     const titleOverlay = [...(apply.mock.calls.at(-1)![1] as Map<string, DecorationOptions[]>).values()]
       .flat()
       .find((opt) => opt.range.start.line === 0 && opt.renderOptions?.before?.contentIconPath);
-    expect(titleOverlay?.renderOptions?.before?.textDecoration).toContain('overflow: visible');
-    expect(titleOverlay?.renderOptions?.before?.textDecoration).toContain('max-height: none');
+    const { lineHeight } = getEditorLineMetrics();
+    expect(titleOverlay?.renderOptions?.before?.textDecoration).toContain('overflow: hidden');
+    expect(titleOverlay?.renderOptions?.before?.height).toBe(`${lineHeight}px`);
   });
 });

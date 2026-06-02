@@ -7,7 +7,6 @@ import {
   bodyBandHeaderInsetPx,
   buildTableLayout,
   maxBandHeightPx,
-  mergedHeaderBandBudgetPx,
   MAX_BAND_LINES,
   renderTableSvgLineSlice,
   resolveOverlayBandHeight,

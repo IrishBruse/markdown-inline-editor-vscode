@@ -57,15 +57,16 @@ describe('sourceLineToSliceSpec', () => {
       rowLayoutIndex: 0,
       subLine: 0,
       subLineCount: 1,
-      sliceHeight: HEADER_SOURCE_LINES * metrics.lineHeight,
+      sliceHeight: metrics.lineHeight,
       mergedHeader: true,
+      useFullLineOverlay: true,
       bandBorders: { top: true, bottom: false },
     });
     expect(sourceLineToSliceSpec(1, layout)).toEqual({
       rowLayoutIndex: 0,
       subLine: 0,
       subLineCount: 1,
-      sliceHeight: HEADER_SOURCE_LINES * metrics.lineHeight,
+      sliceHeight: metrics.lineHeight,
       separatorColumnBridge: true,
       useFullLineOverlay: true,
       bandBorders: { top: false, bottom: true },

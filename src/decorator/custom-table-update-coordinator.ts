@@ -193,6 +193,7 @@ export class CustomTableUpdateCoordinator {
     headerBackground?: string,
   ): DecorationOptions[] {
     const overflow = sliceAllowsDecorationOverflow(slice, bandHeight, lineHeight);
+    const fullLine = slice.useFullLineOverlay === true;
     const overflowStyle = overflow
       ? 'overflow: visible; max-height: none;'
       : `overflow: hidden; border-radius: 0; max-height: ${bandHeight}px;`;
@@ -206,7 +207,8 @@ export class CustomTableUpdateCoordinator {
       'margin: 0',
       'padding: 0',
       'vertical-align: top',
-      'line-height: 0',
+      fullLine ? `line-height: ${bandHeight}px` : 'line-height: 0',
+      ...(fullLine ? ['box-sizing: border-box'] : []),
       `width: ${bandWidth}px`,
       `height: ${bandHeight}px`,
       `max-width: ${bandWidth}px`,
@@ -214,9 +216,12 @@ export class CustomTableUpdateCoordinator {
         ? [`min-height: ${bandHeight}px`]
         : [`max-height: ${bandHeight}px`]),
     ].join('; ');
-    const hideOptions: DecorationOptions = slice.useFullLineOverlay === true && headerBackground
-      ? { range: hideRange, renderOptions: { backgroundColor: headerBackground } }
-      : { range: hideRange };
+    const hideOptions = {
+      range: hideRange,
+      ...(slice.useFullLineOverlay === true && headerBackground
+        ? { renderOptions: { backgroundColor: headerBackground } }
+        : {}),
+    } as DecorationOptions;
     return [
       hideOptions,
       {
@@ -374,7 +379,9 @@ export class CustomTableUpdateCoordinator {
 
         const cachedUri = this.svgDataUriCache.get(key);
         if (cachedUri) {
-          const bandHeight = this.bandHeightForSlice(block, sourceLineIndex, renderOptions, blockLayout);
+          const bandHeight = slice.useFullLineOverlay === true
+            ? lineHeight
+            : this.bandHeightForSlice(block, sourceLineIndex, renderOptions, blockLayout);
           const overlayRange = slice.useFullLineOverlay === true
             ? lineRanges.hideRange
             : lineRanges.overlayRange;
@@ -440,7 +447,9 @@ export class CustomTableUpdateCoordinator {
           continue;
         }
 
-        const bandHeight = this.bandHeightForSlice(job.block, job.sourceLineIndex, renderOptions, layout);
+        const bandHeight = slice.useFullLineOverlay === true
+          ? lineHeight
+          : this.bandHeightForSlice(job.block, job.sourceLineIndex, renderOptions, layout);
         const overlayRange = slice.useFullLineOverlay === true
           ? lineRanges.hideRange
           : lineRanges.overlayRange;
