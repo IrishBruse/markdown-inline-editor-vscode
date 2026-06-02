@@ -242,7 +242,7 @@ describe('CustomTableUpdateCoordinator', () => {
     expect(overlay?.range.start).toEqual(overlay?.range.end);
   });
 
-  it('hides separator source text and renders column bridge plus title overlay for a short thead', async () => {
+  it('hides separator source text and uses only the merged title overlay for a short thead', async () => {
     const md = '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter.';
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
     const document = new TextDocument(Uri.file('t.md'), 'markdown', 1, md);
@@ -261,11 +261,15 @@ describe('CustomTableUpdateCoordinator', () => {
     const separatorIcon = allOptions.find(
       (opt) => opt.range.start.line === 1 && opt.renderOptions?.before?.contentIconPath,
     );
+    const titleIcon = allOptions.find(
+      (opt) => opt.range.start.line === 0 && opt.renderOptions?.before?.contentIconPath,
+    );
     const dataRowIcon = allOptions.find(
       (opt) => opt.range.start.line === 2 && opt.renderOptions?.before?.contentIconPath,
     );
     expect(separatorHide).toBeDefined();
     expect(separatorIcon).toBeDefined();
+    expect(titleIcon).toBeDefined();
     expect(dataRowIcon).toBeDefined();
   });
 

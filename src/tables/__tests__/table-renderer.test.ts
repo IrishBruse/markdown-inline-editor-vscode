@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { TableBlock } from '../../parser';
 import {
+  bodyBandHeaderInsetPx,
   buildTableLayout,
   computeBandHeightForSlice,
+  HEADER_SOURCE_LINES,
   resolveOverlayBandHeight,
   MAX_BAND_LINES,
   maxBandHeightPx,
@@ -55,16 +57,18 @@ describe('sourceLineToSliceSpec', () => {
       rowLayoutIndex: 0,
       subLine: 0,
       subLineCount: 1,
-      sliceHeight: metrics.lineHeight,
+      sliceHeight: HEADER_SOURCE_LINES * metrics.lineHeight,
       mergedHeader: true,
-      bandBorders: { top: true, bottom: true },
+      bandBorders: { top: true, bottom: false },
     });
     expect(sourceLineToSliceSpec(1, layout)).toEqual({
       rowLayoutIndex: 0,
       subLine: 0,
       subLineCount: 1,
-      sliceHeight: metrics.lineHeight,
+      sliceHeight: HEADER_SOURCE_LINES * metrics.lineHeight,
       separatorColumnBridge: true,
+      useFullLineOverlay: true,
+      bandBorders: { top: false, bottom: true },
     });
     expect(sourceLineToSliceSpec(2, layout)).toEqual({
       rowLayoutIndex: 1,
@@ -90,7 +94,8 @@ describe('multiline header band', () => {
     expect(headerSvg).toContain('Name');
     expect(headerSvg).toContain('Role');
     expect(headerSvg).not.toContain('Ada');
-    expect(renderTableSvgLineSlice(layout, 1)).toContain(layout.metrics.colors.border);
+    expect(renderTableSvgLineSlice(layout, 1)).toContain(layout.metrics.colors.headerBackground);
+    expect(headerSvg).toContain(layout.metrics.colors.border);
     const titleSlice = sourceLineToSliceSpec(0, layout)!;
     expect(Number(headerSvg.match(/height="(\d+)px"/)![1])).toBe(
       resolveOverlayBandHeight(layout, titleSlice),
@@ -126,11 +131,10 @@ describe('multiline header band', () => {
     expect(headerSvg).not.toMatch(/fill="#ffffff"/);
   });
 
-  it('draws thead bottom border on the merged title overlay for a short thead', () => {
+  it('draws thead bottom border on the separator bridge for a short thead', () => {
     const layout = buildTableLayout(basicBlock(), { isDark: false, ...metrics });
-    const headerSvg = renderTableSvgLineSlice(layout, 0)!;
-    const titleHeight = Number(headerSvg.match(/height="(\d+)px"/)![1]);
-    expect(headerSvg).toMatch(new RegExp(`<rect x="0" y="${titleHeight - 1}"[^>]*width="`));
+    const separatorSvg = renderTableSvgLineSlice(layout, 1)!;
+    expect(separatorSvg).toMatch(new RegExp(`<rect x="0" y="${metrics.lineHeight - 1}"[^>]*width="`));
   });
 
   it('vertically centers multiline wrapped header text', () => {
@@ -170,9 +174,6 @@ describe('renderTableSvgLineSlice', () => {
         expect(svg).toBeNull();
         continue;
       }
-      if (slice.separatorColumnBridge === true) {
-        expect(svg).toContain(layout.metrics.colors.border);
-      }
       const bandHeight = resolveOverlayBandHeight(layout, slice);
       expect(svg).toContain('<svg');
       const heightMatch = svg!.match(/height="(\d+)px"/);
@@ -197,15 +198,15 @@ describe('renderTableSvgLineSlice', () => {
     const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor';
     const block: TableBlock = {
       startPos: 0,
-      endPos: 100,
-      numLines: 3,
-      header: ['Row', 'Content'],
-      rows: [[longText, 'x']],
+      endPos: 120,
+      numLines: 4,
+      header: ['H', 'Content'],
+      rows: [['short', 'y'], [longText, 'x']],
       align: [null, null],
     };
     const layout = buildTableLayout(block, { isDark: false, ...metrics });
-    const slice = sourceLineToSliceSpec(2, layout)!;
-    const svg = renderTableSvgLineSlice(layout, 2)!;
+    const slice = sourceLineToSliceSpec(3, layout)!;
+    const svg = renderTableSvgLineSlice(layout, 3)!;
     const bandHeight = resolveOverlayBandHeight(layout, slice);
     const yMatch = svg.match(/<tspan x="[^"]*" y="([\d.]+)">x<\/tspan>/);
     expect(yMatch).not.toBeNull();
@@ -215,7 +216,7 @@ describe('renderTableSvgLineSlice', () => {
     expect(baseline).toBeLessThan(bandHeight * 0.65 + fontSize);
   });
 
-  it('vertically centers a row label beside a taller wrapped cell', () => {
+  it('top-aligns the first body row label under the thead', () => {
     const longText = [
       'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore',
       'et dolore magna aliqua.',
@@ -236,8 +237,7 @@ describe('renderTableSvgLineSlice', () => {
     expect(yMatch).not.toBeNull();
     const baseline = Number(yMatch![1]);
     const { fontSize } = layout.metrics;
-    expect(baseline).toBeGreaterThan(bandHeight * 0.28);
-    expect(baseline).toBeLessThan(bandHeight * 0.65 + fontSize);
+    expect(baseline).toBeLessThan(bandHeight * 0.35 + fontSize);
   });
 
   it('insets the band fill below the bottom grid line on tall data bands', () => {

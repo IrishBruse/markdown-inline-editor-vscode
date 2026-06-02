@@ -9,17 +9,16 @@ const TITLE_LINE_INDEX = 0;
 /** Source-line index of the GFM `|---|---|` separator row. */
 const SEPARATOR_LINE_INDEX = 1;
 
+const TABLE_BORDER_WIDTH = 1;
+
 /** Pixel height budget for merged header overlays (title row plus separator bridge). */
 export function mergedHeaderBandBudgetPx(metrics: Pick<TableLayoutMetrics, 'lineHeight'>): number {
   return HEADER_SOURCE_LINES * metrics.lineHeight;
 }
 
 /** Overlay band height for the merged header title line (spans title + separator source lines). */
-export function mergedHeaderOverlayBandPx(
-  layout: Pick<TableLayout, 'metrics'>,
-  contentRowHeight: number,
-): number {
-  return Math.max(contentRowHeight, mergedHeaderBandBudgetPx(layout.metrics));
+export function mergedHeaderOverlayBandPx(layout: Pick<TableLayout, 'metrics'>): number {
+  return mergedHeaderBandBudgetPx(layout.metrics);
 }
 
 /** Pixel height of the thead band used when capping header wrap lines. */
@@ -32,21 +31,21 @@ export function headerSourceLineToSliceSpec(
   sourceLineIndex: number,
   layout: TableLayout,
 ): TableLineSliceSpec | null {
-  const { lineHeight } = layout.metrics;
+  const bandHeight = mergedHeaderBandBudgetPx(layout.metrics);
 
   // Both header lines occupy the first row layout as a single visual sub-line.
   const headerSliceBase = {
     rowLayoutIndex: 0,
     subLine: 0,
     subLineCount: 1,
-    sliceHeight: lineHeight,
+    sliceHeight: bandHeight,
   } satisfies Partial<TableLineSliceSpec>;
 
   if (sourceLineIndex === TITLE_LINE_INDEX) {
     return {
       ...headerSliceBase,
       mergedHeader: true,
-      bandBorders: { top: true, bottom: true },
+      bandBorders: { top: true, bottom: false },
     };
   }
 
@@ -54,6 +53,8 @@ export function headerSourceLineToSliceSpec(
     return {
       ...headerSliceBase,
       separatorColumnBridge: true,
+      useFullLineOverlay: true,
+      bandBorders: { top: false, bottom: true },
     };
   }
 
@@ -77,16 +78,45 @@ export function mergedHeaderLabelBaselineY(
 export function resolveHeaderOverlayBandHeight(
   layout: TableLayout,
   slice: TableLineSliceSpec,
-  preparedRowHeight: number,
   bodyTopInset: number,
 ): number | null {
   if (slice.separatorColumnBridge === true) {
     return layout.metrics.lineHeight;
   }
   if (slice.mergedHeader === true) {
-    return mergedHeaderOverlayBandPx(layout, preparedRowHeight) + bodyTopInset;
+    return mergedHeaderOverlayBandPx(layout) + bodyTopInset;
   }
   return null;
+}
+
+/** Background fill rect for the merged title overlay (spans thead plus optional body bridge). */
+export function mergedHeaderFillRect(
+  totalBandHeight: number,
+  tableWidth: number,
+  edges: { top: boolean; bottom: boolean },
+): { x: number; y: number; width: number; height: number } {
+  const x = TABLE_BORDER_WIDTH;
+  const y = edges.top ? TABLE_BORDER_WIDTH : 0;
+  const bottomInset = edges.bottom ? TABLE_BORDER_WIDTH : 0;
+  return {
+    x,
+    y,
+    width: tableWidth - TABLE_BORDER_WIDTH * 2,
+    height: totalBandHeight - y - bottomInset,
+  };
+}
+
+/** Background fill rect for the GFM separator bridge source line. */
+export function separatorBridgeFillRect(
+  bandHeight: number,
+  tableWidth: number,
+): { x: number; y: number; width: number; height: number } {
+  return {
+    x: TABLE_BORDER_WIDTH,
+    y: 0,
+    width: tableWidth - TABLE_BORDER_WIDTH * 2,
+    height: bandHeight,
+  };
 }
 
 /** Band budget and max visible wrap lines when preparing a merged header row band. */
@@ -113,7 +143,9 @@ export function overlayBandFillForSlice(
   headerBackground: string,
   bodyBackground: string,
 ): string {
-  const usesHeaderFill = slice.mergedHeader === true || isHeaderRow;
+  const usesHeaderFill = slice.mergedHeader === true
+    || slice.separatorColumnBridge === true
+    || isHeaderRow;
   return usesHeaderFill ? headerBackground : bodyBackground;
 }
 

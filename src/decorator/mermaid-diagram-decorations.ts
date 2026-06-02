@@ -48,7 +48,8 @@ export class MermaidDiagramDecorations {
       }
 
       if (isDecorationOptionsEntry(entries[0])) {
-        const entry = this.getOrCreateOptionsEntry(key, isDarkTheme, batchKeys);
+        const isWholeLine = key.endsWith(':wl');
+        const entry = this.getOrCreateOptionsEntry(key, isDarkTheme, batchKeys, isWholeLine);
         usedKeys.add(`opt:${key}`);
         editor.setDecorations(entry.decorationType, entries as DecorationOptions[]);
         continue;
@@ -119,6 +120,7 @@ export class MermaidDiagramDecorations {
     key: string,
     isDarkTheme: boolean,
     protectedKeys: ReadonlySet<string>,
+    isWholeLine = false,
   ): MermaidDecorationEntry {
     const existing = this.optionsCache.get(key);
     if (existing && existing.isDarkTheme === isDarkTheme) {
@@ -134,6 +136,7 @@ export class MermaidDiagramDecorations {
     const decorationType = window.createTextEditorDecorationType({
       color: 'transparent',
       textDecoration: 'none; display: inline-block; width: 0;',
+      isWholeLine,
       before: {
         textDecoration: 'none;',
       },

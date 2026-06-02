@@ -3,6 +3,7 @@ import { workspace } from 'vscode';
 import type { TableBlock } from '../parser';
 import { measureTextWidth } from '../parser/tables';
 import { ensureSvgDimensions } from '../mermaid/svg-processor';
+import { logDebug } from '../logging';
 import { resolveTableColors, type TableColors } from './table-colors';
 import {
   dataRowLayoutIndexForSourceLine,
@@ -10,12 +11,14 @@ import {
   headerSliceAllowsDecorationOverflow,
   headerSourceLineToSliceSpec,
   HEADER_SOURCE_LINES,
+  mergedHeaderFillRect,
   mergedHeaderLabelBaselineY,
   mergedHeaderOverlayBandPx,
   mergedHeaderPrepareConstraints,
   overlayBandFillForSlice,
   renderHeaderSeparatorBridge as renderHeaderSeparatorBridgeSlice,
   resolveHeaderOverlayBandHeight,
+  separatorBridgeFillRect,
 } from './table-header-renderer';
 import type {
   TableLayout,
@@ -47,11 +50,13 @@ export type TableRenderOptions = {
   fontSize?: number;
   /** When true, row bands fit source line count (per-line overlay mode). */
   capToSourceLines?: boolean;
+  /** Document line of the table's first GFM row (0-based); used for debug logging. */
+  tableStartLine?: number;
 };
 
 const BORDER_WIDTH = 1;
 
-/** Source lines that receive a per-line SVG overlay (title, separator bridge, and data rows). */
+/** Source lines that receive a per-line SVG overlay (merged title + data rows; separator is hide-only). */
 export function countTableOverlaySourceLines(numLines: number): number {
   return Math.max(0, numLines);
 }
@@ -319,6 +324,37 @@ export function resolveBandRowHeight(
   return Math.min(Math.max(fromContent, sliceBudget), maxBand);
 }
 
+/** GFM source line index for a per-line table slice. */
+function sourceLineIndexForSlice(slice: TableLineSliceSpec): number {
+  if (slice.mergedHeader === true) {
+    return 0;
+  }
+  if (slice.separatorColumnBridge === true) {
+    return 1;
+  }
+  return slice.rowLayoutIndex + HEADER_SOURCE_LINES - 1;
+}
+
+function logSourceLineNumber(layout: TableLayout, sourceLineIndex: number): number {
+  if (layout.tableStartLine !== undefined) {
+    return layout.tableStartLine + sourceLineIndex + 1;
+  }
+  return sourceLineIndex;
+}
+
+function debugLogWrappedLines(
+  layout: TableLayout,
+  sourceLineIndex: number,
+  cellWrapCounts: number[],
+  lineStep: number,
+  overlayHeightPx: number,
+): void {
+  const { lineHeight } = layout.metrics;
+  logDebug(
+    `${logSourceLineNumber(layout, sourceLineIndex)} [${cellWrapCounts.join(',')}] lh=${lineHeight} h=${overlayHeightPx}`,
+  );
+}
+
 /** Keep at most {@link maxLines}; mark overflow with an ellipsis on the last line. */
 export function truncateLinesForBandDisplay(lines: string[], maxLines: number): string[] {
   if (maxLines <= 0 || lines.length === 0) {
@@ -457,9 +493,40 @@ export function rowOverlayExceedsSourceLine(
   return resolveOverlayBandHeight(layout, slice) > lineHeight;
 }
 
+const FIRST_DATA_ROW_LAYOUT_INDEX = 1;
+
+/** Overlay band height for a data row without header-bridge inset (avoids recursion). */
+function dataRowOverlayBandHeight(layout: TableLayout, rowLayoutIndex: number): number {
+  const { lineHeight } = layout.metrics;
+  if (rowLayoutIndex < FIRST_DATA_ROW_LAYOUT_INDEX) {
+    return lineHeight;
+  }
+  const slice: TableLineSliceSpec = {
+    rowLayoutIndex,
+    subLine: 0,
+    subLineCount: 1,
+    sliceHeight: layout.rowHeights[rowLayoutIndex] ?? lineHeight,
+    bandBorders: { top: false, bottom: true },
+  };
+  const prepared = prepareRowBand(
+    layout,
+    rowLayoutIndex,
+    slice,
+    sourceLineIndexForSlice(slice),
+  );
+  return prepared?.rowHeight ?? lineHeight;
+}
+
 export function bodyBandHeaderInsetPx(layout: TableLayout, rowLayoutIndex: number): number {
-  void layout;
-  void rowLayoutIndex;
+  const { lineHeight } = layout.metrics;
+
+  if (rowLayoutIndex > FIRST_DATA_ROW_LAYOUT_INDEX) {
+    const prevHeight = dataRowOverlayBandHeight(layout, rowLayoutIndex - 1);
+    if (prevHeight > lineHeight) {
+      return prevHeight - lineHeight;
+    }
+  }
+
   return 0;
 }
 
@@ -502,8 +569,13 @@ function shouldVerticallyCenterCellInBand(
   lineCount: number,
   bandWrapLines: number,
   mergedHeader: boolean,
+  rowLayoutIndex: number,
 ): boolean {
   if (mergedHeader) {
+    return false;
+  }
+  // Keep the first body row flush under the thead (no empty band above short labels).
+  if (rowLayoutIndex === FIRST_DATA_ROW_LAYOUT_INDEX) {
     return false;
   }
   return lineCount < bandWrapLines;
@@ -676,12 +748,12 @@ export function resolveOverlayBandHeight(
   if (slice.hideSourceOnly === true) {
     return computeBandHeightForSlice(layout, slice);
   }
-  const prepared = prepareRowBand(layout, slice.rowLayoutIndex, slice);
+  const prepared = prepareRowBand(layout, slice.rowLayoutIndex, slice, sourceLineIndexForSlice(slice));
   if (!prepared) {
     return computeBandHeightForSlice(layout, slice);
   }
   const inset = bodyBandHeaderInsetPx(layout, slice.rowLayoutIndex);
-  const headerHeight = resolveHeaderOverlayBandHeight(layout, slice, prepared.rowHeight, inset);
+  const headerHeight = resolveHeaderOverlayBandHeight(layout, slice, inset);
   if (headerHeight !== null) {
     return headerHeight;
   }
@@ -692,6 +764,7 @@ function prepareRowBand(
   layout: TableLayout,
   rowLayoutIndex: number,
   slice: TableLineSliceSpec,
+  sourceLineIndex = sourceLineIndexForSlice(slice),
 ): PreparedRowBand | null {
   const rowLayout = layout.rowLayouts[rowLayoutIndex];
   if (!rowLayout) {
@@ -729,6 +802,17 @@ function prepareRowBand(
   if (slice.mergedHeader === true) {
     rowHeight = Math.max(rowHeight, layout.metrics.lineHeight);
   }
+
+  if (slice.mergedHeader === true) {
+    debugLogWrappedLines(
+      layout,
+      sourceLineIndex,
+      cellLines.map((lines) => lines.length),
+      lineStep,
+      resolveHeaderOverlayBandHeight(layout, slice, 0) ?? mergedHeaderOverlayBandPx(layout),
+    );
+  }
+
   return { cellLines, visibleWrapLines, rowHeight, lineStep };
 }
 
@@ -739,6 +823,7 @@ function renderRowBand(
   slice: TableLineSliceSpec,
   prepared: PreparedRowBand,
   bandTop = 0,
+  overlayBandHeight?: number,
 ): void {
   const rowLayout = layout.rowLayouts[rowLayoutIndex];
   if (!rowLayout) {
@@ -766,7 +851,7 @@ function renderRowBand(
         lineCount,
         cellPadY,
         lineStep,
-        shouldVerticallyCenterCellInBand(lineCount, visibleWrapLines, false),
+        shouldVerticallyCenterCellInBand(lineCount, visibleWrapLines, false, rowLayoutIndex),
       );
 
     appendWrappedCellText(
@@ -788,7 +873,7 @@ function renderRowBand(
   }
 
   const borderBandHeight = slice.mergedHeader === true
-    ? mergedHeaderOverlayBandPx(layout, rowHeight)
+    ? (overlayBandHeight ?? mergedHeaderOverlayBandPx(layout) + bodyBandHeaderInsetPx(layout, 0))
     : rowHeight;
   appendBandBorderLines(parts, layout, bandTop, borderBandHeight, edges);
 }
@@ -825,6 +910,7 @@ export function buildTableLayout(block: TableBlock, options: TableRenderOptions)
     totalWidth,
     totalHeight,
     capToSourceLines,
+    tableStartLine: options.tableStartLine,
   };
 }
 
@@ -864,12 +950,26 @@ export function renderTableSvgLineSlice(
 
   if (slice.separatorColumnBridge === true) {
     const bandHeight = layout.metrics.lineHeight;
-    const parts: string[] = [];
-    appendBandBorderLines(parts, layout, 0, bandHeight, { top: false, bottom: false });
+    const rowLayout = layout.rowLayouts[slice.rowLayoutIndex];
+    const bandFill = overlayBandFillForSlice(
+      slice,
+      rowLayout?.isHeader === true,
+      layout.metrics.colors.headerBackground,
+      layout.metrics.colors.background,
+    );
+    const { x: fillX, y: fillY, width: fillW, height: fillH } = separatorBridgeFillRect(
+      bandHeight,
+      layout.totalWidth,
+    );
+    const parts: string[] = [
+      `<rect x="${fillX}" y="${fillY}" width="${fillW}" height="${fillH}" fill="${bandFill}"/>`,
+    ];
+    const bridgeEdges = slice.bandBorders ?? { top: false, bottom: true };
+    appendBandBorderLines(parts, layout, 0, bandHeight, bridgeEdges);
     return renderSvgFromParts(parts, layout.totalWidth, bandHeight);
   }
 
-  const prepared = prepareRowBand(layout, slice.rowLayoutIndex, slice);
+  const prepared = prepareRowBand(layout, slice.rowLayoutIndex, slice, sourceLineIndex);
   if (!prepared) {
     return null;
   }
@@ -877,7 +977,7 @@ export function renderTableSvgLineSlice(
   const bodyTopInset = bodyBandHeaderInsetPx(layout, slice.rowLayoutIndex);
   const { rowHeight } = prepared;
   const contentSpan = slice.mergedHeader === true
-    ? mergedHeaderOverlayBandPx(layout, rowHeight)
+    ? mergedHeaderOverlayBandPx(layout)
     : rowHeight;
   const bandHeight = contentSpan + bodyTopInset;
   const rowLayout = layout.rowLayouts[slice.rowLayoutIndex];
@@ -888,11 +988,10 @@ export function renderTableSvgLineSlice(
     layout.metrics.colors.background,
   );
   const edges = slice.bandBorders ?? { top: false, bottom: true };
-  const { x: fillX, y: fillY, width: fillW, height: fillH } = bandInnerFrame(
-    contentSpan,
-    layout.totalWidth,
-    edges,
-  );
+  const fillFrame = slice.mergedHeader === true
+    ? mergedHeaderFillRect(bandHeight, layout.totalWidth, edges)
+    : bandInnerFrame(contentSpan, layout.totalWidth, edges);
+  const { x: fillX, y: fillY, width: fillW, height: fillH } = fillFrame;
   const parts: string[] = [];
   const w = layout.totalWidth;
   if (slice.mergedHeader !== true) {
@@ -903,8 +1002,10 @@ export function renderTableSvgLineSlice(
   } else {
     parts.push('<g>');
   }
-  parts.push(`<rect x="${fillX}" y="${fillY + bodyTopInset}" width="${fillW}" height="${fillH}" fill="${bandFill}"/>`);
-  renderRowBand(parts, layout, slice.rowLayoutIndex, slice, prepared, bodyTopInset);
+  const fillYPos = slice.mergedHeader === true ? fillY : fillY + bodyTopInset;
+  const rowBandTop = slice.mergedHeader === true ? 0 : bodyTopInset;
+  parts.push(`<rect x="${fillX}" y="${fillYPos}" width="${fillW}" height="${fillH}" fill="${bandFill}"/>`);
+  renderRowBand(parts, layout, slice.rowLayoutIndex, slice, prepared, rowBandTop, bandHeight);
   parts.push('</g>');
   return renderSvgFromParts(parts, w, bandHeight);
 }

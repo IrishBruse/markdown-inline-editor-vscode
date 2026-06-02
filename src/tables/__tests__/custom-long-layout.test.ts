@@ -3,6 +3,7 @@ import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import { MarkdownParser } from '../../parser/core';
 import {
+  bodyBandHeaderInsetPx,
   buildTableLayout,
   renderTableSvgLineSlice,
   resolveOverlayBandHeight,
@@ -30,8 +31,7 @@ describe('custom-long table layout', () => {
     const row1Y = svg.match(/<tspan x="[^"]*" y="([\d.]+)">Row 1<\/tspan>/)?.[1];
     expect(row1Y).toBeDefined();
     const baseline = Number(row1Y);
-    expect(baseline).toBeGreaterThan(bandHeight * 0.28);
-    expect(baseline).toBeLessThan(bandHeight * 0.65 + layout.metrics.fontSize);
+    expect(baseline).toBeLessThan(bandHeight * 0.35 + layout.metrics.fontSize);
 
     expect(layout.totalWidth).toBeGreaterThan(500);
     expect(layout.totalWidth).toBeLessThan(600);

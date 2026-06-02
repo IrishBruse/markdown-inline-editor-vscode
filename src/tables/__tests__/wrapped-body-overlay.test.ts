@@ -7,6 +7,7 @@ import {
   bodyBandHeaderInsetPx,
   buildTableLayout,
   maxBandHeightPx,
+  mergedHeaderBandBudgetPx,
   MAX_BAND_LINES,
   renderTableSvgLineSlice,
   resolveOverlayBandHeight,
@@ -47,6 +48,17 @@ function labelBaselineY(svg: string, label: string): number {
 }
 
 describe('wrapped body cell overlays (05-tables long cell text)', () => {
+  it('bridges thead to the first body row via a separator-line overlay', () => {
+    const layout = buildTableLayout(docsLongBodyBlock(), { ...metrics, capToSourceLines: false });
+    expect(bodyBandHeaderInsetPx(layout, 1)).toBe(0);
+    const { headerBackground, background } = layout.metrics.colors;
+    const separatorSvg = renderTableSvgLineSlice(layout, 1)!;
+    expect(separatorSvg).toContain(`fill="${headerBackground}"`);
+    const bodySvg = renderTableSvgLineSlice(layout, 2)!;
+    expect(bodySvg).toContain(`fill="${background}"`);
+    expect(bodySvg).not.toMatch(new RegExp(`y="0"[^>]*fill="${headerBackground.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+  });
+
   it('wraps docs-style Lorem across many lines in layout', () => {
     const layout = buildTableLayout(docsLongBodyBlock(), { ...metrics, capToSourceLines: false });
     expect(layout.rowLayouts[1].maxWrapLines).toBeGreaterThan(MAX_BAND_LINES);
@@ -66,15 +78,14 @@ describe('wrapped body cell overlays (05-tables long cell text)', () => {
     expect((svg.match(/<tspan/g) ?? []).length).toBeLessThanOrEqual(MAX_BAND_LINES);
   });
 
-  it('vertically centers the row label beside wrapped content', () => {
+  it('top-aligns the first body row label under the thead', () => {
     const layout = buildTableLayout(docsLongBodyBlock(), { ...metrics, capToSourceLines: false });
     const slice = sourceLineToSliceSpec(2, layout)!;
     const bandHeight = resolveOverlayBandHeight(layout, slice);
     const svg = renderTableSvgLineSlice(layout, 2)!;
     const baseline = labelBaselineY(svg, 'Row 1');
     expect(bandHeight).toBeGreaterThan(metrics.lineHeight);
-    expect(baseline).toBeGreaterThan(bandHeight * 0.28);
-    expect(baseline).toBeLessThan(bandHeight * 0.65 + layout.metrics.fontSize);
+    expect(baseline).toBeLessThan(bandHeight * 0.35 + layout.metrics.fontSize);
   });
 
   it('word-wraps body text with multiple tspans instead of a single truncated line', () => {
@@ -118,8 +129,7 @@ describe('wrapped body cell overlays (05-tables long cell text)', () => {
     const row1Y = svg.match(/<tspan x="[^"]*" y="([\d.]+)">Row 1<\/tspan>/)?.[1];
     expect(row1Y).toBeDefined();
     const baseline = Number(row1Y);
-    expect(baseline).toBeGreaterThan(bandHeight * 0.28);
-    expect(baseline).toBeLessThan(bandHeight * 0.65 + layout.metrics.fontSize);
+    expect(baseline).toBeLessThan(bandHeight * 0.35 + layout.metrics.fontSize);
     expect(layout.totalWidth).toBeGreaterThan(500);
     expect(layout.totalWidth).toBeLessThan(600);
   });

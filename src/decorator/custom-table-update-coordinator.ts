@@ -98,8 +98,12 @@ function getTableBlockCacheKey(
   return key;
 }
 
-function sliceCacheKey(blockKey: string, sourceLineIndex: number): string {
-  return `${blockKey}:${sourceLineIndex}`;
+function sliceCacheKey(
+  blockKey: string,
+  sourceLineIndex: number,
+  wholeLineOverlay = false,
+): string {
+  return `${blockKey}:${sourceLineIndex}${wholeLineOverlay ? ':wl' : ''}`;
 }
 
 type TableSourceLineRanges = {
@@ -186,6 +190,7 @@ export class CustomTableUpdateCoordinator {
     bandHeight: number,
     slice: TableLineSliceSpec,
     lineHeight: number,
+    headerBackground?: string,
   ): DecorationOptions[] {
     const overflow = sliceAllowsDecorationOverflow(slice, bandHeight, lineHeight);
     const overflowStyle = overflow
@@ -205,10 +210,15 @@ export class CustomTableUpdateCoordinator {
       `width: ${bandWidth}px`,
       `height: ${bandHeight}px`,
       `max-width: ${bandWidth}px`,
-      `max-height: ${bandHeight}px`,
+      ...(overflow
+        ? [`min-height: ${bandHeight}px`]
+        : [`max-height: ${bandHeight}px`]),
     ].join('; ');
+    const hideOptions: DecorationOptions = slice.useFullLineOverlay === true && headerBackground
+      ? { range: hideRange, renderOptions: { backgroundColor: headerBackground } }
+      : { range: hideRange };
     return [
-      { range: hideRange },
+      hideOptions,
       {
         range: overlayRange,
         renderOptions: {
@@ -331,7 +341,11 @@ export class CustomTableUpdateCoordinator {
 
       const blockKey = getTableBlockCacheKey(block, isDark, colorsKey, lineHeight, fontSize, fontFamily);
 
-      const blockLayout = buildTableLayout(block, renderOptions);
+      const tableRange = createRange(editor, block.startPos, block.endPos, normalizedText);
+      const blockLayout = buildTableLayout(block, {
+        ...renderOptions,
+        tableStartLine: tableRange?.start.line,
+      });
 
       for (let sourceLineIndex = 0; sourceLineIndex < block.numLines; sourceLineIndex++) {
         const slice = sourceLineToSliceSpec(sourceLineIndex, blockLayout);
@@ -349,7 +363,7 @@ export class CustomTableUpdateCoordinator {
           continue;
         }
 
-        const key = sliceCacheKey(blockKey, sourceLineIndex);
+        const key = sliceCacheKey(blockKey, sourceLineIndex, slice.useFullLineOverlay === true);
 
         if (slice.hideSourceOnly === true) {
           const existing = decorationsByKey.get(key) || [];
@@ -361,14 +375,18 @@ export class CustomTableUpdateCoordinator {
         const cachedUri = this.svgDataUriCache.get(key);
         if (cachedUri) {
           const bandHeight = this.bandHeightForSlice(block, sourceLineIndex, renderOptions, blockLayout);
+          const overlayRange = slice.useFullLineOverlay === true
+            ? lineRanges.hideRange
+            : lineRanges.overlayRange;
           const options = this.buildTableSliceDecorations(
             lineRanges.hideRange,
-            lineRanges.overlayRange,
+            overlayRange,
             cachedUri,
             blockLayout.totalWidth,
             bandHeight,
             slice,
             lineHeight,
+            blockLayout.metrics.colors.headerBackground,
           );
           const existing = decorationsByKey.get(key) || [];
           existing.push(...options);
@@ -395,7 +413,11 @@ export class CustomTableUpdateCoordinator {
 
       const batch = jobsToRender.slice(offset, offset + this.renderBatchSize);
       for (const job of batch) {
-        const layout = buildTableLayout(job.block, renderOptions);
+        const jobTableRange = createRange(editor, job.block.startPos, job.block.endPos, normalizedText);
+        const layout = buildTableLayout(job.block, {
+          ...renderOptions,
+          tableStartLine: jobTableRange?.start.line,
+        });
         const slice = sourceLineToSliceSpec(job.sourceLineIndex, layout);
         if (!slice) {
           continue;
@@ -419,14 +441,18 @@ export class CustomTableUpdateCoordinator {
         }
 
         const bandHeight = this.bandHeightForSlice(job.block, job.sourceLineIndex, renderOptions, layout);
+        const overlayRange = slice.useFullLineOverlay === true
+          ? lineRanges.hideRange
+          : lineRanges.overlayRange;
         const options = this.buildTableSliceDecorations(
           lineRanges.hideRange,
-          lineRanges.overlayRange,
+          overlayRange,
           dataUri,
           layout.totalWidth,
           bandHeight,
           slice,
           lineHeight,
+          layout.metrics.colors.headerBackground,
         );
         const existing = decorationsByKey.get(job.sliceKey) || [];
         existing.push(...options);

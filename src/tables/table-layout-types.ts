@@ -29,6 +29,8 @@ export type TableLayout = {
   totalWidth: number;
   totalHeight: number;
   capToSourceLines: boolean;
+  /** Document line of the table's first GFM row (0-based); used for debug logging. */
+  tableStartLine?: number;
 };
 
 export type TableLineSliceSpec = {
@@ -42,6 +44,8 @@ export type TableLineSliceSpec = {
   headerBridge?: boolean;
   /** Separator source line: column rules only (bridges header to body). */
   separatorColumnBridge?: boolean;
+  /** Anchor the SVG overlay on the full source line (separator bridge). */
+  useFullLineOverlay?: boolean;
   /** Source line is hidden but does not receive an SVG overlay. */
   hideSourceOnly?: boolean;
   /** Which horizontal edges to stroke on this band (per-line overlays only). */

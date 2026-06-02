@@ -27,7 +27,6 @@ export class MarkdownParseCache {
     const cached = this.cache.get(cacheKey);
     if (cached && cached.version === document.version) {
       cached.lastAccessed = ++this.accessCounter;
-      logDebug('parse cache hit', { uri: cacheKey, version: document.version });
       return cached;
     }
 
