@@ -1,4 +1,5 @@
-import type { TableLayout, TableLayoutMetrics, TableLineSliceSpec } from './table-layout-types';
+import type { PreparedRowBand, TableLayout, TableLayoutMetrics, TableLineSliceSpec } from './layout-types';
+import { appendBandBorderLines, appendWrappedCellText, BORDER_WIDTH, renderSvgFromParts } from './svg';
 
 /** GFM header row plus `|---|---|` separator line rendered as one thead band. */
 export const HEADER_SOURCE_LINES = 2;
@@ -8,8 +9,6 @@ const TITLE_LINE_INDEX = 0;
 
 /** Source-line index of the GFM `|---|---|` separator row. */
 const SEPARATOR_LINE_INDEX = 1;
-
-const TABLE_BORDER_WIDTH = 1;
 
 /** Pixel height budget for merged header overlays (title row plus separator bridge). */
 export function mergedHeaderBandBudgetPx(metrics: Pick<TableLayoutMetrics, 'lineHeight'>): number {
@@ -98,12 +97,12 @@ export function mergedHeaderFillRect(
   edges: { top: boolean; bottom: boolean },
 ): { x: number; y: number; width: number; height: number } {
   void edges.top;
-  const x = TABLE_BORDER_WIDTH;
-  const bottomInset = edges.bottom ? TABLE_BORDER_WIDTH : 0;
+  const x = BORDER_WIDTH;
+  const bottomInset = edges.bottom ? BORDER_WIDTH : 0;
   return {
     x,
     y: 0,
-    width: tableWidth - TABLE_BORDER_WIDTH * 2,
+    width: tableWidth - BORDER_WIDTH * 2,
     height: totalBandHeight - bottomInset,
   };
 }
@@ -114,9 +113,9 @@ export function separatorBridgeFillRect(
   tableWidth: number,
 ): { x: number; y: number; width: number; height: number } {
   return {
-    x: TABLE_BORDER_WIDTH,
+    x: BORDER_WIDTH,
     y: 0,
-    width: tableWidth - TABLE_BORDER_WIDTH * 2,
+    width: tableWidth - BORDER_WIDTH * 2,
     height: bandHeight,
   };
 }
@@ -166,4 +165,101 @@ export function renderHeaderSeparatorBridge(
     return null;
   }
   return renderLineSlice(layout, SEPARATOR_LINE_INDEX);
+}
+
+/** Render the GFM separator bridge overlay (column rules only). */
+export function renderHeaderSeparatorBridgeSlice(
+  layout: TableLayout,
+  slice: TableLineSliceSpec,
+): string {
+  const bandHeight = layout.metrics.lineHeight;
+  const rowLayout = layout.rowLayouts[slice.rowLayoutIndex];
+  const bandFill = overlayBandFillForSlice(
+    slice,
+    rowLayout?.isHeader === true,
+    layout.metrics.colors.headerBackground,
+    layout.metrics.colors.background,
+  );
+  const { x: fillX, y: fillY, width: fillW, height: fillH } = separatorBridgeFillRect(
+    bandHeight,
+    layout.totalWidth,
+  );
+  const parts: string[] = [
+    `<rect x="${fillX}" y="${fillY}" width="${fillW}" height="${fillH}" fill="${bandFill}"/>`,
+  ];
+  const bridgeEdges = slice.bandBorders ?? { top: false, bottom: true };
+  appendBandBorderLines(parts, layout, 0, bandHeight, bridgeEdges);
+  return renderSvgFromParts(parts, layout.totalWidth, bandHeight);
+}
+
+function renderHeaderRowBand(
+  parts: string[],
+  layout: TableLayout,
+  slice: TableLineSliceSpec,
+  prepared: PreparedRowBand,
+  overlayBandHeight: number,
+): void {
+  const rowLayout = layout.rowLayouts[slice.rowLayoutIndex];
+  if (!rowLayout) {
+    return;
+  }
+
+  const { colWidths, block, metrics } = layout;
+  const { fontSize, charWidth, cellPadX, cellPadY, fontFamily, colors } = metrics;
+  const { text: textColor } = colors;
+  const { cellLines, lineStep } = prepared;
+  const edges = slice.bandBorders ?? { top: false, bottom: true };
+
+  let x = BORDER_WIDTH;
+  for (let colIdx = 0; colIdx < rowLayout.row.length; colIdx++) {
+    const colWidth = colWidths[colIdx];
+    const align = colIdx < block.align.length ? block.align[colIdx] : null;
+    const lines = cellLines[colIdx] ?? [''];
+    const cellFirstY = mergedHeaderLabelBaselineY(fontSize, cellPadY);
+
+    appendWrappedCellText(
+      parts,
+      lines,
+      align,
+      x,
+      colWidth,
+      cellFirstY,
+      lineStep,
+      textColor,
+      fontFamily,
+      fontSize,
+      charWidth,
+      cellPadX,
+    );
+
+    x += colWidth;
+  }
+
+  appendBandBorderLines(parts, layout, 0, overlayBandHeight, edges);
+}
+
+/** Render the merged header title overlay (spans title + separator source lines). */
+export function renderMergedHeaderLineSlice(
+  layout: TableLayout,
+  slice: TableLineSliceSpec,
+  prepared: PreparedRowBand,
+  sourceLineIndex: number,
+): string {
+  const bandHeight = layout.metrics.lineHeight;
+  const rowLayout = layout.rowLayouts[slice.rowLayoutIndex];
+  const bandFill = overlayBandFillForSlice(
+    slice,
+    rowLayout?.isHeader === true,
+    layout.metrics.colors.headerBackground,
+    layout.metrics.colors.background,
+  );
+  const edges = slice.bandBorders ?? { top: false, bottom: true };
+  const fillFrame = mergedHeaderFillRect(bandHeight, layout.totalWidth, edges);
+  const { x: fillX, y: fillY, width: fillW, height: fillH } = fillFrame;
+  const parts: string[] = ['<g>'];
+  parts.push(`<rect x="${fillX}" y="${fillY}" width="${fillW}" height="${fillH}" fill="${bandFill}"/>`);
+  renderHeaderRowBand(parts, layout, slice, prepared, bandHeight);
+  parts.push('</g>');
+  void sourceLineIndex;
+  return renderSvgFromParts(parts, layout.totalWidth, bandHeight);
 }

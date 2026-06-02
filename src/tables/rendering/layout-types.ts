@@ -1,5 +1,5 @@
-import type { TableBlock } from '../parser';
-import type { TableColors } from './table-colors';
+import type { TableBlock } from '../../parser';
+import type { TableColors } from '../table-colors';
 
 export type TableLayoutMetrics = {
   lineHeight: number;
@@ -50,4 +50,11 @@ export type TableLineSliceSpec = {
   hideSourceOnly?: boolean;
   /** Which horizontal edges to stroke on this band (per-line overlays only). */
   bandBorders?: { top: boolean; bottom: boolean };
+};
+
+export type PreparedRowBand = {
+  cellLines: string[][];
+  visibleWrapLines: number;
+  rowHeight: number;
+  lineStep: number;
 };
