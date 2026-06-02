@@ -10,7 +10,9 @@ import {
   workspace,
 } from 'vscode';
 import type { TableBlock } from '../parser';
+import { logDebug } from '../logging';
 import { svgToDataUri } from '../mermaid/svg-processor';
+import { estimateEditorLineWrap, isDebugDocumentLine } from '../tables/editor-line-wrap-estimate';
 import { resolveTableColors, tableColorsCacheKey } from '../tables/table-colors';
 import {
   buildTableLayout,
@@ -252,6 +254,45 @@ export class CustomTableUpdateCoordinator {
     return resolveOverlayBandHeight(tableLayout, slice);
   }
 
+  /**
+   * Compare table overlay band height with a manual editor word-wrap estimate (line 324 only).
+   * Enable debug logging in extension settings to see output in the Markdown Inline Editor channel.
+   */
+  private maybeDebugLogLine324Wrap(
+    editor: TextEditor,
+    tableStartLine0: number,
+    sourceLineIndex: number,
+    layout: ReturnType<typeof buildTableLayout>,
+    slice: TableLineSliceSpec,
+  ): void {
+    const docLineOneBased = tableStartLine0 + sourceLineIndex + 1;
+    if (!isDebugDocumentLine(docLineOneBased)) {
+      return;
+    }
+
+    const docLine0 = tableStartLine0 + sourceLineIndex;
+    const lineText = editor.document.lineAt(docLine0).text;
+    const editorWrap = estimateEditorLineWrap(lineText, { editor });
+    const tableOverlayBandPx = resolveOverlayBandHeight(layout, slice);
+
+    console.log('table line 324 word-wrap height', {
+      docLine: docLineOneBased,
+      editorWrapLineCount: editorWrap.wrapLineCount,
+      editorEstimatedHeightPx: editorWrap.estimatedPixelHeightPx,
+      tableOverlayBandPx,
+      tableUsesPerSourceLineCap: tableOverlayBandPx === editorWrap.lineHeightPx,
+      wordWrap: editorWrap.wordWrap,
+      wordWrapColumn: editorWrap.wordWrapColumn,
+      wrapBoundaryUnits: editorWrap.wrapBoundaryUnits,
+      lineTextUnits: editorWrap.lineTextUnits,
+      viewportApproximate: editorWrap.viewportApproximate,
+      lineHeightPx: editorWrap.lineHeightPx,
+      fontSize: editorWrap.fontSize,
+      charWidthPx: editorWrap.charWidthPx,
+      lineTextLength: editorWrap.lineTextLength,
+    });
+  }
+
   private resetCoordinatorState(): void {
     this.appliedState = null;
     this.inFlightSignature = null;
@@ -347,15 +388,20 @@ export class CustomTableUpdateCoordinator {
       const blockKey = getTableBlockCacheKey(block, isDark, colorsKey, lineHeight, fontSize, fontFamily);
 
       const tableRange = createRange(editor, block.startPos, block.endPos, normalizedText);
+      const tableStartLine0 = tableRange?.start.line;
       const blockLayout = buildTableLayout(block, {
         ...renderOptions,
-        tableStartLine: tableRange?.start.line,
+        tableStartLine: tableStartLine0,
       });
 
       for (let sourceLineIndex = 0; sourceLineIndex < block.numLines; sourceLineIndex++) {
         const slice = sourceLineToSliceSpec(sourceLineIndex, blockLayout);
         if (!slice) {
           continue;
+        }
+
+        if (tableStartLine0 !== undefined) {
+          this.maybeDebugLogLine324Wrap(editor, tableStartLine0, sourceLineIndex, blockLayout, slice);
         }
 
         const lineRanges = createTableSourceLineRanges(
@@ -421,13 +467,18 @@ export class CustomTableUpdateCoordinator {
       const batch = jobsToRender.slice(offset, offset + this.renderBatchSize);
       for (const job of batch) {
         const jobTableRange = createRange(editor, job.block.startPos, job.block.endPos, normalizedText);
+        const jobTableStartLine0 = jobTableRange?.start.line;
         const layout = buildTableLayout(job.block, {
           ...renderOptions,
-          tableStartLine: jobTableRange?.start.line,
+          tableStartLine: jobTableStartLine0,
         });
         const slice = sourceLineToSliceSpec(job.sourceLineIndex, layout);
         if (!slice) {
           continue;
+        }
+
+        if (jobTableStartLine0 !== undefined) {
+          this.maybeDebugLogLine324Wrap(editor, jobTableStartLine0, job.sourceLineIndex, layout, slice);
         }
 
         const svg = renderTableSvgLineSlice(layout, job.sourceLineIndex);
