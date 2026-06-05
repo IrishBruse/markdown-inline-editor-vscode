@@ -82,7 +82,7 @@ function extractHeadings(content) {
 }
 
 function validateFile(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
+  const content = fs.readFileSync(filePath, 'utf-8').replace(/\r\n/g, '\n');
   const { frontmatter, body } = extractFrontmatter(content);
   const headings = extractHeadings(body);
   
