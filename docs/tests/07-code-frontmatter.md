@@ -2,6 +2,7 @@
 title: Visual test frontmatter
 tags: [yaml, frontmatter]
 enabled: true
+glob: **/*.ts
 ---
 
 # Code blocks and frontmatter

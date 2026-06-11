@@ -96,7 +96,7 @@ export function filterDecorationsForEditor(
         rawTableRanges.push(tableScope.range);
         continue;
       }
-      if (tableWouldWrap(editor, tableScope, decorations, lineAtOffset)) {
+      if (tableWouldWrap(editor, tableScope, decorations, originalText, lineAtOffset)) {
         rawTableRanges.push(tableScope.range);
       }
     }

@@ -73,6 +73,11 @@ export function registerEventHandlers(
     vscode.window.onDidChangeWindowState(() => {
       decorator.updateDecorationsForSelection();
     }),
+    vscode.window.onDidChangeTextEditorViewColumn((event) => {
+      if (event.textEditor === vscode.window.activeTextEditor) {
+        decorator.updateDecorationsForSelection();
+      }
+    }),
     vscode.window.onDidChangeActiveColorTheme(() => {
       decorator.recreateColorDependentTypes();
     }),

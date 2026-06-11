@@ -43,7 +43,7 @@ describe('table-word-wrap long cell fixture', () => {
     const lineAtOffset = (offset: number) => text.substring(0, offset).split(/\r\n|\r|\n/).length - 1;
 
     expect(
-      tableWouldWrap(editor as any, scope, parsed.decorations, lineAtOffset),
+      tableWouldWrap(editor as any, scope, parsed.decorations, text, lineAtOffset),
     ).toBe(true);
   });
 });
