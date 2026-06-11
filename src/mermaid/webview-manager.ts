@@ -15,7 +15,8 @@ export class MermaidWebviewManager {
   private pendingRenders = new Map<string, PendingRender>();
   private renderRequestCounter = 0;
   private messageHandlerDisposable: vscode.Disposable | undefined;
-  private initTimeoutId: NodeJS.Timeout | undefined;
+  private visibilityDisposable: vscode.Disposable | undefined;
+  private hideViewTimeoutId: NodeJS.Timeout | undefined;
   private ensureWebviewInFlight: Promise<void> | undefined;
   private _extensionContext: vscode.ExtensionContext | undefined;
 
@@ -51,21 +52,21 @@ export class MermaidWebviewManager {
 
   /**
    * Focus the Mermaid view to trigger webview creation on first use.
-   * Hidden views are not resolved until focused. Waits for readiness (or 5s), then switches back to Explorer.
+   * Hidden views are not resolved until focused. Waits for readiness (or 5s).
+   * Auto-hide is handled by onDidChangeVisibility once the view becomes visible.
    */
   async ensureWebviewReady(): Promise<void> {
     if (this.webviewView) {
       return;
     }
     if (!this.ensureWebviewInFlight) {
-      this.ensureWebviewInFlight = this.doEnsureWebviewThenSwitchBack();
+      this.ensureWebviewInFlight = this.doEnsureWebviewReady();
     }
     await this.ensureWebviewInFlight;
   }
 
-  private async doEnsureWebviewThenSwitchBack(): Promise<void> {
+  private async doEnsureWebviewReady(): Promise<void> {
     const WEBVIEW_READY_TIMEOUT_MS = 5000;
-    const SWITCH_BACK_DELAY_MS = 100;
 
     try {
       await vscode.commands.executeCommand('mdInline.mermaidRenderer.focus');
@@ -88,11 +89,65 @@ export class MermaidWebviewManager {
         logWarn('Mermaid: Webview not ready after opening view');
       }
     }
+  }
 
-    this.initTimeoutId = setTimeout(() => {
-      void vscode.commands.executeCommand('workbench.view.explorer');
-      this.initTimeoutId = undefined;
-    }, SWITCH_BACK_DELAY_MS);
+  /**
+   * Schedule hiding the Mermaid view after it becomes visible.
+   * Waits for webview readiness, then switches back to Explorer and focuses the editor.
+   */
+  private scheduleHideView(): void {
+    const HIDE_VIEW_DELAY_MS = 100;
+
+    if (this.hideViewTimeoutId) {
+      clearTimeout(this.hideViewTimeoutId);
+    }
+
+    this.hideViewTimeoutId = setTimeout(() => {
+      this.hideViewTimeoutId = undefined;
+      void this.hideMermaidView();
+    }, HIDE_VIEW_DELAY_MS);
+  }
+
+  private async hideMermaidView(): Promise<void> {
+    const WEBVIEW_READY_TIMEOUT_MS = 5000;
+
+    try {
+      await Promise.race([
+        this.webviewLoaded,
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), WEBVIEW_READY_TIMEOUT_MS)
+        ),
+      ]);
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message === 'timeout') {
+        logWarn('Mermaid: Webview not ready before hiding view');
+      }
+    }
+
+    try {
+      await vscode.commands.executeCommand('workbench.view.explorer');
+      await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+    } catch (err: unknown) {
+      if (err !== undefined) {
+        logWarn('Mermaid: Failed to hide view', err);
+      }
+    }
+  }
+
+  /**
+   * Track view visibility so the internal renderer panel auto-hides after being shown.
+   */
+  private attachVisibilityAutoHide(webviewView: vscode.WebviewView): void {
+    this.visibilityDisposable?.dispose();
+    this.visibilityDisposable = webviewView.onDidChangeVisibility(() => {
+      if (webviewView.visible) {
+        this.scheduleHideView();
+      }
+    });
+
+    if (webviewView.visible) {
+      this.scheduleHideView();
+    }
   }
 
   /**
@@ -100,6 +155,7 @@ export class MermaidWebviewManager {
    */
   setWebviewView(view: vscode.WebviewView): void {
     this.webviewView = view;
+    this.attachVisibilityAutoHide(view);
     // Resolve webviewLoaded immediately when webview is created
     this.resolveWebviewLoaded?.();
   }
@@ -403,11 +459,14 @@ export class MermaidWebviewManager {
    * Dispose and clean up resources
    */
   dispose(): void {
-    // Clear timeout if still pending
-    if (this.initTimeoutId) {
-      clearTimeout(this.initTimeoutId);
-      this.initTimeoutId = undefined;
+    // Clear hide timeout if still pending
+    if (this.hideViewTimeoutId) {
+      clearTimeout(this.hideViewTimeoutId);
+      this.hideViewTimeoutId = undefined;
     }
+
+    this.visibilityDisposable?.dispose();
+    this.visibilityDisposable = undefined;
     
     // Clear all pending render timeouts and reject promises
     for (const { reject, timeoutId } of this.pendingRenders.values()) {
