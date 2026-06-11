@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
-const SECTION = 'markdownInlineEditor' as const;
+export const CONFIG_SECTION = 'markdownInlineEditor' as const;
+const LEGACY_CONFIG_SECTION = 'inlineMarkdownEditor' as const;
 
 export type TableRenderingMode = 'raw' | 'inline' | 'custom';
 
@@ -37,110 +38,107 @@ function parseHexColor(value: string | undefined | null): string | undefined {
   return HEX_COLOR_REGEX.test(trimmed) ? trimmed : undefined;
 }
 
+function getSetting<T>(key: string, defaultValue: T): T {
+  const current = vscode.workspace.getConfiguration(CONFIG_SECTION).get<T>(key);
+  if (current !== undefined) {
+    return current;
+  }
+  const legacy = vscode.workspace.getConfiguration(LEGACY_CONFIG_SECTION).get<T>(key);
+  if (legacy !== undefined) {
+    return legacy;
+  }
+  return defaultValue;
+}
+
+function getOptionalSetting<T>(key: string): T | undefined {
+  const current = vscode.workspace.getConfiguration(CONFIG_SECTION).get<T>(key);
+  if (current !== undefined) {
+    return current;
+  }
+  return vscode.workspace.getConfiguration(LEGACY_CONFIG_SECTION).get<T>(key);
+}
+
 function getColorConfig(key: string): string | undefined {
-  return parseHexColor(
-    vscode.workspace.getConfiguration(SECTION).get<string>(`colors.${key}`)
-  );
+  return parseHexColor(getOptionalSetting<string>(`colors.${key}`));
+}
+
+/** True when a configuration key under this extension changed (current or legacy namespace). */
+export function configAffectsConfiguration(
+  event: vscode.ConfigurationChangeEvent,
+  key: string,
+): boolean {
+  return event.affectsConfiguration(`${CONFIG_SECTION}.${key}`)
+    || event.affectsConfiguration(`${LEGACY_CONFIG_SECTION}.${key}`);
 }
 
 export const config = {
   diffView: {
     applyDecorations(): boolean {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('defaultBehaviors.diffView.applyDecorations', false);
+      return getSetting('defaultBehaviors.diffView.applyDecorations', false);
     },
   },
   links: {
     singleClickOpen(): boolean {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('links.singleClickOpen', false);
+      return getSetting('links.singleClickOpen', false);
     },
     /** Chain (🔗) icon after link text; off by default so raw markdown tables stay aligned. */
     showEmoji(): boolean {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('links.showEmoji', false);
+      return getSetting('links.showEmoji', false);
     },
   },
   decorations: {
     ghostFaintOpacity(): number {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<number>('decorations.ghostFaintOpacity', 0.3);
+      return getSetting('decorations.ghostFaintOpacity', 0.3);
     },
     frontmatterDelimiterOpacity(): number {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<number>('decorations.frontmatterDelimiterOpacity', 0.3);
+      return getSetting('decorations.frontmatterDelimiterOpacity', 0.3);
     },
     codeBlockLanguageOpacity(): number {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<number>('decorations.codeBlockLanguageOpacity', 0.3);
+      return getSetting('decorations.codeBlockLanguageOpacity', 0.3);
     },
   },
   emojis: {
     enabled(): boolean {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('emojis.enabled', true);
+      return getSetting('emojis.enabled', true);
     },
   },
   math: {
     enabled(): boolean {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('math.enabled', true);
+      return getSetting('math.enabled', true);
     },
   },
   tables: {
     renderingMode(): TableRenderingMode {
-      const value = vscode.workspace
-        .getConfiguration(SECTION)
-        .get<string>('tables.renderingMode', 'inline');
+      const value = getSetting('tables.renderingMode', 'inline');
       return normalizeTableRenderingMode(value) ?? 'inline';
     },
   },
   orderedLists: {
     /** When true, ordered list markers are hidden and replaced with computed numbers (lazy `1.` numbering, etc.). When false, the source text is shown as written. */
     autoNumber(): boolean {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('orderedLists.autoNumber', true);
+      return getSetting('orderedLists.autoNumber', true);
     },
     /** When auto-numbering is on, tint the displayed marker when it differs from the number in the source. */
     warnWhenSourceNumberDiffers(): boolean {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('orderedLists.warnWhenSourceNumberDiffers', true);
+      return getSetting('orderedLists.warnWhenSourceNumberDiffers', true);
     },
   },
   mentions: {
     /** If set, overrides GitHub context: true = force links on, false = force off. Unset = use git remote auto-detect. */
     linksEnabled(): boolean | undefined {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('mentions.linksEnabled');
+      return getOptionalSetting<boolean>('mentions.linksEnabled');
     },
     /** Optional: master switch to enable/disable mention and issue-reference styling and detection. */
     enabled(): boolean {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('mentions.enabled', true);
+      return getSetting('mentions.enabled', true);
     },
   },
   debug: {
     loggingEnabled(): boolean {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('debug.logging.enabled', false);
+      return getSetting('debug.logging.enabled', false);
     },
     performanceEnabled(): boolean {
-      return vscode.workspace
-        .getConfiguration(SECTION)
-        .get<boolean>('debug.performance.enabled', false);
+      return getSetting('debug.performance.enabled', false);
     },
   },
   colors: {

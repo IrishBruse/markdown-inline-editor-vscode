@@ -46,7 +46,7 @@ export function resolveLinkTarget(
     const anchor = trimmed.substring(1);
     return {
       kind: "command",
-      command: "markdown-inline-editor.navigateToAnchor",
+      command: "mdInline.navigateToAnchor",
       args: [anchor, documentUri.toString()],
     };
   }

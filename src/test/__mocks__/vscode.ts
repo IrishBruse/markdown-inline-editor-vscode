@@ -234,6 +234,7 @@ export const window = {
   onDidChangeActiveTextEditor: () => ({ dispose: () => {} }),
   onDidChangeTextEditorSelection: () => ({ dispose: () => {} }),
   onDidChangeActiveColorTheme: () => ({ dispose: () => {} }),
+  onDidChangeWindowState: () => ({ dispose: () => {} }),
 };
 
 export class WorkspaceEdit {

@@ -29,7 +29,7 @@ async function navigateToAnchor(anchor: string, documentUri: string): Promise<vo
 
 export function createNavigateToAnchorCommand(): vscode.Disposable {
   return vscode.commands.registerCommand(
-    'markdown-inline-editor.navigateToAnchor',
+    'mdInline.navigateToAnchor',
     navigateToAnchor
   );
 }

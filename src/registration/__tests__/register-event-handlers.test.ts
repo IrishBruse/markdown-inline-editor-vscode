@@ -26,7 +26,7 @@ describe('registerEventHandlers', () => {
 
     const disposables = registerEventHandlers(decorator as any, linkClickHandler as any);
 
-    expect(disposables).toHaveLength(6);
+    expect(disposables).toHaveLength(7);
   });
 
   it('routes editor and workspace events to the decorator', () => {

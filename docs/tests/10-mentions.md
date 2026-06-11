@@ -18,7 +18,7 @@ cc @my-org/platform-team for infra.
 
 ## Repo-scoped
 
-See @SeardnaSchmid/markdown-inline-editor-vscode#1 for tracking.
+See @IrishBruse/markdown-inline-editor-vscode#1 for tracking.
 
 ## Inside code (should NOT decorate)
 

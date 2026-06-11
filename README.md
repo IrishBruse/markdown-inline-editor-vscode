@@ -82,6 +82,8 @@ Example:
 }
 ```
 
+Brief rebrand `inlineMarkdownEditor.*` settings are still read as fallbacks.
+
 ## Commands
 
 - **Toggle Markdown Decorations** (`mdInline.toggleDecorations`) - enable or disable inline rendering for the current file (persisted per URI).
@@ -127,7 +129,7 @@ MIT - see [LICENSE.txt][license].
 
 Inspired by [markdown-inline-preview-vscode](https://github.com/domdomegg/markdown-inline-preview-vscode), [Markdown WYSIWYG](https://marketplace.visualstudio.com/items?itemName=remcohaszing.markdown-decorations), [markless](https://github.com/tejasvi/markless), [Typora](https://typora.io/), and [Obsidian](https://obsidian.md/).
 
-Fork maintained by [@IrishBruse](https://github.com/IrishBruse). Based on [SeardnaSchmid/markdown-inline-editor-vscode](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode). Contributors include [@patrick-yip](https://github.com/patrick-yip), [@bircni](https://github.com/bircni), and [@ssebs](https://github.com/ssebs).
+Maintained by [@IrishBruse](https://github.com/IrishBruse). Descended from [SeardnaSchmid/markdown-inline-editor-vscode](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode). Contributors include [@patrick-yip](https://github.com/patrick-yip), [@bircni](https://github.com/bircni), and [@ssebs](https://github.com/ssebs).
 
 [ci-img]: https://github.com/IrishBruse/markdown-inline-editor-vscode/actions/workflows/ci.yaml/badge.svg
 [ci]: https://github.com/IrishBruse/markdown-inline-editor-vscode/actions/workflows/ci.yaml
@@ -138,8 +140,8 @@ Fork maintained by [@IrishBruse](https://github.com/IrishBruse). Based on [Seard
 [contributing]: https://github.com/IrishBruse/markdown-inline-editor-vscode/blob/main/CONTRIBUTING.md
 [agents]: https://github.com/IrishBruse/markdown-inline-editor-vscode/blob/main/AGENTS.md
 [license]: https://github.com/IrishBruse/markdown-inline-editor-vscode/blob/main/LICENSE.txt
-[marketplace]: https://marketplace.visualstudio.com/items?itemName=CodeSmith.markdown-inline-editor-vscode
-[openvsx]: https://open-vsx.org/extension/CodeSmith/markdown-inline-editor-vscode
-[marketplace-img]: https://img.shields.io/visual-studio-marketplace/v/CodeSmith.markdown-inline-editor-vscode?label=Install%20on%20VS%20Code&logo=visualstudiocode&logoColor=white
-[openvsx-img]: https://img.shields.io/open-vsx/v/CodeSmith/markdown-inline-editor-vscode?label=Get%20on%20Open%20VSX&logo=openvsx&logoColor=white
+[marketplace]: https://marketplace.visualstudio.com/items?itemName=irishbruse.markdown-inline-editor-vscode
+[openvsx]: https://open-vsx.org/extension/irishbruse/markdown-inline-editor-vscode
+[marketplace-img]: https://img.shields.io/visual-studio-marketplace/v/irishbruse.markdown-inline-editor-vscode?label=Install%20on%20VS%20Code&logo=visualstudiocode&logoColor=white
+[openvsx-img]: https://img.shields.io/open-vsx/v/irishbruse.markdown-inline-editor-vscode?label=Get%20on%20Open%20VSX&logo=openvsx&logoColor=white
 [license-img]: https://img.shields.io/badge/License-MIT-555555?labelColor=blue

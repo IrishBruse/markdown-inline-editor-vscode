@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { config } from '../config';
+import { config, configAffectsConfiguration } from '../config';
 import { Decorator } from '../decorator';
 import { LinkClickHandler } from '../link-click-handler';
 
@@ -25,43 +25,53 @@ export function registerEventHandlers(
       }
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('markdownInlineEditor.defaultBehaviors.diffView.applyDecorations')) {
+      if (configAffectsConfiguration(event, 'defaultBehaviors.diffView.applyDecorations')) {
         const diffViewApplyDecorations = config.diffView.applyDecorations();
         decorator.updateDiffViewDecorationSetting(!diffViewApplyDecorations);
         decorator.updateDecorationsForSelection();
       }
 
-      if (event.affectsConfiguration('markdownInlineEditor.decorations.ghostFaintOpacity')) {
+      if (configAffectsConfiguration(event, 'decorations.ghostFaintOpacity')) {
         decorator.recreateGhostFaintDecorationType();
       }
 
-      if (event.affectsConfiguration('markdownInlineEditor.decorations.frontmatterDelimiterOpacity')) {
+      if (configAffectsConfiguration(event, 'decorations.frontmatterDelimiterOpacity')) {
         decorator.recreateFrontmatterDelimiterDecorationType();
       }
 
-      if (event.affectsConfiguration('markdownInlineEditor.decorations.codeBlockLanguageOpacity')) {
+      if (configAffectsConfiguration(event, 'decorations.codeBlockLanguageOpacity')) {
         decorator.recreateCodeBlockLanguageDecorationType();
       }
 
-      if (event.affectsConfiguration('markdownInlineEditor.links.singleClickOpen')) {
+      if (configAffectsConfiguration(event, 'links.singleClickOpen')) {
         linkClickHandler.setEnabled(config.links.singleClickOpen());
       }
 
-      if (event.affectsConfiguration('markdownInlineEditor.links.showEmoji')) {
+      if (configAffectsConfiguration(event, 'links.showEmoji')) {
         decorator.recreateLinkDecorationType();
       }
 
-      if (event.affectsConfiguration('markdownInlineEditor.tables.renderingMode')) {
+      if (configAffectsConfiguration(event, 'tables.renderingMode')) {
         decorator.updateDecorationsForSelection();
       }
 
-      if (event.affectsConfiguration('markdownInlineEditor.colors')) {
+      if (configAffectsConfiguration(event, 'colors')) {
         decorator.recreateColorDependentTypes();
       }
 
       if (event.affectsConfiguration('editor.fontSize') || event.affectsConfiguration('editor.lineHeight')) {
         decorator.clearMathDecorationCache();
       }
+
+      if (
+        event.affectsConfiguration('editor.wordWrap')
+        || event.affectsConfiguration('editor.wordWrapColumn')
+      ) {
+        decorator.updateDecorationsForSelection();
+      }
+    }),
+    vscode.window.onDidChangeWindowState(() => {
+      decorator.updateDecorationsForSelection();
     }),
     vscode.window.onDidChangeActiveColorTheme(() => {
       decorator.recreateColorDependentTypes();

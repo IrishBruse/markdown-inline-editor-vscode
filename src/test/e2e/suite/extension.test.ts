@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-const EXTENSION_ID = 'CodeSmith.markdown-inline-editor-vscode';
+const EXTENSION_ID = 'irishbruse.markdown-inline-editor-vscode';
 
 // ── Minimal mirror types for ext.exports ─────────────────────────────────────
 // These parallel src/parser.ts::DecorationRange, src/markdown-parse-cache.ts::ParseEntry,
@@ -356,8 +356,8 @@ suite('Extension E2E', () => {
   test('navigateToAnchor command is registered', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('markdown-inline-editor.navigateToAnchor'),
-      'markdown-inline-editor.navigateToAnchor not registered'
+      commands.includes('mdInline.navigateToAnchor'),
+      'mdInline.navigateToAnchor not registered'
     );
   });
 
@@ -505,7 +505,7 @@ suite('Extension E2E', () => {
       async (_doc, uri) => {
         // Navigate to "introduction" (normalizeAnchorText lowercases the heading).
         await vscode.commands.executeCommand(
-          'markdown-inline-editor.navigateToAnchor',
+          'mdInline.navigateToAnchor',
           'introduction',
           uri.toString()
         );
@@ -528,7 +528,7 @@ suite('Extension E2E', () => {
       '# Title\n\n## Sub section\n\nText.\n\n### Deep\n',
       async (_doc, uri) => {
         await vscode.commands.executeCommand(
-          'markdown-inline-editor.navigateToAnchor',
+          'mdInline.navigateToAnchor',
           'sub-section',
           uri.toString()
         );
@@ -549,7 +549,7 @@ suite('Extension E2E', () => {
     await withTempFile('# Only heading\n\nParagraph.', async (doc, uri) => {
       const before = doc.getText();
       await vscode.commands.executeCommand(
-        'markdown-inline-editor.navigateToAnchor',
+        'mdInline.navigateToAnchor',
         'this-anchor-is-not-in-the-document',
         uri.toString()
       );

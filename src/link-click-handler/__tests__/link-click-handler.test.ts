@@ -162,7 +162,7 @@ describe("LinkClickHandler", () => {
       await (handler as any).handleClick(editor, position);
 
       expect(mockExecuteCommand).toHaveBeenCalledWith(
-        "markdown-inline-editor.navigateToAnchor",
+        "mdInline.navigateToAnchor",
         "anchor",
         expect.any(String),
       );

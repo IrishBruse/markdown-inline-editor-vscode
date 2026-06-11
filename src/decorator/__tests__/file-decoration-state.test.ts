@@ -32,7 +32,7 @@ describe('FileDecorationStateStore', () => {
     expect(store.isEnabled('file:///test/file-a.md')).toBe(false);
     expect(workspaceState.get).toHaveBeenCalledWith(
       'mdInline.decorationsEnabled.file:///test/file-a.md',
-      true
+      undefined
     );
   });
 

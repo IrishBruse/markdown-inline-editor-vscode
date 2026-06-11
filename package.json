@@ -1,6 +1,6 @@
 {
   "name": "markdown-inline-editor-vscode",
-  "displayName": "Inline Markdown Editor",
+  "displayName": "Markdown Inline Editor",
   "version": "1.24.0",
   "description": "WYSIWYG inline markdown editor - hide syntax, focus on content",
   "license": "MIT",
