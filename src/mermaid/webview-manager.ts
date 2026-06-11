@@ -16,6 +16,7 @@ export class MermaidWebviewManager {
   private renderRequestCounter = 0;
   private messageHandlerDisposable: vscode.Disposable | undefined;
   private initTimeoutId: NodeJS.Timeout | undefined;
+  private ensureWebviewInFlight: Promise<void> | undefined;
   private _extensionContext: vscode.ExtensionContext | undefined;
 
   constructor() {
@@ -46,52 +47,52 @@ export class MermaidWebviewManager {
         { webviewOptions: { retainContextWhenHidden: true } }
       )
     );
-
-    // Open the mermaid view briefly to initialize it, then switch back
-    // Focus the view so VS Code calls resolveWebviewView() (hidden views are not resolved by opening the container only)
-    void this.ensureWebviewThenSwitchBack();
   }
 
   /**
-   * Focus the Mermaid view to trigger webview creation, wait for it (or 5s), then switch back to Explorer.
+   * Focus the Mermaid view to trigger webview creation on first use.
+   * Hidden views are not resolved until focused. Waits for readiness (or 5s), then switches back to Explorer.
    */
-  private ensureWebviewThenSwitchBack(): void {
+  async ensureWebviewReady(): Promise<void> {
+    if (this.webviewView) {
+      return;
+    }
+    if (!this.ensureWebviewInFlight) {
+      this.ensureWebviewInFlight = this.doEnsureWebviewThenSwitchBack();
+    }
+    await this.ensureWebviewInFlight;
+  }
+
+  private async doEnsureWebviewThenSwitchBack(): Promise<void> {
     const WEBVIEW_READY_TIMEOUT_MS = 5000;
     const SWITCH_BACK_DELAY_MS = 100;
 
-    vscode.commands
-      .executeCommand('mdInline.mermaidRenderer.focus')
-      .then(
-        () => {
-          // Wait for webview to be ready or timeout, then switch back
-          Promise.race([
-            this.webviewLoaded,
-            new Promise<void>((_, reject) =>
-              setTimeout(() => reject(new Error('timeout')), WEBVIEW_READY_TIMEOUT_MS)
-            ),
-          ])
-            .then(() => {
-              this.initTimeoutId = setTimeout(() => {
-                vscode.commands.executeCommand('workbench.view.explorer');
-                this.initTimeoutId = undefined;
-              }, SWITCH_BACK_DELAY_MS);
-            })
-            .catch((err: unknown) => {
-              if (err instanceof Error && err.message === 'timeout') {
-                logWarn('Mermaid: Webview not ready after opening view');
-              }
-              this.initTimeoutId = setTimeout(() => {
-                vscode.commands.executeCommand('workbench.view.explorer');
-                this.initTimeoutId = undefined;
-              }, SWITCH_BACK_DELAY_MS);
-            });
-        },
-        (err: unknown) => {
-          if (err !== undefined) {
-            logWarn('Mermaid: Failed to focus view', err);
-          }
-        }
-      );
+    try {
+      await vscode.commands.executeCommand('mdInline.mermaidRenderer.focus');
+    } catch (err: unknown) {
+      if (err !== undefined) {
+        logWarn('Mermaid: Failed to focus view', err);
+      }
+      return;
+    }
+
+    try {
+      await Promise.race([
+        this.webviewLoaded,
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), WEBVIEW_READY_TIMEOUT_MS)
+        ),
+      ]);
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message === 'timeout') {
+        logWarn('Mermaid: Webview not ready after opening view');
+      }
+    }
+
+    this.initTimeoutId = setTimeout(() => {
+      void vscode.commands.executeCommand('workbench.view.explorer');
+      this.initTimeoutId = undefined;
+    }, SWITCH_BACK_DELAY_MS);
   }
 
   /**
@@ -392,7 +393,7 @@ export class MermaidWebviewManager {
    * Wait for webview to be loaded
    */
   async waitForWebview(): Promise<void> {
-    await this.webviewLoaded;
+    await this.ensureWebviewReady();
     if (!this.webviewView) {
       throw new Error('Failed to create mermaid webview');
     }
@@ -422,6 +423,7 @@ export class MermaidWebviewManager {
     // Clear webview reference
     this.webviewView = undefined;
     this.resolveWebviewLoaded = undefined;
+    this.ensureWebviewInFlight = undefined;
   }
 }
 
