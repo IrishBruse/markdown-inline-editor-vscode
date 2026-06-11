@@ -7,7 +7,6 @@ import { MarkdownParseCache } from './markdown-parse-cache';
 import { MarkdownParser } from './parser';
 import { disposeMermaidRenderer, initMermaidRenderer } from './mermaid/mermaid-renderer';
 import { processSvg } from './mermaid/svg-processor';
-import { checkRecommendedExtensions } from './recommendations';
 import { registerEventHandlers } from './registration/register-event-handlers';
 import { registerProviders } from './registration/register-providers';
 import { disposeLogger } from './logging';
@@ -37,8 +36,6 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   const decorator = new Decorator(parseCache, context.workspaceState);
   decorator.updateDiffViewDecorationSetting(!config.diffView.applyDecorations());
   decorator.setActiveEditor(vscode.window.activeTextEditor);
-
-  checkRecommendedExtensions(context);
 
   const { disposables: providerDisposables, linkClickHandler } = registerProviders(parseCache);
   linkClickHandler.setEnabled(config.links.singleClickOpen());

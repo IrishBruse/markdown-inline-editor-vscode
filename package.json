@@ -1,11 +1,11 @@
 {
   "name": "markdown-inline-editor-vscode",
-  "displayName": "Markdown Inline Editor",
-  "version": "1.23.0",
+  "displayName": "Inline Markdown Editor",
+  "version": "1.24.0",
   "description": "WYSIWYG inline markdown editor - hide syntax, focus on content",
   "license": "MIT",
-  "author": "SeardnaSchmid",
-  "publisher": "CodeSmith",
+  "author": "Ethan Conneely",
+  "publisher": "irishbruse",
   "private": true,
   "icon": "assets/icon.png",
   "repository": {
@@ -285,10 +285,6 @@
       }
     }
   },
-  "extensionRecommendations": [
-    "yzhang.markdown-all-in-one",
-    "MermaidChart.vscode-mermaid-chart"
-  ],
   "scripts": {
     "lint": "eslint .",
     "test": "vitest run",
