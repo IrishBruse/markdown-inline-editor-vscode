@@ -43,13 +43,21 @@ export class MarkdownImageHoverProvider implements vscode.HoverProvider {
     const decorations = parseEntry.decorations;
     const hoverOffset = document.offsetAt(position);
     const singleClickEnabled = config.links.singleClickOpen();
-    const decoration = findDecorationAtOffset(
-      decorations,
-      text,
-      hoverOffset,
-      document,
-      (candidate) => candidate.type === 'image' && isLinkDecoration(candidate)
-    );
+    const decoration =
+      findDecorationAtOffset(
+        decorations,
+        text,
+        hoverOffset,
+        document,
+        (candidate) => candidate.type === 'tableCellImage' && isLinkDecoration(candidate),
+      ) ??
+      findDecorationAtOffset(
+        decorations,
+        text,
+        hoverOffset,
+        document,
+        (candidate) => candidate.type === 'image' && isLinkDecoration(candidate),
+      );
     if (!decoration) {
       return;
     }

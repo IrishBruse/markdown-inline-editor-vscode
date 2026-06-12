@@ -67,7 +67,7 @@ export function filterDecorationsForEditor(
 
   // Table decoration types that use per-range replacement rendering
   const tableTypes = new Set<DecorationType>([
-    'tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell',
+    'tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell', 'tableCellImage',
   ]);
 
   const tableRenderingMode = config.tables.renderingMode();
@@ -117,6 +117,11 @@ export function filterDecorationsForEditor(
     // styling inside tables so the theme's markdown syntax colors apply (parse cache still
     // retains link decorations for click/hover providers).
     if (decoration.type === 'link' && tableScopes.some((scope) => rangeIntersectsAny(range, [scope.range]))) {
+      continue;
+    }
+
+    // Image-only table cells render via tableCellImage; skip alt-text image styling.
+    if (decoration.type === 'image' && tableScopes.some((scope) => rangeIntersectsAny(range, [scope.range]))) {
       continue;
     }
 

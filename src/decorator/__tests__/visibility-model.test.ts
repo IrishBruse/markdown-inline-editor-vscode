@@ -128,6 +128,52 @@ describe('table decoration rendering', () => {
     expect(result.has('tablePipe')).toBe(false);
   });
 
+  it('skips image decorations inside inline-rendered tables', () => {
+    const text = '| ![t](https://example.com/x.png) | note |\nother';
+    const decs: DecorationRange[] = [
+      { startPos: 3, endPos: 4, type: 'image', url: 'https://example.com/x.png' } as any,
+    ];
+    const tableScope: ScopeEntry = {
+      startPos: 0,
+      endPos: 40,
+      range: new Range(new Position(0, 0), new Position(0, 40)) as any,
+      kind: 'table',
+    };
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [tableScope],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('image')).toBe(false);
+  });
+
+  it('renders tableCellImage with replacement text', () => {
+    const text = '| ![t](url) |\nother';
+    const decs: DecorationRange[] = [
+      {
+        startPos: 0,
+        endPos: 12,
+        type: 'tableCellImage',
+        replacement: ' \u2B14 ',
+        url: 'https://example.com/x.png',
+      } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    const cells = result.get('tableCellImage') as any[];
+    expect(cells).toBeDefined();
+    expect(cells[0].renderOptions?.before?.contentText).toContain('\u2B14');
+  });
+
   it('skips link decorations inside inline-rendered tables', () => {
     const text = '| https://example.com | note |\nother';
     const decs: DecorationRange[] = [

@@ -625,6 +625,26 @@ export function TableCellDecorationType() {
 }
 
 /**
+ * Creates a decoration type for inline-rendered table cells that contain only an image.
+ *
+ * Hides the markdown image syntax and renders a simple icon via per-range
+ * `renderOptions.before.contentText`. Hover preview uses the decoration URL.
+ *
+ * @param color - Optional hex or theme color; when undefined uses textLink.foreground
+ */
+export function TableCellImageDecorationType(color?: string | ThemeColor) {
+  const resolvedColor = color ?? new ThemeColor('textLink.foreground');
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    cursor: 'pointer',
+    before: {
+      contentText: '',
+      color: resolvedColor,
+    },
+  });
+}
+
+/**
  * Creates a decoration type for mermaid hover indicator.
  *
  * Adds a small visual indicator (⧉) at the start of mermaid code blocks

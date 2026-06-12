@@ -79,5 +79,6 @@ export type DecorationType =
   | "tableSeparatorPipe"
   | "tableSeparatorDash"
   | "tableCell"
+  | "tableCellImage"
   | "mention"
   | "issueReference";

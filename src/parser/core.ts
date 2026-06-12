@@ -34,7 +34,10 @@ import {
 } from "./mentions";
 import {
   cellHasMixedFormatting as cellHasMixedFormattingHelper,
+  imageOnlyCellUrl as imageOnlyCellUrlHelper,
+  isImageOnlyCell as isImageOnlyCellHelper,
   isLinkOnlyCell as isLinkOnlyCellHelper,
+  TABLE_CELL_IMAGE_ICON,
   computeColumnWidths as computeColumnWidthsHelper,
   detectCellStyle as detectCellStyleHelper,
   extractCellPlainText as extractCellPlainTextHelper,
@@ -1448,10 +1451,13 @@ export class MarkdownParser {
         const markdownCellStyle = this.detectCellStyle(trimmedContent);
         const showRaw = !markdownCellStyle && astCell && this.cellHasMixedFormatting(astCell);
         const isLinkCell = !markdownCellStyle && !showRaw && !!astCell && isLinkOnlyCellHelper(astCell);
+        const isImageCell = !markdownCellStyle && !showRaw && !!astCell && isImageOnlyCellHelper(astCell);
         const cellStyle = markdownCellStyle;
-        const displayContent = (astCell && !showRaw)
-          ? this.extractCellPlainText(astCell)
-          : trimmedContent;
+        const displayContent = isImageCell
+          ? TABLE_CELL_IMAGE_ICON
+          : (astCell && !showRaw)
+            ? this.extractCellPlainText(astCell)
+            : trimmedContent;
         const displayWidth = this.measureTextWidth(displayContent);
         const totalPad = Math.max(0, colWidth - displayWidth);
         const align = i < colAligns.length ? colAligns[i] : null;
@@ -1461,6 +1467,28 @@ export class MarkdownParser {
         // partially style padding (e.g. line-through bleeds across NBSP pad chars).
         const isStrikeCell = markdownCellStyle?.textDecoration === 'line-through';
         if (isLinkCell || isStrikeCell) {
+          continue;
+        }
+
+        if (isImageCell && astCell) {
+          let replacement: string;
+          if (align === "right") {
+            replacement = "\u00A0".repeat(totalPad + 1) + displayContent + "\u00A0";
+          } else if (align === "center") {
+            const padLeft = Math.floor(totalPad / 2);
+            const padRight = totalPad - padLeft;
+            replacement = "\u00A0".repeat(padLeft + 1) + displayContent + "\u00A0".repeat(padRight + 1);
+          } else {
+            replacement = "\u00A0" + displayContent + "\u00A0".repeat(totalPad + 1);
+          }
+
+          decorations.push({
+            startPos: cellRangeStart,
+            endPos: cellRangeEnd,
+            type: "tableCellImage",
+            replacement,
+            url: imageOnlyCellUrlHelper(astCell),
+          });
           continue;
         }
 

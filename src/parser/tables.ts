@@ -1,6 +1,7 @@
 import type {
   Delete,
   Emphasis,
+  Image,
   InlineCode,
   Node,
   Strong,
@@ -43,6 +44,18 @@ export function cellHasMixedFormatting(cell: TableCell): boolean {
 
 export function isLinkOnlyCell(cell: TableCell): boolean {
   return cell.children.length === 1 && cell.children[0].type === 'link';
+}
+
+/** Glyph shown in inline-rendered table cells that contain only an image. */
+export const TABLE_CELL_IMAGE_ICON = '\u2B14'; // ⬔
+
+export function isImageOnlyCell(cell: TableCell): boolean {
+  return cell.children.length === 1 && cell.children[0].type === 'image';
+}
+
+export function imageOnlyCellUrl(cell: TableCell): string {
+  const child = cell.children[0] as Image;
+  return child.url ?? '';
 }
 
 export function detectCellStyle(
@@ -194,9 +207,11 @@ export function computeColumnWidths(tableNode: Table, source: string): number[] 
       const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
       const cellStyle = detectCellStyle(cellText);
       const showRaw = !cellStyle && astCell && cellHasMixedFormatting(astCell);
-      const displayText = (astCell && !showRaw)
-        ? extractCellPlainText(astCell)
-        : cellText;
+      const displayText = (astCell && !showRaw && isImageOnlyCell(astCell))
+        ? TABLE_CELL_IMAGE_ICON
+        : (astCell && !showRaw)
+          ? extractCellPlainText(astCell)
+          : cellText;
       const width = measureTextWidth(displayText);
       if (width > widths[i]) widths[i] = width;
     }

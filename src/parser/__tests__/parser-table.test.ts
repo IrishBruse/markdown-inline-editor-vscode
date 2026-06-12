@@ -203,6 +203,21 @@ describe('MarkdownParser - Tables', () => {
     });
   });
 
+  describe('images in cells', () => {
+    it('should emit tableCellImage with icon and url for image-only cells', () => {
+      const md = '| Col | Note |\n| --- | --- |\n| ![t](https://example.com/x.png) | image |';
+      const result = parser.extractDecorations(md);
+      const imageCells = byType(result, 'tableCellImage');
+      expect(imageCells.length).toBe(1);
+      expect(imageCells[0].url).toBe('https://example.com/x.png');
+      expect(imageCells[0].replacement).toContain('\u2B14');
+      const altTextCells = byType(result, 'tableCell').filter((c) =>
+        c.replacement?.replace(/\u00A0/g, '').trim() === 't',
+      );
+      expect(altTextCells).toHaveLength(0);
+    });
+  });
+
   describe('links in cells', () => {
     it('should not replace link-only cells with tableCell decorations', () => {
       const md = '| Col |\n|-----|\n| [label](https://example.com) |';
