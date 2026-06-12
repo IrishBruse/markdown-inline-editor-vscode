@@ -5,25 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.24.0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.23.0..v1.24.0) - 2026-06-12
+
+### Added
+
+- **(ordered-list)** hide markers and replace with auto-calculated sequential numbers - ([8e98a52](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/8e98a521191d9d1b338977fe01b4bcdfcd7ad611))
+
+### Changed
+
+- Update SECURITY.md to clarify support for versions and reporting vulnerabilities - ([cdff2c3](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/cdff2c32f1ff49c2e20b70dc2a3a741f80a9271a))
+- Restructure Changelog generation - ([8c04f22](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/8c04f22274b111c10049f6851b6f097cac9c2fe4))
+
+### Fixed
+
+- **(deps)** pin xmldom to 0.9.9 - ([72e3146](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/72e314655ab6c6c5020432c1ca29f3b200166eea))
+- **(link-provider)** expand zero-width document link ranges for empty image alt - ([b8807ea](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/b8807ea71c7b8edcceb1c8f1dd67d9473084cb3d))
+
+### Internal
+
+- **(dependabot)** remove invalid monthly day - ([7d304ac](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/7d304ac0217d7ef81fdf59758800f7c041cc45a7))
+- **(deps)** update dependencies to latest versions including esbuild, eslint, ts-jest, typescript - ([ad690ea](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/ad690ea9819f23ea60ff5155e8389a7b03a7edc8))
+- **(deps-dev)** bump handlebars from 4.7.8 to 4.7.9 - ([1239880](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/1239880fdfaefbd10990ce0ca3bd34aa13cb25ff))
+- **(e2e)** broaden release smoke for hovers, links, anchors, and parse - ([edc8a09](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/edc8a0972e70fec65b8d513e40ab1a32c6d09d8b))
+- **(link-provider)** assert non-collapsed range for empty-alt images - ([fda0dcc](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/fda0dcc5718a5c133e6a4d5a12f4e88246b713f8))
+- **(mermaid)** Update mermaid to 11.15.0 - ([e935004](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e935004bdfd591cdfd0cd96829fa411ce3460c03))
+- Update dependencies - ([9847879](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/984787908d7e986f98aa78f4a5227ee18dbdd14b))
+- Update .vscodeignore - ([d327a4c](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/d327a4c60894701540b0071b6c2141ccfc07a8c9))
+- Update ESLint configuration to use defineConfig and add additional ignores - ([0fd7e05](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/0fd7e0547312e994ce73e8ad60c42aed8df5ae2b))
+- split parser and decorator, streamline extension wiring - ([234b80d](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/234b80d562b52299937deb13fda440c03cfbac40))
+- migrate from Jest to Vitest - ([d7dd191](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/d7dd1919b304142714f38cde5fd4f869545a6272))
+- reorganize CI workflow - ([c43886d](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c43886d93e60b9ada99bd8ff7ec326653fe9e1f1))
+- Update dependencies - ([8aae33c](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/8aae33cde52827ae212205f004f2a5c91f55276e))
+
 ## [1.23.0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.22.1..v1.23.0) - 2026-03-26
 
 ### Added
 
 - **(decorator)** add per-file toggle state with session persistence ([#28](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/28)) - ([487ad71](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/487ad71d5221f58c361e4d3be7a7b058fc377baf))
 
-### Changed
-
-- **(deps)** bump picomatch - ([fbce4c0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/fbce4c0294e6cd39ceeb9114bf1d4c0acda13825))
-- add Cursor e2e test support with configuration and noise suppression - ([2f594a2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/2f594a2b10f905211ef9671ee6ec8634b9ed6e8b))
-
 ### Fixed
 
 - **(mermaid)** constrain diagram width to editor viewport ([#50](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/issues/50)) - ([f3dd74f](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/f3dd74fc87604c3723d28f1832db24bb2b835beb))
 - **(mermaid)** correct width constraint, cross-platform build, e2e tests - ([43d398e](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/43d398e5919d1a2a06473422bf051ed79446466f))
 
+### Internal
+
+- **(deps)** bump picomatch - ([fbce4c0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/fbce4c0294e6cd39ceeb9114bf1d4c0acda13825))
+- add Cursor e2e test support with configuration and noise suppression - ([2f594a2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/2f594a2b10f905211ef9671ee6ec8634b9ed6e8b))
+
 ## [1.22.1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.22.0..v1.22.1) - 2026-03-24
 
-### Ci
+### Internal
 
 - **(audit-fix)** use PAT for checkout and create-pull-request - ([cf1db05](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/cf1db0550fc8a201351fd7fbabb5956ef1f66c10))
 
@@ -35,21 +67,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(ci)** add explicit GITHUB_TOKEN permissions to CI jobs - ([9e4ce71](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9e4ce7176f8f7adf553f180c2f8457ee6ba8d953))
-- **(codeql)** exclude test files from CodeQL analysis - ([39c50a2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/39c50a20ee341df244ec1188b6a1a6887f1ab3f1))
-- **(decorator)** use Range mock in mermaid diagram decoration tests - ([59c6414](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/59c6414ebea9c76446ba0520836aea57ab1cd21a))
 - **(readme)** friendlier badge names; rename workflows for marketing clarity - ([da221fa](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/da221fa9e779865076baafb9f9175cd5cd3c66bb))
-- **(security)** add CodeQL workflow and exclude vendored mermaid - ([8e95ebf](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/8e95ebfbdd3199918829841cdbeaff1f88b28364))
-- enhance unit test coverage with 80% gate - ([9b7a0c2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9b7a0c2eb84d0b98c36fc6bef5859b372f65b010))
 
 ### Fixed
 
 - support skill, markdoc, and mdc language IDs (#58, #61) - ([61cf0e2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/61cf0e262a262ce97fcce8d834a65adb243dd683))
 
-### Ci
+### Internal
 
+- **(ci)** add explicit GITHUB_TOKEN permissions to CI jobs - ([9e4ce71](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9e4ce7176f8f7adf553f180c2f8457ee6ba8d953))
 - **(codeql)** upgrade to codeql-action v4 and document default-setup conflict - ([b681aa5](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/b681aa5a90ec7f1e02b83706f6489db874ef5384))
+- **(codeql)** exclude test files from CodeQL analysis - ([39c50a2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/39c50a20ee341df244ec1188b6a1a6887f1ab3f1))
+- **(decorator)** use Range mock in mermaid diagram decoration tests - ([59c6414](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/59c6414ebea9c76446ba0520836aea57ab1cd21a))
+- **(security)** add CodeQL workflow and exclude vendored mermaid - ([8e95ebf](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/8e95ebfbdd3199918829841cdbeaff1f88b28364))
 - add npm-audit workflow for dependency vulnerability badge - ([ea7147a](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/ea7147a00ee3f75a3e38553178d4822974c36150))
+- enhance unit test coverage with 80% gate - ([9b7a0c2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9b7a0c2eb84d0b98c36fc6bef5859b372f65b010))
 
 ## [1.21.1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.21.0..v1.21.1) - 2026-03-21
 
@@ -75,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.19.2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.19.1..v1.19.2) - 2026-03-20
 
-### Changed
+### Internal
 
 - **(assets)** update extension icon - ([dcbe093](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/dcbe093535372991b28cabe4124f579c0fc57f4a))
 
@@ -93,13 +125,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(deps)** audit fix lockfile (flatted, undici) - ([e4a8d66](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e4a8d66a5385960a347ba924cc61140d19dd22a2))
 - **(readme)** add contributors to acknowledgments - ([c97f30b](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c97f30bfdd24f5822aa3a8a10e9684a179157b12))
 - improve README - showcase best features early - ([a098673](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/a09867318cfc163221f079fbe3e2b0066a0fd41c))
 
 ### Fixed
 
 - **(parser)** address GFM table findings (boundary, docs, tests) - ([35c09bc](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/35c09bc071d54e2473c71541fc8b2079ff906f86))
+
+### Internal
+
+- **(deps)** audit fix lockfile (flatted, undici) - ([e4a8d66](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e4a8d66a5385960a347ba924cc61140d19dd22a2))
 
 ## [1.18.2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.18.1..v1.18.2) - 2026-03-09
 
@@ -111,14 +146,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(docs)** exclude todo.md from feature outline validation - ([9395842](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9395842a68112b5553215ab4fe9d281999f03e63))
 - **(features)** consolidate todo into single list, move latex-math to done - ([c3f6cc9](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c3f6cc985ac5521c4bdf06a65d5d6dca8da0cb15))
 - **(specs)** add 004-code-block-math-environments spec and design artifacts - ([d35a104](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/d35a1048be1a645c3950dea6df32488d9301e2a0))
-- add .eslintignore - ([ae20179](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/ae20179cb385b8348e0edd456b80c8ce93f16bbe))
 
 ### Fixed
 
 - **(math)** correct block math SVG height and body line count - ([1a79aa8](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/1a79aa806291b5ec47daba4ed93e654d9049fc9d))
+
+### Internal
+
+- **(docs)** exclude todo.md from feature outline validation - ([9395842](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9395842a68112b5553215ab4fe9d281999f03e63))
+- add .eslintignore - ([ae20179](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/ae20179cb385b8348e0edd456b80c8ce93f16bbe))
 
 ## [1.18.0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.17.0..v1.18.0) - 2026-03-09
 
@@ -138,9 +176,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(deps)** npm audit fix - resolve high/moderate vulnerabilities - ([b3a8965](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/b3a89654fa2ba13126665503a9078b9afee258ad))
 - **(speckit)** add constitution, product spec, implementation plan, and tasks - ([46a2136](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/46a21369bcdc5d66b0e517db79685d4963bc6997))
 - document customizable syntax colors in README; react to colors config and theme in extension - ([ee79d9e](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/ee79d9eacc1763f5cbefe6dc10a25cf2cb3b52ed))
+
+### Internal
+
+- **(deps)** npm audit fix - resolve high/moderate vulnerabilities - ([b3a8965](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/b3a89654fa2ba13126665503a9078b9afee258ad))
 
 ## [1.16.2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.16.1..v1.16.2) - 2026-02-11
 
@@ -178,7 +219,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.15.1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.15.0..v1.15.1) - 2026-01-28
 
-### Changed
+### Internal
 
 - update icon assets and table column alignment docs - ([2367631](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/2367631f66bc4c23a41cdb7e509602cf06174192))
 
@@ -197,13 +238,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(readme)** add loading attribute to demo GIF for improved performance - ([2529f9a](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/2529f9af1c10bc5d639cba1e1f5101c8a295dcfd))
 - **(readme)** update demo GIF layout for better visibility - ([0c0a7f2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/0c0a7f25a414690482889518a89eab689933570e))
 - **(readme)** improve marketing and user experience - ([4fa6b18](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/4fa6b1811dbf306a9f0903bf9592e56da6dae4e8))
-- clean up assets and update feature docs - ([c088b9d](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c088b9dba9d3797b2a8453feebe8b03120edd082))
 - update autoplay demo gif - ([580d527](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/580d5276db3f946fd81591639c4946ce8439d0ca))
 
 ### Fixed
 
 - restore accidentally deleted icon.png - ([21f565f](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/21f565fb457ad0154ec4416f3cf98d422afc2d22))
 - update icon.png - ([0d9d040](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/0d9d040d80fa6c5af603ae3d2577a60d48001398))
+
+### Internal
+
+- clean up assets and update feature docs - ([c088b9d](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c088b9dba9d3797b2a8453feebe8b03120edd082))
 
 ## [1.14.0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.13.3..v1.14.0) - 2026-01-27
 
@@ -225,7 +269,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.13.1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.13.0..v1.13.1) - 2026-01-25
 
-### Changed
+### Internal
 
 - **(deps)** use fixed mermaid version 10.9.5 - ([7c226f8](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/7c226f88924df8178644668082c75ca836ba0bd9))
 
@@ -241,11 +285,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **(bundle)** exclude TypeScript declaration files from package - ([27a1113](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/27a11137d9651d7b3ba416ce4ac440805f5ba2ae))
-- **(deps)** downgrade mermaid to v10.9.5 - ([41f3f51](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/41f3f514d087c732892dc73f95725fa27b2c4961))
-- **(deps)** update mermaid to 11.12.2 - ([58585ef](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/58585ef9774e7f0eaf4a635759dc38918c699860))
-- **(lint)** fix linting errors and warnings - ([641c5ce](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/641c5cea172f943cd66fc763a0ae3f6fd9ac06b6))
 - **(mermaid)** implement Phase 1 performance improvements - ([2092b72](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/2092b72d279930bd75b733b6c4cb5c36c119d555))
-- remove duplicate media directory to reduce extension size - ([edc3351](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/edc335125ccf09280b3ffeab946df250ed287c8b))
 - update feature documentation and test coverage references - ([e46613e](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e46613eef86982580b26dc840a9d7be9712c2be8))
 
 ### Fixed
@@ -259,6 +299,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(mermaid)** handle large SVG rendering in hover dialogs - ([9e21f75](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9e21f75acdc11d44a0981f88f43df42074190e79))
 - **(parser)** prevent markdown formatting decorations inside code blocks - ([cd5f859](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/cd5f8598d5ca0705e5b6be1b86771cd6f363b1c1))
 
+### Internal
+
+- **(deps)** downgrade mermaid to v10.9.5 - ([41f3f51](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/41f3f514d087c732892dc73f95725fa27b2c4961))
+- **(deps)** update mermaid to 11.12.2 - ([58585ef](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/58585ef9774e7f0eaf4a635759dc38918c699860))
+- **(lint)** fix linting errors and warnings - ([641c5ce](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/641c5cea172f943cd66fc763a0ae3f6fd9ac06b6))
+- remove duplicate media directory to reduce extension size - ([edc3351](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/edc335125ccf09280b3ffeab946df250ed287c8b))
+
 ## [1.12.0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.11.1..v1.12.0) - 2026-01-24
 
 ### Added
@@ -267,10 +314,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(build)** remove Makefile and streamline build/release with npm scripts - ([68c9391](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/68c93919cdb54363759c268affeef40a41197b72))
-- **(parser)** implement lazy loading for emoji map and improve test coverage - ([1141a8c](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/1141a8c6dc6bfd980384522314af90745982301a))
 - update feature documentation and README for emoji support - ([7c62b77](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/7c62b777236accb7353cdf7e84eff9e39c6ec604))
-- add git-cliff to devDependencies - ([f44225f](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/f44225fed3fc91fa2b942346d164a519a78d8fba))
 
 ### Fixed
 
@@ -279,23 +323,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(release)** address PR review feedback - ([2bdc35c](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/2bdc35c22ce5557de68c2914579ad5dee502de62))
 - **(release)** improve git-cliff availability check - ([09bcae2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/09bcae2cac1e5e6c3395a9c189a87e55f68706a7))
 
-### Build
+### Internal
 
+- **(build)** remove Makefile and streamline build/release with npm scripts - ([68c9391](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/68c93919cdb54363759c268affeef40a41197b72))
+- **(parser)** implement lazy loading for emoji map and improve test coverage - ([1141a8c](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/1141a8c6dc6bfd980384522314af90745982301a))
 - **(versioning)** add release generation instructions - ([0a61a8b](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/0a61a8bbad40f69c4afb9d0fb8be21e4fb1c06ae))
 - **(versioning)** add release generation instructions - ([4b17246](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/4b1724607c56af35591d7d24236c467fae2072c6))
+- add git-cliff to devDependencies - ([f44225f](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/f44225fed3fc91fa2b942346d164a519a78d8fba))
 
 ## [1.11.1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.11.0..v1.11.1) - 2026-01-22
-
-### Changed
-
-- **(architecture)** update documentation to reflect refactored structure - ([c4b28cb](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c4b28cb3ffa42b2acacb5cc1417c6124c15c41d7))
-- fix hover provider and click handler tests for refactored architecture - ([8091998](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/80919988b09efc8603ce3038beede3e05e1ed4bc))
-- optimize VSIX package size by excluding dev files - ([8d00fa0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/8d00fa0df5436aa084ad63a2d600a70c24ffdea0))
 
 ### Fixed
 
 - **(docs)** correct markdown table formatting in UAT template - ([474c494](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/474c4948c18b5a71411a3dcccfb030e3ff3db94e))
 - **(parser)** prevent markdown formatting decorations inside code blocks - ([9c75ab8](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9c75ab84fbc5c1367a1774957ce8b52ce90c4b67))
+
+### Internal
+
+- **(architecture)** update documentation to reflect refactored structure - ([c4b28cb](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c4b28cb3ffa42b2acacb5cc1417c6124c15c41d7))
+- fix hover provider and click handler tests for refactored architecture - ([8091998](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/80919988b09efc8603ce3038beede3e05e1ed4bc))
+- optimize VSIX package size by excluding dev files - ([8d00fa0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/8d00fa0df5436aa084ad63a2d600a70c24ffdea0))
 
 ## [1.11.0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.10.0..v1.11.0) - 2026-01-20
 
@@ -320,8 +367,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(hover)** add comprehensive tests for hover providers and click handler - ([6d3b995](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/6d3b995943e5a50c6e568ba15c41ad8ab428a3c9))
 - update README and docs to reflect new test coverage - ([153fc67](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/153fc67781346b5502159616adbef03833b7700f))
+
+### Internal
+
+- **(hover)** add comprehensive tests for hover providers and click handler - ([6d3b995](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/6d3b995943e5a50c6e568ba15c41ad8ab428a3c9))
 
 ## [1.9.2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.9.1..v1.9.2) - 2026-01-19
 
@@ -350,13 +400,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(config)** [**breaking**] remove redundant editor.applyDecorations setting - ([1562309](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/15623090fd2f58c5fe6dd72f8830cdccbce05b1d))
 - **(decorator)** eliminate O(n²) scope extraction via parser-emitted scopes - ([d8eb850](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/d8eb850e4e0757702b43dd5f8ccf1d5cd25773b2))
-- **(docs)** organize feature files into todo/done folders - ([ecddd75](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/ecddd757ba41e10d2bc3192aa44d231f0474b1ce))
 - **(example)** expand Markdown example document with comprehensive formatting and syntax examples - ([12624be](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/12624bed88eab109207c849e6faa38c78840eeac))
 - **(features)** split syntax-shadowing into milestone-based files - ([1268b33](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/1268b33b45caa499e177b197f9f183b18ee49519))
-- uat 1 done - ([85cc44c](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/85cc44c62875895a08265f5feffb8221f45ca2b5))
-- organize UAT files into separate folder - ([e5aefa6](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e5aefa69144ebf07c3dd8d908a1ebfb26b9f64e0))
 - remove M3 milestone and clean up feature documentation - ([94981e0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/94981e0085b37ce794d290be6630cb66222256ed))
 - update documentation for implemented features from syntax-shadowing-m2 branch - ([42367bc](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/42367bc7b143915aa82068f2acd8f9d39aac6315))
 
@@ -366,9 +412,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(decorator)** improve inline code scope detection and increase ghost visibility - ([76df38c](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/76df38cde9a1f645495373446d8a73668e444ad3))
 - **(decorator)** keep leading markers rendered on active line, show raw only on overlap - ([3891a98](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/3891a983be92c6bdf11c5a73f2b50a7aca573732))
 
-### Ci
+### Internal
 
+- **(config)** [**breaking**] remove redundant editor.applyDecorations setting - ([1562309](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/15623090fd2f58c5fe6dd72f8830cdccbce05b1d))
+- **(docs)** organize feature files into todo/done folders - ([ecddd75](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/ecddd757ba41e10d2bc3192aa44d231f0474b1ce))
 - update GitHub Actions to use latest checkout and setup-node versions - ([0f20630](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/0f20630fe1d31dbebb1e8416caf85c11e893ae06))
+- uat 1 done - ([85cc44c](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/85cc44c62875895a08265f5feffb8221f45ca2b5))
+- organize UAT files into separate folder - ([e5aefa6](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e5aefa69144ebf07c3dd8d908a1ebfb26b9f64e0))
 
 ## [1.8.0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.7.4..v1.8.0) - 2026-01-10
 
@@ -380,25 +430,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- improve code quality, type safety, and DRY compliance - ([cd1e07e](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/cd1e07eb10be8659c4661ccb9e93061f43f4ff05))
 - remove agent roster and fix documentation inconsistencies - ([7561707](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/756170786c16070f2429d7e8c47a9c8fd133a0be))
+
+### Internal
+
+- improve code quality, type safety, and DRY compliance - ([cd1e07e](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/cd1e07eb10be8659c4661ccb9e93061f43f4ff05))
 - remove unused markdown preview settings and custom CSS - ([58279bd](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/58279bd9b525f16124a1fae83680f7ae5884844d))
 
 ## [1.7.4](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.7.2..v1.7.4) - 2026-01-10
 
 ### Changed
 
-- **(decorations)** add bold font weight to checkbox decorations - ([6bc3c02](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/6bc3c02842533e718c765fc9780776495ae3d18a))
-- **(position-mapping)** extract shared position mapping utility - ([a5fa4cc](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/a5fa4cc06bbb70276b9e2edc44c47d0607127b74))
 - update architecture documentation for position-mapping utility - ([c5f3365](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c5f3365c97f459205174d5de7a5f43b974b551a5))
 
 ### Fixed
 
 - **(link-provider)** handle CRLF line endings in table of contents links - ([57f40c7](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/57f40c710f860c42c5e60a64d0411d005fdb3261))
 
+### Internal
+
+- **(decorations)** add bold font weight to checkbox decorations - ([6bc3c02](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/6bc3c02842533e718c765fc9780776495ae3d18a))
+- **(position-mapping)** extract shared position mapping utility - ([a5fa4cc](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/a5fa4cc06bbb70276b9e2edc44c47d0607127b74))
+
 ## [1.7.2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.7.1..v1.7.2) - 2026-01-09
 
-### Changed
+### Internal
 
 - change list markers from dashes to asterisks in README - ([c75d2b7](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c75d2b7f3c632493b260edbcd7f02f9775d3b4dc))
 
@@ -465,12 +521,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(ci)** update CI workflow and add release job - ([c4b9321](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c4b9321999d176955a8190ad6115914736bd4b0e))
-- **(decorations)** use ThemeColor for horizontal rule border - ([1edc6d1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/1edc6d1de5a6ff1d309f7480fff0356547d26b80))
-- **(decorations)** reduce horizontal rule border width to 1px - ([5e50ff0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/5e50ff0c61bb238cf360c33fc326ba8306da7d82))
-- **(deps)** fix npm audit vulnerabilities - ([e72468f](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e72468f108a1d242ebe8dfb10e538f597cf3cbdb))
 - **(security)** add SC1 Security Requirements document - ([70d2fbc](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/70d2fbc8d1bfd638df6d782131cba0842375e43a))
-- **(test)** update test report paths to use dist directory - ([bf16d87](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/bf16d87a0f3f8bd30550be522cea17afe3b94f42))
 - reorganize documentation into project and product directories - ([5b5dbcd](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/5b5dbcdad54e2e74bdfc308d1cfd26136292de13))
 - add workflow chart design guidelines and update stages.csv format - ([af08413](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/af08413def883641e9a5f6d1c562c2c7c0b4ebf5))
 - enhance example.md with GFM edge cases and formatting examples - ([222b299](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/222b29920aa0d6f8521c9887e8fc586bd5353a5c))
@@ -482,16 +533,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - remove obsolete AI-related documentation files - ([c756db2](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c756db20dac364b1c0e60887fa0cf1c4727761ca))
 - remove obsolete documentation files and templates - ([2f37b52](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/2f37b5273ff3dd541909db81d8dcfbb5febc2fa9))
 - streamline documentation by removing outdated files and templates - ([4f86cde](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/4f86cdecd5181c43d0790488dc7237648a4bb1f3))
-- update artifact paths and validation scripts in workflow documentation - ([0e5abf3](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/0e5abf399048e260a19790bbea193e6413424775))
 - enhance AGENTS.md with clearer human input protocols and execution steps - ([e01c2c1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e01c2c186be7545efa8db992c12779c118059c8b))
-- update .gitignore to include new directories - ([d6b4bc9](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/d6b4bc963dc3e7d21f13788c4ab4ea1b6ffffcb7))
-- update .gitignore to reflect new context directory - ([5863892](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/5863892b3881f774e07852333c1f7dbc946e637a))
 - update README.md to enhance Markdown features section and outline upcoming enhancements - ([655a4f7](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/655a4f7307ca51a426ebbe4d8f26550cb83231a9))
 - add feature implementation table and split features into separate files - ([fed98a1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/fed98a13561363fcf2927496dca19daba7257418))
 - add implemented features documentation - ([a8b9f08](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/a8b9f08a51d8e95639be2db7153c6047288eedc7))
 - add acknowledgements and license attribution - ([ebe8b4b](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/ebe8b4bfe3c8ee4902886967f6180c16d5363c97))
-- update .gitignore to include context-example-repositories and examples directories - ([931e9c1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/931e9c13e50e0f6862e69627fd43b25655c41a7f))
-- remove old vsix package file - ([2f450d0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/2f450d0a8de5a44a20c47e54c0858f07789feffd))
 
 ### Fixed
 
@@ -499,21 +545,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(parser)** prevent ordered lists from being replaced with bullet points - ([67ad46f](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/67ad46fc6ef77cd7d15b12276e2d799d2dbc45b1))
 - update workflow node identifiers and enhance validation script paths - ([fe006b3](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/fe006b3e8c1d7728c88a31ee132541bd53b18f2a))
 
+### Internal
+
+- **(ci)** update CI workflow and add release job - ([c4b9321](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/c4b9321999d176955a8190ad6115914736bd4b0e))
+- **(decorations)** use ThemeColor for horizontal rule border - ([1edc6d1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/1edc6d1de5a6ff1d309f7480fff0356547d26b80))
+- **(decorations)** reduce horizontal rule border width to 1px - ([5e50ff0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/5e50ff0c61bb238cf360c33fc326ba8306da7d82))
+- **(deps)** fix npm audit vulnerabilities - ([e72468f](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e72468f108a1d242ebe8dfb10e538f597cf3cbdb))
+- **(test)** update test report paths to use dist directory - ([bf16d87](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/bf16d87a0f3f8bd30550be522cea17afe3b94f42))
+- update artifact paths and validation scripts in workflow documentation - ([0e5abf3](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/0e5abf399048e260a19790bbea193e6413424775))
+- update .gitignore to include new directories - ([d6b4bc9](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/d6b4bc963dc3e7d21f13788c4ab4ea1b6ffffcb7))
+- update .gitignore to reflect new context directory - ([5863892](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/5863892b3881f774e07852333c1f7dbc946e637a))
+- update .gitignore to include context-example-repositories and examples directories - ([931e9c1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/931e9c13e50e0f6862e69627fd43b25655c41a7f))
+- remove old vsix package file - ([2f450d0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/2f450d0a8de5a44a20c47e54c0858f07789feffd))
+
 ## [1.4.0](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.3.12..v1.4.0) - 2025-12-25
 
 ### Added
 
 - **(decorator)** toggle checkbox on click - ([7aeb4e8](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/7aeb4e8be2d90a31dddc8cf94f02efc7d0e59f7f))
 
-### Changed
-
-- **(ci)** trigger CI build - ([6f60486](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/6f60486bfd5c06c3ee115845e0a7948dc2e83a21))
-- **(deps)** adjust dependency strategy and add Dependabot - ([b4b2b10](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/b4b2b10608c651ba4e56e75abd61506d0d04cc63))
-
 ### Fixed
 
 - **(ci)** downgrade VS Code engines and fix Jest test script - ([e439c9f](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/e439c9fd3ff2b8209375ba0570953827f1f4469f))
 - **(lint)** resolve all ESLint warnings and improve config - ([ff2479d](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/ff2479dba205c0322073a179c8505ae607f67ffa))
+
+### Internal
+
+- **(ci)** trigger CI build - ([6f60486](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/6f60486bfd5c06c3ee115845e0a7948dc2e83a21))
+- **(deps)** adjust dependency strategy and add Dependabot - ([b4b2b10](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/b4b2b10608c651ba4e56e75abd61506d0d04cc63))
 
 ## [1.3.12](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.3.11..v1.3.12) - 2025-12-21
 
@@ -536,23 +595,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.6](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.3.5..v1.3.6) - 2025-12-21
 
-### Changed
+### Internal
 
 - bump version to 1.3.6 and rename images folder to assets - ([00e9e39](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/00e9e3959e5c52ffb471191a9d4163312101d0e7))
 
 ## [1.3.5](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.3.4..v1.3.5) - 2025-12-19
 
-### Changed
-
-- bump version to 1.3.5 - ([9cf141c](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9cf141ced314cb93361b3a1c6a51c5bd9183261c))
-
 ### Fixed
 
 - **(decorator)** handle CRLF line endings correctly - ([7766aa6](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/7766aa6fa8e41a27d289506cb90cdb26e3207126))
 
+### Internal
+
+- bump version to 1.3.5 - ([9cf141c](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/9cf141ced314cb93361b3a1c6a51c5bd9183261c))
+
 ## [1.3.4](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.3.3..v1.3.4) - 2025-12-19
 
-### Changed
+### Internal
 
 - **(ci)** split CD jobs into separate vsce and ovsx jobs - ([41569ec](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/41569ec6d969273798879b44be75033f051fda55))
 
@@ -571,6 +630,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - add comprehensive CONTRIBUTING.md guide - ([8aee8b1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/8aee8b10c7d35dee61b4e0db9f38c2da1b42dc3a))
+
+### Internal
+
 - bump version to 1.3.2 - ([d007f78](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/d007f78b5d025d37334b2444ec676cb60f7a7706))
 
 ## [1.3.1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.3.0..v1.3.1) - 2025-12-19
@@ -596,23 +658,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - replace video files with optimized GIF - ([ff94da1](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/ff94da177b5c4a9f4028f59602ee9278b738b354))
+
+### Internal
+
 - bump version to 1.1.5 - ([1c08c2b](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/1c08c2b443ad4f879c0e73c082dfa5a482a19645))
 
 ## [1.1.4](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.1.3..v1.1.4) - 2025-12-19
 
-### Changed
+### Internal
 
 - add MP4 video format and bump version to 1.1.4 - ([709ab2d](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/709ab2dee25eb1ff63df601ca37a9c547ed08d7b))
 
 ## [1.1.3](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/compare/v1.1.1..v1.1.3) - 2025-12-19
 
-### Changed
-
-- bump version to 1.1.3 - ([03d35ac](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/03d35acbfe550c38d954816079c0d5f988b4da40))
-
 ### Fixed
 
 - **(ci)** remove Open VSX publishing from deploy workflow - ([7c6d04e](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/7c6d04e8cef41b7f4953ddcf739c2676a704e4ae))
+
+### Internal
+
+- bump version to 1.1.3 - ([03d35ac](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/03d35acbfe550c38d954816079c0d5f988b4da40))
 
 ## [1.1.1] - 2025-12-19
 
@@ -620,5 +685,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ci)** add clarifying comments for cd job conditions - ([fe8733e](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/fe8733e427c8e18c8e3ae4af784171a21ed44850))
 - improve README structure and add @docs agent - ([a905b59](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/a905b597345ad1e1edba9e1b13d6cb7aee404987))
+
+### Internal
+
 - remove Open VSX publishing from deploy script - ([0992e55](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/0992e55c1a88bb0575a2e1ca1778276f8ec15554))
 - update version and readme.md with example videos/images - ([7bc34be](https://github.com/SeardnaSchmid/markdown-inline-editor-vscode/commit/7bc34be463b732e099980d15a0f3de4cce1413e6))
