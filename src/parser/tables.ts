@@ -41,6 +41,10 @@ export function cellHasMixedFormatting(cell: TableCell): boolean {
   );
 }
 
+export function isLinkOnlyCell(cell: TableCell): boolean {
+  return cell.children.length === 1 && cell.children[0].type === 'link';
+}
+
 export function detectCellStyle(
   trimmed: string,
 ): { fontWeight?: string; fontStyle?: string; textDecoration?: string } | undefined {

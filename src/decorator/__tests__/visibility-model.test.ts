@@ -4,7 +4,6 @@ vi.mock('../../parser', () => ({
   },
 }));
 
-import * as vscode from 'vscode';
 import { config } from '../../config';
 import { filterDecorationsForEditor } from '../visibility-model';
 import type { ScopeEntry } from '../visibility-model';
@@ -129,6 +128,28 @@ describe('table decoration rendering', () => {
     expect(result.has('tablePipe')).toBe(false);
   });
 
+  it('skips link decorations inside inline-rendered tables', () => {
+    const text = '| https://example.com | note |\nother';
+    const decs: DecorationRange[] = [
+      { startPos: 2, endPos: 23, type: 'link', url: 'https://example.com' } as any,
+    ];
+    const tableScope: ScopeEntry = {
+      startPos: 0,
+      endPos: 30,
+      range: new Range(new Position(0, 0), new Position(0, 30)) as any,
+      kind: 'table',
+    };
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [tableScope],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('link')).toBe(false);
+  });
+
   it('renders tableCell with cellStyle properties', () => {
     const text = '| **bold** |\nother';
     const decs: DecorationRange[] = [
@@ -188,40 +209,6 @@ describe('table decoration rendering', () => {
     expect(result.has('tablePipe')).toBe(false);
   });
 
-  it('skips table decorations when word wrap is on and the table would wrap', () => {
-    vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
-      get: <T>(key: string, defaultValue: T): T => {
-        if (key === 'wordWrap') return 'wordWrapColumn' as T;
-        if (key === 'wordWrapColumn') return 8 as T;
-        return defaultValue;
-      },
-    } as ReturnType<typeof vscode.workspace.getConfiguration>);
-
-    const text = '| A | B |\n|---|---|\nother';
-    const decs: DecorationRange[] = [
-      { startPos: 0, endPos: 1, type: 'tablePipe', replacement: '│' } as any,
-      { startPos: 1, endPos: 4, type: 'tableCell', replacement: ' A  ' } as any,
-      { startPos: 4, endPos: 5, type: 'tablePipe', replacement: '│' } as any,
-      { startPos: 5, endPos: 8, type: 'tableCell', replacement: ' B  ' } as any,
-      { startPos: 8, endPos: 9, type: 'tablePipe', replacement: '│' } as any,
-    ];
-    const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
-    const tableScope: ScopeEntry = {
-      startPos: 0,
-      endPos: 17,
-      range: new Range(new Position(0, 0), new Position(1, 5)) as any,
-      kind: 'table',
-    };
-    const editor = makeEditor(text, 2, 0);
-    const result = filterDecorationsForEditor(
-      editor as any,
-      decs,
-      [tableScope],
-      text,
-      (s, e, t) => simpleRangeFactory(s, e, t),
-    );
-    expect(result.has('tablePipe')).toBe(false);
-  });
 });
 
 describe('selection overlay for codeBlock/frontmatter', () => {

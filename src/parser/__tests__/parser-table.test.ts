@@ -107,6 +107,13 @@ describe('MarkdownParser - Tables', () => {
   });
 
   describe('inline formatting in cells', () => {
+    it('should not replace strikethrough-only cells with tableCell decorations', () => {
+      const md = '| Col |\n|-----|\n| ~~strike~~ |';
+      const result = parser.extractDecorations(md);
+      expect(byType(result, 'tableCell').some((c) => c.replacement?.includes('strike'))).toBe(false);
+      expect(byType(result, 'strikethrough').length).toBeGreaterThan(0);
+    });
+
     it('should detect bold cell style', () => {
       const md = '| A |\n|---|\n| **bold** |';
       const result = parser.extractDecorations(md);
@@ -197,13 +204,40 @@ describe('MarkdownParser - Tables', () => {
   });
 
   describe('links in cells', () => {
-    it('should include link label text in cell replacement', () => {
+    it('should not replace link-only cells with tableCell decorations', () => {
       const md = '| Col |\n|-----|\n| [label](https://example.com) |';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
-      const dataCell = cells.find((c) => c.replacement?.includes('label'));
-      expect(dataCell).toBeDefined();
-      expect(dataCell!.replacement).not.toContain('https://');
+      expect(byType(result, 'tableCell').some((c) => c.replacement?.includes('label'))).toBe(false);
+      expect(byType(result, 'link').length).toBeGreaterThan(0);
+    });
+
+    it('should emit link decorations for bare URLs in cells', () => {
+      const md = '| Col | Note |\n| --- | --- |\n| https://example.com/path/to/resource?query=1&other=2 | long URL |';
+      const result = parser.extractDecorations(md);
+      const links = byType(result, 'link');
+      expect(links.some((d) => d.url?.includes('https://example.com'))).toBe(true);
+      expect(byType(result, 'tableCell').some((c) => c.replacement?.includes('https://'))).toBe(false);
+    });
+
+    it('should emit link decorations for URL autolinks in cells', () => {
+      const md = '| Col |\n|-----|\n| <https://example.com> |';
+      const result = parser.extractDecorations(md);
+      expect(byType(result, 'link').length).toBeGreaterThan(0);
+      expect(byType(result, 'tableCell').some((c) => c.replacement?.includes('https://'))).toBe(false);
+    });
+
+    it('should emit link decorations for email autolinks in cells', () => {
+      const md = '| Col |\n|-----|\n| <mailto:dev@example.com> |';
+      const result = parser.extractDecorations(md);
+      expect(byType(result, 'link').some((d) => d.url?.includes('mailto:'))).toBe(true);
+    });
+
+    it('should still pad plain text cells beside link cells', () => {
+      const md = '| Col | Note |\n| --- | --- |\n| <https://example.com> | autolink |';
+      const result = parser.extractDecorations(md);
+      const noteCell = byType(result, 'tableCell').find((c) => c.replacement?.includes('autolink'));
+      expect(noteCell).toBeDefined();
+      expect(byType(result, 'link').length).toBeGreaterThan(0);
     });
   });
 

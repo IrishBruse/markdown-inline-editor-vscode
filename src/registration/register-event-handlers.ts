@@ -62,21 +62,6 @@ export function registerEventHandlers(
       if (event.affectsConfiguration('editor.fontSize') || event.affectsConfiguration('editor.lineHeight')) {
         decorator.clearMathDecorationCache();
       }
-
-      if (
-        event.affectsConfiguration('editor.wordWrap')
-        || event.affectsConfiguration('editor.wordWrapColumn')
-      ) {
-        decorator.updateDecorationsForSelection();
-      }
-    }),
-    vscode.window.onDidChangeWindowState(() => {
-      decorator.updateDecorationsForSelection();
-    }),
-    vscode.window.onDidChangeTextEditorViewColumn((event) => {
-      if (event.textEditor === vscode.window.activeTextEditor) {
-        decorator.updateDecorationsForSelection();
-      }
     }),
     vscode.window.onDidChangeActiveColorTheme(() => {
       decorator.recreateColorDependentTypes();

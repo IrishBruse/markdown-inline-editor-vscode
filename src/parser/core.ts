@@ -34,6 +34,7 @@ import {
 } from "./mentions";
 import {
   cellHasMixedFormatting as cellHasMixedFormattingHelper,
+  isLinkOnlyCell as isLinkOnlyCellHelper,
   computeColumnWidths as computeColumnWidthsHelper,
   detectCellStyle as detectCellStyleHelper,
   extractCellPlainText as extractCellPlainTextHelper,
@@ -1438,20 +1439,30 @@ export class MarkdownParser {
 
         const rawContent = text.substring(cellRangeStart, cellRangeEnd);
         const trimmedContent = rawContent.trim();
-        const cellStyle = this.detectCellStyle(trimmedContent);
         const colWidth = i < colWidths.length ? colWidths[i] : 3;
 
         // Whole-cell styled: extract clean text via AST + apply CSS
         // Mixed formatting: show raw syntax (VS Code can't partially style)
         // Plain / escaped: use AST extraction (handles \| → |, \\ → \)
         const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
-        const showRaw = !cellStyle && astCell && this.cellHasMixedFormatting(astCell);
+        const markdownCellStyle = this.detectCellStyle(trimmedContent);
+        const showRaw = !markdownCellStyle && astCell && this.cellHasMixedFormatting(astCell);
+        const isLinkCell = !markdownCellStyle && !showRaw && !!astCell && isLinkOnlyCellHelper(astCell);
+        const cellStyle = markdownCellStyle;
         const displayContent = (astCell && !showRaw)
           ? this.extractCellPlainText(astCell)
           : trimmedContent;
         const displayWidth = this.measureTextWidth(displayContent);
         const totalPad = Math.max(0, colWidth - displayWidth);
         const align = i < colAligns.length ? colAligns[i] : null;
+
+        // Link-only and strikethrough-only cells: skip padded replacement so standard
+        // inline decorations apply to the real text. tableCell before.contentText cannot
+        // partially style padding (e.g. line-through bleeds across NBSP pad chars).
+        const isStrikeCell = markdownCellStyle?.textDecoration === 'line-through';
+        if (isLinkCell || isStrikeCell) {
+          continue;
+        }
 
         let replacement: string;
         if (align === "right") {

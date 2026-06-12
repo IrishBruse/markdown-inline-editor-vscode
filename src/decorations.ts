@@ -355,7 +355,6 @@ export function LinkDecorationType(color?: string | ThemeColor, showEmoji = fals
 /**
  * Creates a decoration type for image styling.
  *
- * Adds an image icon after the image alt text to visually indicate it's an image.
  * Sets cursor to pointer on hover to indicate clickability (same as links).
  *
  * @param {string | ThemeColor | undefined} color - Optional hex or theme color; when undefined uses textLink.foreground
@@ -367,10 +366,6 @@ export function ImageDecorationType(color?: string | ThemeColor) {
     color: resolvedColor,
     cursor: 'pointer', // Show pointer cursor on hover (same as links)
     textDecoration: 'underline; text-decoration-style: dashed; text-decoration-thickness: 1px;',
-    after: {
-      contentText: ' ⬔',
-      color: resolvedColor,
-    },
   });
 }
 

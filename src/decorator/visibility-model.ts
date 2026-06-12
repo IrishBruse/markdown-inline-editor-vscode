@@ -2,7 +2,6 @@ import { Range, ThemeColor, type DecorationOptions, type Position, type TextEdit
 import { config } from '../config';
 import type { DecorationRange, DecorationType } from '../parser';
 import { isMarkerDecorationType } from './decoration-categories';
-import { tableWouldWrap } from './table-word-wrap';
 
 export type ScopeEntry = {
   startPos: number;
@@ -79,10 +78,6 @@ export function filterDecorationsForEditor(
   // in the table, reveal the entire table (show raw markdown, not decorations).
   const tableScopes = scopes.filter(s => s.kind === 'table');
   const rawTableRanges: Range[] = [];
-  const lineAtOffset = (offset: number): number => {
-    const range = rangeFactory(offset, offset + 1, originalText);
-    return range?.start.line ?? -1;
-  };
   if (!tablesAlwaysRaw) {
     for (const tableScope of tableScopes) {
       let tableIsActive = false;
@@ -93,10 +88,6 @@ export function filterDecorationsForEditor(
         }
       }
       if (tableIsActive) {
-        rawTableRanges.push(tableScope.range);
-        continue;
-      }
-      if (tableWouldWrap(editor, tableScope, decorations, originalText, lineAtOffset)) {
         rawTableRanges.push(tableScope.range);
       }
     }
@@ -121,6 +112,13 @@ export function filterDecorationsForEditor(
     const range = rangeFactory(decoration.startPos, decoration.endPos, originalText);
     if (!range) continue;
     const isActiveLine = activeLines.size > 0 && activeLines.has(range.start.line);
+
+    // Table link cells keep source text (no tableCell replacement). Skip extension link
+    // styling inside tables so the theme's markdown syntax colors apply (parse cache still
+    // retains link decorations for click/hover providers).
+    if (decoration.type === 'link' && tableScopes.some((scope) => rangeIntersectsAny(range, [scope.range]))) {
+      continue;
+    }
 
     // Code blocks and frontmatter use opaque, whole-line backgrounds.
     // On some themes, VS Code's native selection highlight is drawn "under" those
