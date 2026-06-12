@@ -46,6 +46,11 @@ export function isLinkOnlyCell(cell: TableCell): boolean {
   return cell.children.length === 1 && cell.children[0].type === 'link';
 }
 
+export function linkOnlyCellUrl(cell: TableCell): string {
+  const child = cell.children[0] as { url?: string };
+  return child.url ?? '';
+}
+
 /** Glyph shown in inline-rendered table cells that contain only an image. */
 export const TABLE_CELL_IMAGE_ICON = '\u2B14'; // ⬔
 
@@ -58,9 +63,78 @@ export function imageOnlyCellUrl(cell: TableCell): string {
   return child.url ?? '';
 }
 
+function isWideCodePoint(code: number): boolean {
+  if (
+    (code >= 0x2e80 && code <= 0x9fff) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xfe30 && code <= 0xfe4f) ||
+    (code >= 0x20000 && code <= 0x2fa1f) ||
+    (code >= 0xac00 && code <= 0xd7af) ||
+    (code >= 0x2600 && code <= 0x27bf) ||
+    (code >= 0x1f300 && code <= 0x1faff) ||
+    (code >= 0x1f1e6 && code <= 0x1f1ff)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isZeroWidthCodePoint(code: number): boolean {
+  return code === 0x200d || code === 0xfe0f;
+}
+
+export function measureTextWidth(plain: string, options?: { cjkCorrection?: boolean }): number {
+  let width = 0;
+  let cjkCount = 0;
+  for (const char of plain) {
+    const code = char.codePointAt(0)!;
+    if (isZeroWidthCodePoint(code)) {
+      continue;
+    }
+    if (isWideCodePoint(code)) {
+      width += 2;
+      if (
+        (code >= 0x2e80 && code <= 0x9fff) ||
+        (code >= 0xf900 && code <= 0xfaff) ||
+        (code >= 0xfe30 && code <= 0xfe4f) ||
+        (code >= 0x20000 && code <= 0x2fa1f)
+      ) {
+        cjkCount++;
+      }
+    } else {
+      width += 1;
+    }
+  }
+  if (options?.cjkCorrection && cjkCount > 0) {
+    return width + Math.ceil(cjkCount * 0.25);
+  }
+  return width;
+}
+
+/** Padded replacement that fills the source cell span between pipes. */
+export function buildTableCellReplacement(
+  rawContent: string,
+  displayContent: string,
+  displayWidth: number,
+  align: 'left' | 'right' | 'center' | null,
+): string {
+  const sourceWidth = measureTextWidth(rawContent);
+  const totalPad = Math.max(0, sourceWidth - displayWidth - 2);
+
+  if (align === 'right') {
+    return '\u00A0'.repeat(totalPad + 1) + displayContent + '\u00A0';
+  }
+  if (align === 'center') {
+    const padLeft = Math.floor(totalPad / 2);
+    const padRight = totalPad - padLeft;
+    return '\u00A0'.repeat(padLeft + 1) + displayContent + '\u00A0'.repeat(padRight + 1);
+  }
+  return '\u00A0' + displayContent + '\u00A0'.repeat(totalPad + 1);
+}
+
 export function detectCellStyle(
   trimmed: string,
-): { fontWeight?: string; fontStyle?: string; textDecoration?: string } | undefined {
+): { fontWeight?: string; fontStyle?: string; textDecoration?: string; inlineCode?: boolean } | undefined {
   if (
     (trimmed.startsWith('***') && trimmed.endsWith('***')) ||
     (trimmed.startsWith('___') && trimmed.endsWith('___'))
@@ -83,29 +157,9 @@ export function detectCellStyle(
     return { fontStyle: 'italic' };
   }
   if (trimmed.startsWith('`') && trimmed.endsWith('`') && trimmed.length > 2) {
-    return { fontWeight: 'normal' };
+    return { inlineCode: true };
   }
   return undefined;
-}
-
-export function measureTextWidth(plain: string): number {
-  let width = 0;
-  let cjkCount = 0;
-  for (const char of plain) {
-    const code = char.codePointAt(0)!;
-    if (
-      (code >= 0x2e80 && code <= 0x9fff) ||
-      (code >= 0xf900 && code <= 0xfaff) ||
-      (code >= 0xfe30 && code <= 0xfe4f) ||
-      (code >= 0x20000 && code <= 0x2fa1f)
-    ) {
-      width += 2;
-      cjkCount++;
-    } else {
-      width += 1;
-    }
-  }
-  return width + Math.ceil(cjkCount * 0.25);
 }
 
 export function findPipePositions(

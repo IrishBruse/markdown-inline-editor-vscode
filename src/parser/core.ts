@@ -37,8 +37,9 @@ import {
   imageOnlyCellUrl as imageOnlyCellUrlHelper,
   isImageOnlyCell as isImageOnlyCellHelper,
   isLinkOnlyCell as isLinkOnlyCellHelper,
+  linkOnlyCellUrl as linkOnlyCellUrlHelper,
   TABLE_CELL_IMAGE_ICON,
-  computeColumnWidths as computeColumnWidthsHelper,
+  buildTableCellReplacement as buildTableCellReplacementHelper,
   detectCellStyle as detectCellStyleHelper,
   extractCellPlainText as extractCellPlainTextHelper,
   findPipePositions as findPipePositionsHelper,
@@ -1307,8 +1308,20 @@ export class MarkdownParser {
    * @param plain - Already-unmarked cell display text
    * @returns Estimated width in monospace columns
    */
-  private measureTextWidth(plain: string): number {
-    return measureTextWidthHelper(plain);
+  private measureTextWidth(
+    plain: string,
+    options?: { cjkCorrection?: boolean },
+  ): number {
+    return measureTextWidthHelper(plain, options);
+  }
+
+  private buildTableCellReplacement(
+    rawContent: string,
+    displayContent: string,
+    displayWidth: number,
+    align: 'left' | 'right' | 'center' | null,
+  ): string {
+    return buildTableCellReplacementHelper(rawContent, displayContent, displayWidth, align);
   }
 
   /**
@@ -1358,27 +1371,13 @@ export class MarkdownParser {
   }
 
   /**
-   * Computes the maximum display width for each column in a table.
-   *
-   * Uses pipe positions on each row line to extract cell content, avoiding
-   * remark-gfm cell positions which include pipe characters.
-   *
-   * @param tableNode - The remark Table AST node
-   * @param source - The full normalized document text
-   * @returns Array of column widths (one per column, minimum 3)
-   */
-  private computeColumnWidths(tableNode: Table, source: string): number[] {
-    return computeColumnWidthsHelper(tableNode, source);
-  }
-
-  /**
    * Processes a GFM table node and emits decorations for pipes, cells, and the separator row.
    *
    * Produces:
    * - `tablePipe` decorations for `|` in header and data rows (replaced with `│`)
    * - `tableSeparatorPipe` decorations for `|` in the separator row (replaced with `├`, `┼`, or `┤`)
    * - `tableSeparatorDash` decorations for dash segments in the separator row (replaced with `─` repeats)
-   * - `tableCell` decorations for cell content (padded to uniform column width)
+   * - `tableCell` decorations for cell content (padded to each row's source span)
    *
    * Also adds a scope for the entire table so the visibility model can reveal the
    * whole block when the cursor is inside it.
@@ -1399,7 +1398,6 @@ export class MarkdownParser {
 
     const tableStart = node.position!.start.offset!;
     const tableEnd = node.position!.end.offset!;
-    const colWidths = this.computeColumnWidths(node, text);
     const colAligns = node.align ?? [];
 
     this.addScope(scopes, tableStart, tableEnd, "table");
@@ -1442,7 +1440,6 @@ export class MarkdownParser {
 
         const rawContent = text.substring(cellRangeStart, cellRangeEnd);
         const trimmedContent = rawContent.trim();
-        const colWidth = i < colWidths.length ? colWidths[i] : 3;
 
         // Whole-cell styled: extract clean text via AST + apply CSS
         // Mixed formatting: show raw syntax (VS Code can't partially style)
@@ -1458,29 +1455,13 @@ export class MarkdownParser {
           : (astCell && !showRaw)
             ? this.extractCellPlainText(astCell)
             : trimmedContent;
-        const displayWidth = this.measureTextWidth(displayContent);
-        const totalPad = Math.max(0, colWidth - displayWidth);
+        const displayWidth = this.measureTextWidth(displayContent, { cjkCorrection: true });
         const align = i < colAligns.length ? colAligns[i] : null;
 
-        // Link-only and strikethrough-only cells: skip padded replacement so standard
-        // inline decorations apply to the real text. tableCell before.contentText cannot
-        // partially style padding (e.g. line-through bleeds across NBSP pad chars).
-        const isStrikeCell = markdownCellStyle?.textDecoration === 'line-through';
-        if (isLinkCell || isStrikeCell) {
-          continue;
-        }
-
         if (isImageCell && astCell) {
-          let replacement: string;
-          if (align === "right") {
-            replacement = "\u00A0".repeat(totalPad + 1) + displayContent + "\u00A0";
-          } else if (align === "center") {
-            const padLeft = Math.floor(totalPad / 2);
-            const padRight = totalPad - padLeft;
-            replacement = "\u00A0".repeat(padLeft + 1) + displayContent + "\u00A0".repeat(padRight + 1);
-          } else {
-            replacement = "\u00A0" + displayContent + "\u00A0".repeat(totalPad + 1);
-          }
+          const replacement = this.buildTableCellReplacement(
+            rawContent, displayContent, displayWidth, align,
+          );
 
           decorations.push({
             startPos: cellRangeStart,
@@ -1492,17 +1473,9 @@ export class MarkdownParser {
           continue;
         }
 
-        let replacement: string;
-        if (align === "right") {
-          replacement = "\u00A0".repeat(totalPad + 1) + displayContent + "\u00A0";
-        } else if (align === "center") {
-          const padLeft = Math.floor(totalPad / 2);
-          const padRight = totalPad - padLeft;
-          replacement = "\u00A0".repeat(padLeft + 1) + displayContent + "\u00A0".repeat(padRight + 1);
-        } else {
-          // left or null (default)
-          replacement = "\u00A0" + displayContent + "\u00A0".repeat(totalPad + 1);
-        }
+        const replacement = this.buildTableCellReplacement(
+          rawContent, displayContent, displayWidth, align,
+        );
 
         decorations.push({
           startPos: cellRangeStart,
@@ -1510,6 +1483,7 @@ export class MarkdownParser {
           type: "tableCell",
           replacement,
           cellStyle,
+          ...(isLinkCell && astCell ? { url: linkOnlyCellUrlHelper(astCell) } : {}),
         });
       }
 
@@ -1559,12 +1533,13 @@ export class MarkdownParser {
           const segEnd = sepPipes[pIdx + 1];
           if (segStart >= segEnd) continue;
 
-          const colWidth = pIdx < colWidths.length ? colWidths[pIdx] : 3;
+          const segContent = text.substring(segStart, segEnd);
+          const segWidth = this.measureTextWidth(segContent);
           decorations.push({
             startPos: segStart,
             endPos: segEnd,
             type: "tableSeparatorDash",
-            replacement: "-".repeat(colWidth + 2),
+            replacement: "-".repeat(segWidth),
           });
         }
       }

@@ -59,7 +59,7 @@ export function resolveInteractionTarget(
     return uri ? { kind: 'uri', uri } : undefined;
   }
 
-  if (decoration.type === 'link' && decoration.url) {
+  if ((decoration.type === 'link' || decoration.type === 'tableCell') && decoration.url) {
     const resolved = resolveLinkTarget(decoration.url, documentUri);
     if (!resolved) {
       return undefined;
@@ -110,7 +110,12 @@ export function getInteractionDisplayValue(
   decoration: DecorationRange,
   target: InteractionTarget
 ): string {
-  if (decoration.type === 'link' || decoration.type === 'image' || decoration.type === 'tableCellImage') {
+  if (
+    decoration.type === 'link' ||
+    decoration.type === 'tableCell' ||
+    decoration.type === 'image' ||
+    decoration.type === 'tableCellImage'
+  ) {
     return decoration.url ?? toInteractionUri(target).toString();
   }
 
@@ -119,7 +124,7 @@ export function getInteractionDisplayValue(
 
 export function isLinkDecoration(decoration: DecorationRange): boolean {
   return (
-    (decoration.type === 'link' || decoration.type === 'image' || decoration.type === 'tableCellImage') &&
+    (decoration.type === 'link' || decoration.type === 'tableCell' || decoration.type === 'image' || decoration.type === 'tableCellImage') &&
     typeof decoration.url === 'string'
   );
 }

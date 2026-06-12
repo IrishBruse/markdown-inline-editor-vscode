@@ -42,8 +42,8 @@
 
 | Left | Center | Right |
 |:-----|:------:|------:|
-| L    |   C    |     R |
-| long |  mid   |   1.0 |
+| L    |C    |     R 
+| long |  mid|   1.0 |
 
 | Left | Center | Right |
 | :--- | :----: | ----: |

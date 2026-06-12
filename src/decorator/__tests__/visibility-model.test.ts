@@ -221,6 +221,136 @@ describe('table decoration rendering', () => {
     expect(cells[0].renderOptions?.before?.fontWeight).toBe('bold');
   });
 
+  it('renders tableCell with inlineCode cellStyle colors', () => {
+    const text = '| `code` |\nother';
+    const decs: DecorationRange[] = [
+      {
+        startPos: 0,
+        endPos: 1,
+        type: 'tableCell',
+        replacement: ' code ',
+        cellStyle: { inlineCode: true },
+      } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    const cells = result.get('tableCell') as any[];
+    expect(cells).toBeDefined();
+    expect(cells[0].renderOptions?.before?.contentText).toBe(' code ');
+    expect(cells[0].renderOptions?.before?.backgroundColor).toBeDefined();
+  });
+
+  it('skips inline code decorations inside padded tableCell ranges', () => {
+    const text = '| `code` |\nother';
+    const decs: DecorationRange[] = [
+      {
+        startPos: 1,
+        endPos: 8,
+        type: 'tableCell',
+        replacement: ' code ',
+        cellStyle: { inlineCode: true },
+      } as any,
+      { startPos: 2, endPos: 8, type: 'code' } as any,
+      { startPos: 2, endPos: 3, type: 'transparent' } as any,
+      { startPos: 7, endPos: 8, type: 'transparent' } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('tableCell')).toBe(true);
+    expect(result.has('code')).toBe(false);
+    expect(result.has('transparent')).toBe(false);
+  });
+
+  it('skips inline bold and hide decorations inside padded tableCell ranges', () => {
+    const text = '| **bold** and plain | note |\nother';
+    const decs: DecorationRange[] = [
+      {
+        startPos: 1,
+        endPos: 21,
+        type: 'tableCell',
+        replacement: ' **bold** and plain ',
+      } as any,
+      { startPos: 2, endPos: 4, type: 'hide' } as any,
+      { startPos: 4, endPos: 8, type: 'bold' } as any,
+      { startPos: 8, endPos: 10, type: 'hide' } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('tableCell')).toBe(true);
+    expect(result.has('bold')).toBe(false);
+    expect(result.has('hide')).toBe(false);
+  });
+
+  it('skips strikethrough and hide decorations inside padded tableCell ranges', () => {
+    const text = '| ~~strike~~ |\nother';
+    const decs: DecorationRange[] = [
+      {
+        startPos: 2,
+        endPos: 14,
+        type: 'tableCell',
+        replacement: ' strike ',
+        cellStyle: { textDecoration: 'line-through' },
+      } as any,
+      { startPos: 2, endPos: 4, type: 'hide' } as any,
+      { startPos: 4, endPos: 10, type: 'strikethrough' } as any,
+      { startPos: 10, endPos: 12, type: 'hide' } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('tableCell')).toBe(true);
+    expect(result.has('strikethrough')).toBe(false);
+    expect(result.has('hide')).toBe(false);
+  });
+
+  it('renders tableCell with link url styling', () => {
+    const text = '| https://example.com |\nother';
+    const decs: DecorationRange[] = [
+      {
+        startPos: 2,
+        endPos: 23,
+        type: 'tableCell',
+        replacement: ' https://example.com ',
+        url: 'https://example.com',
+      } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    const cells = result.get('tableCell') as any[];
+    expect(cells).toBeDefined();
+    expect(cells[0].renderOptions?.before?.textDecoration).toBe('underline');
+    expect(cells[0].renderOptions?.before?.cursor).toBe('pointer');
+  });
+
   it('skips table decorations when rendering mode is raw', () => {
     vi.spyOn(config.tables, 'renderingMode').mockReturnValue('raw');
     const text = '| A |\n| - |\nother';

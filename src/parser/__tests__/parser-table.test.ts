@@ -1,4 +1,5 @@
 import { MarkdownParser, DecorationRange } from '../../parser';
+import { measureTextWidth } from '../tables';
 
 describe('MarkdownParser - Tables', () => {
   let parser: MarkdownParser;
@@ -99,19 +100,40 @@ describe('MarkdownParser - Tables', () => {
       const md = '| Name | CJK  |\n|------|------|\n| AB   | \u4F60\u597D   |';
       const result = parser.extractDecorations(md);
       const cells = byType(result, 'tableCell');
-      // All cells should have replacement text
       cells.forEach((c) => {
         expect(c.replacement).toBeDefined();
       });
     });
+
+    it('should match replacement width to each cell source span', () => {
+      const cases = [
+        '| EN | 中文 |\n|----|------|\n| Hi | 你好 |',
+        '| Name | CJK  |\n| ---- | ---- |\n| AB   | 你好 |',
+        '| Col    | Val  |\n| ------ | ---- |\n| Hangul | 안녕 |',
+        '| Col   | Val |\n| ----- | --- |\n| Emoji | 😀  |',
+      ];
+      for (const md of cases) {
+        const result = parser.extractDecorations(md);
+        for (const cell of byType(result, 'tableCell')) {
+          const raw = md.slice(cell.startPos, cell.endPos);
+          expect(measureTextWidth(cell.replacement!)).toBe(measureTextWidth(raw));
+        }
+        for (const dash of byType(result, 'tableSeparatorDash')) {
+          const raw = md.slice(dash.startPos, dash.endPos);
+          expect(dash.replacement!.length).toBe(measureTextWidth(raw));
+        }
+      }
+    });
   });
 
   describe('inline formatting in cells', () => {
-    it('should not replace strikethrough-only cells with tableCell decorations', () => {
+    it('should replace strikethrough-only cells with padded tableCell decorations', () => {
       const md = '| Col |\n|-----|\n| ~~strike~~ |';
       const result = parser.extractDecorations(md);
-      expect(byType(result, 'tableCell').some((c) => c.replacement?.includes('strike'))).toBe(false);
-      expect(byType(result, 'strikethrough').length).toBeGreaterThan(0);
+      const strikeCell = byType(result, 'tableCell').find((c) => c.replacement?.includes('strike'));
+      expect(strikeCell).toBeDefined();
+      expect(strikeCell!.replacement).not.toContain('~~');
+      expect(strikeCell!.cellStyle?.textDecoration).toBe('line-through');
     });
 
     it('should detect bold cell style', () => {
@@ -137,14 +159,16 @@ describe('MarkdownParser - Tables', () => {
       const md = '| Header   |\n|----------|\n| **bold** |';
       const result = parser.extractDecorations(md);
       const cells = byType(result, 'tableCell');
-      // "bold" (4 chars) should be padded relative to "Header" (6 chars),
-      // not "**bold**" (8 chars)
       const boldCell = cells.find((c) => c.replacement!.includes('bold'));
-      expect(boldCell).toBeDefined();
       const headerCell = cells.find((c) => c.replacement!.includes('Header'));
+      expect(boldCell).toBeDefined();
       expect(headerCell).toBeDefined();
-      // Both replacements should be same total length (aligned columns)
-      expect(boldCell!.replacement!.length).toBe(headerCell!.replacement!.length);
+      expect(measureTextWidth(boldCell!.replacement!)).toBe(
+        measureTextWidth(md.slice(boldCell!.startPos, boldCell!.endPos)),
+      );
+      expect(measureTextWidth(headerCell!.replacement!)).toBe(
+        measureTextWidth(md.slice(headerCell!.startPos, headerCell!.endPos)),
+      );
     });
   });
 
@@ -219,40 +243,50 @@ describe('MarkdownParser - Tables', () => {
   });
 
   describe('links in cells', () => {
-    it('should not replace link-only cells with tableCell decorations', () => {
+    it('should replace link-only cells with padded tableCell decorations and url', () => {
       const md = '| Col |\n|-----|\n| [label](https://example.com) |';
       const result = parser.extractDecorations(md);
-      expect(byType(result, 'tableCell').some((c) => c.replacement?.includes('label'))).toBe(false);
-      expect(byType(result, 'link').length).toBeGreaterThan(0);
+      const linkCell = byType(result, 'tableCell').find((c) => c.replacement?.includes('label'));
+      expect(linkCell).toBeDefined();
+      expect(linkCell!.url).toBe('https://example.com');
+      expect(linkCell!.replacement).not.toContain('](');
     });
 
-    it('should emit link decorations for bare URLs in cells', () => {
+    it('should pad bare URL cells via tableCell with url', () => {
       const md = '| Col | Note |\n| --- | --- |\n| https://example.com/path/to/resource?query=1&other=2 | long URL |';
       const result = parser.extractDecorations(md);
-      const links = byType(result, 'link');
-      expect(links.some((d) => d.url?.includes('https://example.com'))).toBe(true);
-      expect(byType(result, 'tableCell').some((c) => c.replacement?.includes('https://'))).toBe(false);
+      const urlCell = byType(result, 'tableCell').find((c) => c.url?.includes('https://example.com'));
+      expect(urlCell).toBeDefined();
+      expect(urlCell!.replacement).toContain('https://example.com');
+      expect(measureTextWidth(urlCell!.replacement!)).toBe(
+        measureTextWidth(md.slice(urlCell!.startPos, urlCell!.endPos)),
+      );
     });
 
-    it('should emit link decorations for URL autolinks in cells', () => {
+    it('should pad URL autolink cells via tableCell with url', () => {
       const md = '| Col |\n|-----|\n| <https://example.com> |';
       const result = parser.extractDecorations(md);
-      expect(byType(result, 'link').length).toBeGreaterThan(0);
-      expect(byType(result, 'tableCell').some((c) => c.replacement?.includes('https://'))).toBe(false);
+      const linkCell = byType(result, 'tableCell').find((c) => c.url === 'https://example.com');
+      expect(linkCell).toBeDefined();
+      expect(linkCell!.replacement).toContain('https://example.com');
+      expect(linkCell!.replacement).not.toContain('<');
     });
 
-    it('should emit link decorations for email autolinks in cells', () => {
+    it('should pad email autolink cells via tableCell with url', () => {
       const md = '| Col |\n|-----|\n| <mailto:dev@example.com> |';
       const result = parser.extractDecorations(md);
-      expect(byType(result, 'link').some((d) => d.url?.includes('mailto:'))).toBe(true);
+      const mailCell = byType(result, 'tableCell').find((c) => c.url?.includes('mailto:'));
+      expect(mailCell).toBeDefined();
+      expect(mailCell!.replacement).toContain('dev@example.com');
     });
 
     it('should still pad plain text cells beside link cells', () => {
       const md = '| Col | Note |\n| --- | --- |\n| <https://example.com> | autolink |';
       const result = parser.extractDecorations(md);
       const noteCell = byType(result, 'tableCell').find((c) => c.replacement?.includes('autolink'));
+      const linkCell = byType(result, 'tableCell').find((c) => c.url === 'https://example.com');
       expect(noteCell).toBeDefined();
-      expect(byType(result, 'link').length).toBeGreaterThan(0);
+      expect(linkCell).toBeDefined();
     });
   });
 
@@ -271,6 +305,46 @@ describe('MarkdownParser - Tables', () => {
       const cells = byType(result, 'tableCell');
       const exprCell = cells.find((c) => c.replacement!.includes('100'));
       expect(exprCell).toBeDefined();
+    });
+  });
+
+  describe('inline code in cells', () => {
+    it('should detect inline code cell style', () => {
+      const md = '| Plain | **Bold** | *Italic* | `code` |\n|-------|----------|----------|--------|\n| ok    | loud     | soft     | mono   |';
+      const result = parser.extractDecorations(md);
+      const cells = byType(result, 'tableCell');
+      const codeCell = cells.find((c) => c.replacement?.includes('code') && c.cellStyle?.inlineCode);
+      expect(codeCell).toBeDefined();
+      expect(codeCell!.replacement).not.toContain('`');
+    });
+  });
+
+  describe('link and strikethrough cell alignment', () => {
+    const cases = [
+      [
+        'bare URL autolink',
+        '| Col                 | Note    |\n| ------------------- | ------- |\n| https://example.com | autolink |',
+      ],
+      [
+        'mailto autolink',
+        '| Col                       | Note           |\n| --------------------------- | -------------- |\n| mailto:dev@example.com | mail autolink |',
+      ],
+      [
+        'strikethrough whole cell',
+        '| Col     | Note   |\n| ------- | ------ |\n| ~~gone~~ | delete |',
+      ],
+    ] as const;
+
+    it.each(cases)('keeps padded cell width for %s rows', (_label, md) => {
+      const result = parser.extractDecorations(md);
+      for (const cell of byType(result, 'tableCell')) {
+        const raw = md.slice(cell.startPos, cell.endPos);
+        expect(measureTextWidth(cell.replacement!)).toBe(measureTextWidth(raw));
+      }
+      for (const dash of byType(result, 'tableSeparatorDash')) {
+        const raw = md.slice(dash.startPos, dash.endPos);
+        expect(dash.replacement!.length).toBe(measureTextWidth(raw));
+      }
     });
   });
 

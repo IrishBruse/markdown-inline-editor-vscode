@@ -1,4 +1,4 @@
-import { Range, ThemeColor, type DecorationOptions, type Position, type TextEditor } from 'vscode';
+import { Range, ThemeColor, ColorThemeKind, window, type DecorationOptions, type Position, type TextEditor } from 'vscode';
 import { config } from '../config';
 import type { DecorationRange, DecorationType } from '../parser';
 import { isMarkerDecorationType } from './decoration-categories';
@@ -93,6 +93,24 @@ export function filterDecorationsForEditor(
     }
   }
 
+  // Ranges where tableCell/tableCellImage replace the whole cell via before.contentText.
+  // Inline hide/bold/italic decorations inside those cells fight that replacement and
+  // collapse marker columns, which misaligns pipes across rows.
+  const paddedTableCellRanges: Range[] = [];
+  for (const decoration of decorations) {
+    if (decoration.type !== 'tableCell' && decoration.type !== 'tableCellImage') {
+      continue;
+    }
+    const cellRange = rangeFactory(decoration.startPos, decoration.endPos, originalText);
+    if (cellRange) {
+      paddedTableCellRanges.push(cellRange);
+    }
+  }
+
+  const tableCellInlineConflictTypes = new Set<DecorationType>([
+    'bold', 'italic', 'boldItalic', 'hide', 'code', 'transparent', 'strikethrough', 'link',
+  ]);
+
   const filtered = new Map<DecorationType, FilteredDecoration[]>();
   const ghostFaintRanges: Range[] = [];
   const selectionOverlayRanges: Range[] = [];
@@ -122,6 +140,13 @@ export function filterDecorationsForEditor(
 
     // Image-only table cells render via tableCellImage; skip alt-text image styling.
     if (decoration.type === 'image' && tableScopes.some((scope) => rangeIntersectsAny(range, [scope.range]))) {
+      continue;
+    }
+
+    if (
+      tableCellInlineConflictTypes.has(decoration.type) &&
+      paddedTableCellRanges.some((cellRange) => range.intersection(cellRange) !== undefined)
+    ) {
       continue;
     }
 
@@ -228,10 +253,16 @@ export function filterDecorationsForEditor(
         const beforeOpts: Record<string, unknown> = {
           contentText: decoration.replacement,
         };
+        if (decoration.url) {
+          Object.assign(beforeOpts, tableCellLinkBeforeStyle());
+        }
         if (decoration.cellStyle) {
           if (decoration.cellStyle.fontWeight) beforeOpts.fontWeight = decoration.cellStyle.fontWeight;
           if (decoration.cellStyle.fontStyle) beforeOpts.fontStyle = decoration.cellStyle.fontStyle;
           if (decoration.cellStyle.textDecoration) beforeOpts.textDecoration = decoration.cellStyle.textDecoration;
+          if (decoration.cellStyle.inlineCode) {
+            Object.assign(beforeOpts, inlineCodeTableCellBeforeStyle());
+          }
         }
         ranges.push({
           range,
@@ -361,6 +392,35 @@ function mergeRanges(ranges: Range[]): Range[] {
   }
 
   return merged;
+}
+
+/** Matches {@link LinkDecorationType} defaults for link-only tableCell cells. */
+function tableCellLinkBeforeStyle(): Record<string, unknown> {
+  const opts: Record<string, unknown> = {
+    textDecoration: 'underline',
+    cursor: 'pointer',
+  };
+  const color = config.colors.link();
+  opts.color = color ?? new ThemeColor('textLink.foreground');
+  return opts;
+}
+
+/** Matches {@link CodeDecorationType} defaults for tableCell inline-code cells. */
+function inlineCodeTableCellBeforeStyle(): Record<string, string> {
+  const opts: Record<string, string> = {};
+  const color = config.colors.inlineCode();
+  const backgroundColor = config.colors.inlineCodeBackground();
+  if (color) {
+    opts.color = color;
+  }
+  if (backgroundColor) {
+    opts.backgroundColor = backgroundColor;
+  } else {
+    const themeKind = window.activeColorTheme.kind;
+    const isDark = themeKind === ColorThemeKind.Dark || themeKind === ColorThemeKind.HighContrast;
+    opts.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+  }
+  return opts;
 }
 
 function rangeIntersectsAny(range: Range, ranges: Range[]): boolean {
