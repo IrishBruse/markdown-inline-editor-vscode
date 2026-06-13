@@ -86,6 +86,78 @@ describe('emoji decoration', () => {
 });
 
 
+describe('table syntax space replacement', () => {
+  it('replaces hide markers with spaces inside table scopes', () => {
+    const text = '| **bold** | plain |\n| --- | --- |\n| x | y |\n\nafter';
+    const decs: DecorationRange[] = [
+      { startPos: 2, endPos: 4, type: 'hide' } as any,
+      { startPos: 8, endPos: 10, type: 'hide' } as any,
+      { startPos: 4, endPos: 8, type: 'bold' } as any,
+    ];
+    const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
+    const tableScope: ScopeEntry = {
+      startPos: 0,
+      endPos: text.indexOf('\n\n'),
+      range: new Range(doc.positionAt(0), doc.positionAt(text.indexOf('\n\n'))) as any,
+      kind: 'table',
+    };
+    const editor = makeEditor(text, 4, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [tableScope],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    const hideItems = result.get('hide') as any[];
+    expect(hideItems).toBeDefined();
+    expect(hideItems).toHaveLength(2);
+    expect(hideItems[0].renderOptions?.before?.contentText).toBe('  ');
+    expect(hideItems[1].renderOptions?.before?.contentText).toBe('  ');
+    const boldItems = result.get('bold') as any[];
+    expect(boldItems).toBeDefined();
+    expect(boldItems).toHaveLength(1);
+  });
+
+  it('uses normal hide outside table scopes', () => {
+    const text = '**bold**';
+    const decs: DecorationRange[] = [
+      { startPos: 0, endPos: 2, type: 'hide' } as any,
+      { startPos: 6, endPos: 8, type: 'hide' } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    const hideItems = result.get('hide') as any[];
+    expect(hideItems).toBeDefined();
+    expect(hideItems[0]).not.toHaveProperty('renderOptions');
+  });
+
+  it('ignores scope entries with missing ranges instead of throwing', () => {
+    const text = '**bold**';
+    const decs: DecorationRange[] = [
+      { startPos: 0, endPos: 2, type: 'hide' } as any,
+      { startPos: 2, endPos: 6, type: 'bold' } as any,
+      { startPos: 6, endPos: 8, type: 'hide' } as any,
+    ];
+    const editor = makeEditor(text, 0, 0);
+    expect(() =>
+      filterDecorationsForEditor(
+        editor as any,
+        decs,
+        [{ startPos: 0, endPos: 8, range: undefined as any, kind: 'table' }],
+        text,
+        (s, e, t) => simpleRangeFactory(s, e, t),
+      ),
+    ).not.toThrow();
+  });
+});
+
 describe('selection overlay for codeBlock/frontmatter', () => {
   it('adds selectionOverlay when non-empty selection covers a codeBlock', () => {
     const text = '```\ncode\n```';

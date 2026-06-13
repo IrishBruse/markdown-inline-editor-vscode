@@ -5,6 +5,7 @@ import {
   buildScopeEntries,
   createRange,
   isSelectionOrCursorInsideOffsets,
+  prepareDecorationPayload,
 } from '../editor-decoration-applier';
 
 describe('editor-decoration-applier', () => {
@@ -106,6 +107,25 @@ describe('editor-decoration-applier', () => {
     expect(
       isSelectionOrCursorInsideOffsets(0, 2, document.getText(), [outside], document as any)
     ).toBe(false);
+  });
+
+  it('normalizes mixed Range and DecorationOptions arrays for setDecorations', () => {
+    const hideRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 2));
+    const spacedOption = {
+      range: new vscode.Range(new vscode.Position(1, 0), new vscode.Position(1, 2)),
+      renderOptions: { before: { contentText: '  ' } },
+    };
+
+    const payload = prepareDecorationPayload([hideRange, spacedOption]);
+
+    expect(payload).toHaveLength(2);
+    expect(payload[0]).toEqual({ range: hideRange });
+    expect(payload[1]).toBe(spacedOption);
+  });
+
+  it('keeps plain Range arrays unchanged', () => {
+    const hideRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 2));
+    expect(prepareDecorationPayload([hideRange])).toEqual([hideRange]);
   });
 
   it('applies ranges, render options, ghost faint, and reports non-empty counts', () => {

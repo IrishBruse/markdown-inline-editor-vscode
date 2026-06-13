@@ -13,6 +13,7 @@ import type {
   ListItem,
   ThematicBreak,
   Text,
+  Table,
 } from "mdast";
 import {
   addMarkerDecorations as addMarkerDecorationsHelper,
@@ -347,6 +348,14 @@ export class MarkdownParser {
                 node as ThematicBreak,
                 text,
                 decorations,
+                scopes,
+                currentAncestors,
+              );
+              break;
+
+            case "table":
+              this.processTableScope(
+                node as Table,
                 scopes,
                 currentAncestors,
               );
@@ -1233,6 +1242,24 @@ export class MarkdownParser {
     scopes: ScopeRange[],
   ): void {
     processFrontmatterHelper(text, decorations, scopes);
+  }
+
+  /**
+   * Registers a scope for GFM tables so decorators can preserve column width
+   * when hiding markdown syntax inside cells (spaces instead of display:none).
+   */
+  private processTableScope(
+    node: Table,
+    scopes: ScopeRange[],
+    ancestors: Node[],
+  ): void {
+    if (!this.hasValidPosition(node) || this.isInCodeBlock(ancestors)) {
+      return;
+    }
+
+    const tableStart = node.position!.start.offset!;
+    const tableEnd = node.position!.end.offset!;
+    this.addScope(scopes, tableStart, tableEnd, "table");
   }
 
 }

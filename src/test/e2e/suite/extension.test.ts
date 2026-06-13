@@ -1053,6 +1053,29 @@ suite('Extension E2E', () => {
   // cursor-move is enough to trigger a fresh setDecorations cycle that the
   // spy can observe within a short delay.
 
+  test('decorator applies non-empty ranges for 05-tables.md fixture (onApply hook)', async () => {
+    assert.ok(decoratorApi, 'decorator not available from ext.exports');
+    const tablesPath = path.join(__dirname, '../../../../docs/tests/05-tables.md');
+    assert.ok(fs.existsSync(tablesPath), `fixture missing at ${tablesPath}`);
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(tablesPath));
+    await vscode.window.showTextDocument(doc);
+    await delay(200);
+
+    let nonEmptyTypeCount = 0;
+    decoratorApi.onApply = (count) => { nonEmptyTypeCount += count; };
+
+    try {
+      await vscode.commands.executeCommand('cursorMove', { to: 'down' });
+      await delay(300);
+      assert.ok(
+        nonEmptyTypeCount > 0,
+        `05-tables.md must apply decorations; got nonEmptyTypeCount=${nonEmptyTypeCount}`,
+      );
+    } finally {
+      decoratorApi.onApply = undefined;
+    }
+  });
+
   test('decorator applies non-empty ranges for markdown content (onApply hook)', async () => {
     assert.ok(decoratorApi, 'decorator not available from ext.exports');
     const doc = await vscode.workspace.openTextDocument({

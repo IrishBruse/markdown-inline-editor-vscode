@@ -67,35 +67,46 @@ export function isSelectionOrCursorInsideOffsets(
   });
 }
 
+function isDecorationOptionsEntry(entry: Range | DecorationOptions): entry is DecorationOptions {
+  return typeof entry === 'object' && entry !== null && 'range' in entry;
+}
+
+/**
+ * VS Code requires setDecorations to receive either Range[] or DecorationOptions[],
+ * never a mixed array. Table hide markers use DecorationOptions (space replacement)
+ * alongside plain Range hide entries, so normalize when needed.
+ */
+export function prepareDecorationPayload(
+  entries: Array<Range | DecorationOptions> | undefined
+): Range[] | DecorationOptions[] {
+  if (!entries?.length) {
+    return [];
+  }
+  const hasOptionsEntries = entries.some(isDecorationOptionsEntry);
+  if (!hasOptionsEntries) {
+    return entries as Range[];
+  }
+  return entries.map((entry) =>
+    isDecorationOptionsEntry(entry) ? entry : { range: entry }
+  );
+}
+
 export function applyFilteredDecorations(
   editor: TextEditor,
   filteredDecorations: Map<DecorationType, Array<Range | DecorationOptions>>,
   decorationTypes: DecorationTypeRegistry,
   onApply?: (nonEmptyTypeCount: number) => void
 ): void {
-  const renderOptionsTypes = new Set<DecorationType>([
-    'emoji', 'orderedListItem',
-  ]);
-
   for (const [type, decorationType] of decorationTypes.getMap().entries()) {
-    if (type === 'emoji') {
-      if (!config.emojis.enabled()) {
-        editor.setDecorations(decorationType, []);
-        continue;
-      }
-      const emojiRanges = filteredDecorations.get(type) as DecorationOptions[] | undefined;
-      editor.setDecorations(decorationType, emojiRanges || []);
+    if (type === 'emoji' && !config.emojis.enabled()) {
+      editor.setDecorations(decorationType, []);
       continue;
     }
 
-    if (renderOptionsTypes.has(type)) {
-      const optionsRanges = filteredDecorations.get(type) as DecorationOptions[] | undefined;
-      editor.setDecorations(decorationType, optionsRanges || []);
-      continue;
-    }
-
-    const ranges = filteredDecorations.get(type) as Range[] | undefined;
-    editor.setDecorations(decorationType, ranges || []);
+    editor.setDecorations(
+      decorationType,
+      prepareDecorationPayload(filteredDecorations.get(type))
+    );
   }
 
   const ghostFaintRanges = (filteredDecorations.get('ghostFaint') as Range[] | undefined) || [];
