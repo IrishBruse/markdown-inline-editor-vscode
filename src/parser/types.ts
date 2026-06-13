@@ -6,12 +6,6 @@ export interface DecorationRange {
   level?: number;
   emoji?: string;
   replacement?: string;
-  cellStyle?: {
-    fontWeight?: string;
-    fontStyle?: string;
-    textDecoration?: string;
-    inlineCode?: boolean;
-  };
   slug?: string;
   issueNumber?: number;
   ownerRepo?: string;
@@ -76,10 +70,5 @@ export type DecorationType =
   | "horizontalRule"
   | "frontmatter"
   | "frontmatterDelimiter"
-  | "tablePipe"
-  | "tableSeparatorPipe"
-  | "tableSeparatorDash"
-  | "tableCell"
-  | "tableCellImage"
   | "mention"
   | "issueReference";

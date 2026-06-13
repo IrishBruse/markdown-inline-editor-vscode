@@ -122,14 +122,14 @@ describe('editor-decoration-applier', () => {
 
     const hideType = { key: 'hide' };
     const emojiType = { key: 'emoji' };
-    const tableType = { key: 'tableCell' };
+    const listType = { key: 'orderedListItem' };
     const ghostFaintType = { key: 'ghostFaint' };
     const registry = {
       getMap: () =>
         new Map<any, any>([
           ['hide', hideType],
           ['emoji', emojiType],
-          ['tableCell', tableType],
+          ['orderedListItem', listType],
         ]),
       getGhostFaintDecorationType: () => ghostFaintType,
     };
@@ -137,7 +137,7 @@ describe('editor-decoration-applier', () => {
     const hideRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1));
     const ghostRange = new vscode.Range(new vscode.Position(0, 1), new vscode.Position(0, 2));
     const emojiOption = { range: hideRange, renderOptions: { after: { contentText: 'x' } } };
-    const tableOption = { range: hideRange, renderOptions: { before: { contentText: '|' } } };
+    const listOption = { range: hideRange, renderOptions: { before: { contentText: '1.' } } };
     const onApply = vi.fn();
 
     applyFilteredDecorations(
@@ -145,7 +145,7 @@ describe('editor-decoration-applier', () => {
       new Map<any, any>([
         ['hide', [hideRange]],
         ['emoji', [emojiOption]],
-        ['tableCell', [tableOption]],
+        ['orderedListItem', [listOption]],
         ['ghostFaint', [ghostRange]],
       ]),
       registry as any,
@@ -154,7 +154,7 @@ describe('editor-decoration-applier', () => {
 
     expect(editor.setDecorations).toHaveBeenCalledWith(hideType, [hideRange]);
     expect(editor.setDecorations).toHaveBeenCalledWith(emojiType, [emojiOption]);
-    expect(editor.setDecorations).toHaveBeenCalledWith(tableType, [tableOption]);
+    expect(editor.setDecorations).toHaveBeenCalledWith(listType, [listOption]);
     expect(editor.setDecorations).toHaveBeenCalledWith(ghostFaintType, [ghostRange]);
     expect(onApply).toHaveBeenCalledWith(4);
   });

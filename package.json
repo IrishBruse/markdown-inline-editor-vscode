@@ -136,27 +136,6 @@
           "description": "Render LaTeX math inline ($...$ and $$...$$)",
           "markdownDescription": "Render LaTeX math inline ($...$ and $$...$$). When disabled, math delimiters are shown as plain text."
         },
-        "markdownInlineEditor.tables.renderingMode": {
-          "type": "string",
-          "enum": [
-            "raw",
-            "inline",
-            "custom"
-          ],
-          "enumItemLabels": [
-            "Raw",
-            "Inline",
-            "Custom"
-          ],
-          "default": "inline",
-          "enumDescriptions": [
-            "Always show tables as plain GFM source (pipes, padding, and cell text).",
-            "Render aligned columns in the editor; reveal raw markdown for the whole table while the cursor or selection is inside it.",
-            "Render tables as preview-style SVG overlays (like Mermaid). Reveal raw GFM while editing inside the table."
-          ],
-          "description": "How tables are rendered in the editor",
-          "markdownDescription": "Controls table rendering.\n\n- `raw` — always plain markdown\n- `inline` — aligned columns until you edit inside the table (default)\n- `custom` — preview-style HTML table as an SVG overlay"
-        },
         "markdownInlineEditor.orderedLists.autoNumber": {
           "type": "boolean",
           "default": true,

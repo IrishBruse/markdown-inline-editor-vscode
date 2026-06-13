@@ -155,28 +155,6 @@ describe('MarkdownImageHoverProvider', () => {
       expect(result).toBeDefined();
     });
 
-    it('should return hover for image-only table cells', async () => {
-      const document = new TextDocument(
-        Uri.file('/test.md'),
-        'markdown',
-        1,
-        '| Col | Note |\n| --- | --- |\n| ![t](https://example.com/x.png) | image |',
-      );
-      const position = new Position(2, 20);
-      const token = new CancellationToken(false);
-
-      mockGetConfiguration.mockReturnValue({
-        get: vi.fn((key: string) => {
-          if (key === 'defaultBehaviors.diffView.applyDecorations') return false;
-          if (key === 'links.singleClickOpen') return false;
-          return false;
-        }),
-      });
-
-      const result = await provider.provideHover(document, position, token);
-      expect(result).toBeDefined();
-    });
-
     it('should handle external image URLs', async () => {
       const document = new TextDocument(Uri.file('/test.md'), 'markdown', 1, '![alt](https://example.com/image.png)');
       // Position 4 is inside "alt" (which is positions 2-5, 0-indexed after ![)

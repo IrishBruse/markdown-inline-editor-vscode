@@ -54,12 +54,12 @@ export function resolveInteractionTarget(
   decoration: DecorationRange,
   documentUri: vscode.Uri
 ): InteractionTarget | undefined {
-  if ((decoration.type === 'image' || decoration.type === 'tableCellImage') && decoration.url) {
+  if (decoration.type === 'image' && decoration.url) {
     const uri = resolveImageTarget(decoration.url, documentUri);
     return uri ? { kind: 'uri', uri } : undefined;
   }
 
-  if ((decoration.type === 'link' || decoration.type === 'tableCell') && decoration.url) {
+  if (decoration.type === 'link' && decoration.url) {
     const resolved = resolveLinkTarget(decoration.url, documentUri);
     if (!resolved) {
       return undefined;
@@ -110,12 +110,7 @@ export function getInteractionDisplayValue(
   decoration: DecorationRange,
   target: InteractionTarget
 ): string {
-  if (
-    decoration.type === 'link' ||
-    decoration.type === 'tableCell' ||
-    decoration.type === 'image' ||
-    decoration.type === 'tableCellImage'
-  ) {
+  if (decoration.type === 'link' || decoration.type === 'image') {
     return decoration.url ?? toInteractionUri(target).toString();
   }
 
@@ -124,7 +119,7 @@ export function getInteractionDisplayValue(
 
 export function isLinkDecoration(decoration: DecorationRange): boolean {
   return (
-    (decoration.type === 'link' || decoration.type === 'tableCell' || decoration.type === 'image' || decoration.type === 'tableCellImage') &&
+    (decoration.type === 'link' || decoration.type === 'image') &&
     typeof decoration.url === 'string'
   );
 }

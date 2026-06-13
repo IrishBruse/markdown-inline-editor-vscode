@@ -74,7 +74,7 @@ export function applyFilteredDecorations(
   onApply?: (nonEmptyTypeCount: number) => void
 ): void {
   const renderOptionsTypes = new Set<DecorationType>([
-    'emoji', 'orderedListItem', 'tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell', 'tableCellImage',
+    'emoji', 'orderedListItem',
   ]);
 
   for (const [type, decorationType] of decorationTypes.getMap().entries()) {

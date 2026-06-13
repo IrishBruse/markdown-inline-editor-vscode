@@ -51,10 +51,6 @@ export function registerEventHandlers(
         decorator.recreateLinkDecorationType();
       }
 
-      if (configAffectsConfiguration(event, 'tables.renderingMode')) {
-        decorator.updateDecorationsForSelection();
-      }
-
       if (configAffectsConfiguration(event, 'colors')) {
         decorator.recreateColorDependentTypes();
       }

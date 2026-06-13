@@ -49,13 +49,6 @@ export class MarkdownImageHoverProvider implements vscode.HoverProvider {
         text,
         hoverOffset,
         document,
-        (candidate) => candidate.type === 'tableCellImage' && isLinkDecoration(candidate),
-      ) ??
-      findDecorationAtOffset(
-        decorations,
-        text,
-        hoverOffset,
-        document,
         (candidate) => candidate.type === 'image' && isLinkDecoration(candidate),
       );
     if (!decoration) {

@@ -3,30 +3,6 @@ import * as vscode from 'vscode';
 export const CONFIG_SECTION = 'markdownInlineEditor' as const;
 const LEGACY_CONFIG_SECTION = 'inlineMarkdownEditor' as const;
 
-export type TableRenderingMode = 'raw' | 'inline' | 'custom';
-
-const TABLE_RENDERING_MODES = new Set<TableRenderingMode>([
-  'raw',
-  'inline',
-  'custom',
-]);
-
-/** Legacy setting values before tables.renderingMode rename. */
-const LEGACY_TABLE_RENDERING_MODE: Record<string, TableRenderingMode> = {
-  'always-raw': 'raw',
-  'selection-reveal': 'inline',
-};
-
-function normalizeTableRenderingMode(value: string): TableRenderingMode | undefined {
-  const legacy = LEGACY_TABLE_RENDERING_MODE[value];
-  if (legacy !== undefined) {
-    return legacy;
-  }
-  return TABLE_RENDERING_MODES.has(value as TableRenderingMode)
-    ? (value as TableRenderingMode)
-    : undefined;
-}
-
 /** Matches `#` + 3, 4, 6, or 8 hex digits (#RGB, #RGBA, #RRGGBB, #RRGGBBAA). Invalid values are treated as unset. */
 const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 
@@ -105,12 +81,6 @@ export const config = {
   math: {
     enabled(): boolean {
       return getSetting('math.enabled', true);
-    },
-  },
-  tables: {
-    renderingMode(): TableRenderingMode {
-      const value = getSetting('tables.renderingMode', 'inline');
-      return normalizeTableRenderingMode(value) ?? 'inline';
     },
   },
   orderedLists: {

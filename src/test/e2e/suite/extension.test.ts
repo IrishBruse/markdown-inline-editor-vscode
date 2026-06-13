@@ -746,8 +746,7 @@ suite('Extension E2E', () => {
     );
   });
 
-  // Regression for #55: GFM tables must produce tablePipe decorations.
-  test('parse: GFM table produces tablePipe decorations (#55)', async () => {
+  test('parse: GFM table stays raw with no table decorations (#55)', async () => {
     assert.ok(cache, 'parseCache not available from ext.exports');
     const doc = await vscode.workspace.openTextDocument({
       language: 'markdown',
@@ -756,9 +755,10 @@ suite('Extension E2E', () => {
     await vscode.window.showTextDocument(doc);
     await delay(400);
     const entry = cache.get(doc);
+    const tableTypes = new Set(['tablePipe', 'tableCell', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCellImage']);
     assert.ok(
-      entry.decorations.some(d => d.type === 'tablePipe' || d.type === 'tableCell' || d.type === 'tableSeparatorPipe'),
-      'Expected table-related decorations for GFM table'
+      !entry.decorations.some(d => tableTypes.has(d.type)),
+      'Expected no table rendering decorations for GFM table'
     );
   });
 
