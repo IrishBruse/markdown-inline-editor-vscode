@@ -47,7 +47,7 @@
 
 | Left | Center | Right |
 | :--- | :----: | ----: |
-| a    |   b    |     c |
+| a    |   b    |  c    |
 
 | Foo | Bar |
 | --- | --- |
@@ -72,8 +72,8 @@
 
 ## Links in cells
 
-| Label | URL |
-|-------|-----|
+| Label                   | URL   |
+| ----------------------- | ----- |
 | [Docs](../../README.md) | local |
 
 ## Empty and minimal cells
@@ -99,37 +99,37 @@
 ## CJK and emoji width
 
 | EN | 中文 |
-|----|------|
+|----|----|
 | Hi | 你好 |
 
 | Name | CJK  |
 | ---- | ---- |
-| AB   | 你好 |
+| AB   | 你好   |
 
 | Col      | Val      |
 | -------- | -------- |
-| Hiragana | ひらがな |
+| Hiragana | ひらがな     |
 
 | Col    | Val  |
 | ------ | ---- |
-| Hangul | 안녕 |
+| Hangul | 안녕   |
 
 | Col   | Val |
 | ----- | --- |
 | Emoji | 😀  |
 
-| Col    | Val |
-| ------ | --- |
-| Family | 👨‍👩‍👧  |
+| Col    | Val        |
+| ------ | ---------- |
+| Family | 👨‍👩‍👧   |
 
-| Col  | Val |
-| ---- | --- |
-| Flag | 🇯🇵  |
+| Col  | Val    |
+| ---- | ------ |
+| Flag | 🇯🇵   |
 
 | Name | CJK  | Emoji |
 | ---- | ---- | ----- |
-| AB   | 你好 | 😀    |
-| CD   | 世界 | 🚀    |
+| AB   | 你好   | 😀    |
+| CD   | 世界   | 🚀    |
 
 ## Whole-cell styling (synthetic cells)
 
@@ -167,7 +167,7 @@
 
 ## Rich cells (native padding)
 
-| Col | Note |
+| Col                          | Note |
 | ---------------------------- | ---- |
 | [label](https://example.com) | link |
 
@@ -316,6 +316,7 @@ GFM treats every unescaped `|` on a table line as a column boundary. The header 
 
 ## Custom mode: long cell wrapping
 
+_Not yet implemented._ The `custom` SVG overlay mode described below is planned but not available in the current build. Tables use the default inline grid renderer.
 
 | Section Header | Detailed Placeholder Content                                                                                                                                                                                                                                                                                                                                                                   |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -330,7 +331,7 @@ GFM treats every unescaped `|` on a table line as a column boundary. The header 
 | Row 9          | Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.                                                                                            |
 | Row 10         | Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur. At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.                |
 
-Expected with `custom`: the table renders as a bordered grid with wrapped cells (like Markdown preview). Source GFM is hidden while the overlay is shown. Click inside the table to edit raw markdown (same as `selection-reveal`).
+Expected with `custom` (future): the table renders as a bordered grid with wrapped cells (like Markdown preview). Source GFM is hidden while the overlay is shown. Click inside the table to edit raw markdown (same as `selection-reveal`).
 
 ## Tables near other blocks
 
@@ -356,7 +357,11 @@ Paragraph immediately above a table (blank line separates them).
 
 **Checks**
 
-- Rendered: pipe grid, aligned columns, markers hidden.
+- Rendered: pipe grid, aligned columns, markers hidden. Column padding uses the widest display text per column so short cells line up with neighbors.
 - Cursor anywhere in table: **entire table** goes raw (all rows).
-- Mixed heavy formatting in one cell may fall back to raw (known limitation).
-- `custom` rendering mode: SVG overlay with wrapped cells; click table to edit source.
+- `markdownInlineEditor.tables.forceRaw` (default `false`): when `true`, tables always show as plain GFM with no grid decorations.
+- Link-only and image-only cells participate in the padded grid (link color, image icon). Whole-cell `` ~~strike~~ `` uses inline strikethrough decorations (no padded overlay).
+- Mixed inline formatting in one cell (bold + plain, link + surrounding text, multiple code spans) uses normal inline decorations; column padding is not applied to those cells.
+- Inline code beside plain text in one cell uses inline code decorations; whole-cell `` `code` `` still uses padded inline-code styling.
+- CJK, emoji, and ZWJ sequences use heuristic double-width accounting; visual alignment may still differ slightly from the editor font.
+- `custom` SVG wrapping mode: not yet implemented (see section above).

@@ -34,11 +34,8 @@ import {
 } from "./mentions";
 import {
   cellHasMixedFormatting as cellHasMixedFormattingHelper,
-  imageOnlyCellUrl as imageOnlyCellUrlHelper,
-  isImageOnlyCell as isImageOnlyCellHelper,
-  isLinkOnlyCell as isLinkOnlyCellHelper,
-  linkOnlyCellUrl as linkOnlyCellUrlHelper,
-  TABLE_CELL_IMAGE_ICON,
+  computeColumnWidths as computeColumnWidthsHelper,
+  resolveTableCellRenderContext as resolveTableCellRenderContextHelper,
   buildSeparatorDashReplacement as buildSeparatorDashReplacementHelper,
   buildTableCellReplacement as buildTableCellReplacementHelper,
   detectCellStyle as detectCellStyleHelper,
@@ -1278,6 +1275,7 @@ export class MarkdownParser {
     const tableStart = node.position!.start.offset!;
     const tableEnd = node.position!.end.offset!;
     const colAligns = node.align ?? [];
+    const columnWidths = computeColumnWidthsHelper(node, text);
 
     this.addScope(scopes, tableStart, tableEnd, "table");
 
@@ -1316,53 +1314,30 @@ export class MarkdownParser {
         if (cellRangeStart >= cellRangeEnd) continue;
 
         const rawContent = text.substring(cellRangeStart, cellRangeEnd);
-        const trimmedContent = rawContent.trim();
 
         const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
-        const markdownCellStyle = this.detectCellStyle(trimmedContent);
-        const showRaw = !markdownCellStyle && astCell && this.cellHasMixedFormatting(astCell);
-        const isLinkCell = !markdownCellStyle && !showRaw && !!astCell && isLinkOnlyCellHelper(astCell);
-        const isImageCell = !markdownCellStyle && !showRaw && !!astCell && isImageOnlyCellHelper(astCell);
-        const isStrikeCell = markdownCellStyle?.textDecoration === 'line-through';
-
-        let displayContent: string;
-        let cellType: "tableCell" | "tableCellImage" = "tableCell";
-        let cellStyle = markdownCellStyle;
-        let cellUrl: string | undefined;
-
-        if (isImageCell && astCell) {
-          displayContent = TABLE_CELL_IMAGE_ICON;
-          cellType = "tableCellImage";
-          cellUrl = imageOnlyCellUrlHelper(astCell);
-          cellStyle = undefined;
-        } else if (isLinkCell && astCell) {
-          displayContent = this.extractCellPlainText(astCell);
-          cellStyle = { link: true };
-          cellUrl = linkOnlyCellUrlHelper(astCell);
-        } else if (isStrikeCell) {
-          displayContent = astCell
-            ? this.extractCellPlainText(astCell)
-            : trimmedContent.slice(2, -2);
-        } else {
-          displayContent = (astCell && !showRaw)
-            ? this.extractCellPlainText(astCell)
-            : trimmedContent;
+        const ctx = resolveTableCellRenderContextHelper(rawContent, astCell);
+        if (ctx.skipPaddedCell) {
+          continue;
         }
-
-        const displayWidth = this.measureTextWidth(displayContent, { cjkCorrection: true });
         const align = i < colAligns.length ? colAligns[i] : null;
+        const columnWidth = i < columnWidths.length ? columnWidths[i] : ctx.displayWidth;
 
         const replacement = this.buildTableCellReplacement(
-          rawContent, displayContent, displayWidth, align,
+          rawContent,
+          ctx.displayContent,
+          ctx.displayWidth,
+          columnWidth,
+          align,
         );
 
         decorations.push({
           startPos: cellRangeStart,
           endPos: cellRangeEnd,
-          type: cellType,
+          type: ctx.cellType,
           replacement,
-          cellStyle,
-          url: cellUrl,
+          cellStyle: ctx.cellStyle,
+          url: ctx.cellUrl,
         });
       }
 
@@ -1408,11 +1383,12 @@ export class MarkdownParser {
           if (segStart >= segEnd) continue;
 
           const segContent = text.substring(segStart, segEnd);
+          const sepColumnWidth = pIdx < columnWidths.length ? columnWidths[pIdx] : undefined;
           decorations.push({
             startPos: segStart,
             endPos: segEnd,
             type: "tableSeparatorDash",
-            replacement: buildSeparatorDashReplacementHelper(segContent),
+            replacement: buildSeparatorDashReplacementHelper(segContent, sepColumnWidth),
           });
         }
       }
@@ -1460,9 +1436,12 @@ export class MarkdownParser {
     rawContent: string,
     displayContent: string,
     displayWidth: number,
+    columnWidth: number,
     align: 'left' | 'right' | 'center' | null,
   ): string {
-    return buildTableCellReplacementHelper(rawContent, displayContent, displayWidth, align);
+    return buildTableCellReplacementHelper(
+      rawContent, displayContent, displayWidth, columnWidth, align,
+    );
   }
 
 }

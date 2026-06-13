@@ -66,6 +66,30 @@ describe('table syntax integration', () => {
     expect(result.get('tableCell')).toBeUndefined();
   });
 
+  it('renders mixed inline table cells with bold decorations when cursor is outside', async () => {
+    const markdown = '| Col | Note |\n| --- | --- |\n| **bold** and plain | mixed |\n\nafter';
+    const parser = await MarkdownParser.create();
+    const { decorations, scopes } = parser.extractDecorationsWithScopes(markdown);
+    const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, markdown);
+    const editor = new TextEditor(doc, [new Selection(new Position(5, 0), new Position(5, 0))]);
+    const scopeEntries = buildScopeEntries(editor, scopes, markdown);
+
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decorations,
+      scopeEntries,
+      markdown,
+      (startPos, endPos, text) => createRange(editor, startPos, endPos, text),
+    );
+
+    expect(result.get('bold')?.length).toBeGreaterThan(0);
+    const mixedCellOverlay = decorations.find(
+      (d) => d.type === 'tableCell' && markdown.slice(d.startPos, d.endPos).includes('**bold**'),
+    );
+    expect(mixedCellOverlay).toBeUndefined();
+    expect(result.get('tableCell')?.length).toBeGreaterThan(0);
+  });
+
   it('renders link-colored tableCell without underline on padding', async () => {
     const markdown = '| Col | Note |\n| --- | --- |\n| [label](https://example.com) | link |\n\nafter';
     const parser = await MarkdownParser.create();

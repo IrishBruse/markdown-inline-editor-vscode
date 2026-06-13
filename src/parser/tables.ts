@@ -39,10 +39,21 @@ export function extractCellPlainText(cell: TableCell): string {
 }
 
 export function cellHasMixedFormatting(cell: TableCell): boolean {
-  return cell.children.some((child) =>
+  const hasFormatted = cell.children.some((child) =>
     child.type === 'strong' || child.type === 'emphasis' ||
-    child.type === 'delete' || child.type === 'inlineCode',
+    child.type === 'delete' || child.type === 'inlineCode' ||
+    child.type === 'link' || child.type === 'image',
   );
+  if (!hasFormatted) {
+    return false;
+  }
+  if (isLinkOnlyCell(cell) || isImageOnlyCell(cell)) {
+    return false;
+  }
+  if (cell.children.length === 1) {
+    return false;
+  }
+  return true;
 }
 
 export function isLinkOnlyCell(cell: TableCell): boolean {
@@ -118,26 +129,37 @@ export function measureTextWidth(plain: string, options?: { cjkCorrection?: bool
  * Padded replacement that fills the source cell span between pipes.
  * Padding uses NBSP so VS Code preserves monospace width in before.contentText
  * (regular spaces collapse and break pipe column alignment).
+ *
+ * `columnWidth` is the max display width for the column so shorter cells pad
+ * consistently within the shared content slot. Source and display widths both use
+ * {@link measureTextWidth} without `cjkCorrection` so replacement length matches the
+ * source cell span.
  */
 export function buildTableCellReplacement(
   rawContent: string,
   displayContent: string,
   displayWidth: number,
+  columnWidth: number,
   align: 'left' | 'right' | 'center' | null,
 ): string {
   const sourceWidth = measureTextWidth(rawContent);
-  const totalPad = Math.max(0, sourceWidth - displayWidth - 2);
   const pad = '\u00A0';
+  const maxSlot = Math.max(displayWidth, sourceWidth - 2);
+  const contentSlot = Math.min(Math.max(displayWidth, columnWidth), maxSlot);
+  const totalPad = Math.max(0, sourceWidth - contentSlot - 2);
 
   if (align === 'right') {
-    return pad.repeat(totalPad + 1) + displayContent + pad;
+    const slotPad = contentSlot - displayWidth;
+    return pad.repeat(totalPad + slotPad + 1) + displayContent + pad;
   }
   if (align === 'center') {
-    const padLeft = Math.floor(totalPad / 2);
-    const padRight = totalPad - padLeft;
+    const extraPad = contentSlot - displayWidth;
+    const padLeft = Math.floor((totalPad + extraPad) / 2);
+    const padRight = totalPad + extraPad - padLeft;
     return pad.repeat(padLeft + 1) + displayContent + pad.repeat(padRight + 1);
   }
-  return pad + displayContent + pad.repeat(totalPad + 1);
+  const padAfterContent = contentSlot - displayWidth + totalPad;
+  return pad + displayContent + pad.repeat(padAfterContent + 1);
 }
 
 export function detectCellStyle(
@@ -165,7 +187,10 @@ export function detectCellStyle(
     return { fontStyle: 'italic' };
   }
   if (trimmed.startsWith('`') && trimmed.endsWith('`') && trimmed.length > 2) {
-    return { inlineCode: true };
+    const inner = trimmed.slice(1, -1);
+    if (!inner.includes('`')) {
+      return { inlineCode: true };
+    }
   }
   return undefined;
 }
@@ -245,18 +270,85 @@ export function trimLineEnd(text: string, lineStart: number, lineEnd: number): n
 function cellDisplayText(
   cellText: string,
   astCell: TableCell | undefined,
-  showRaw: boolean,
 ): string {
-  if (astCell && !showRaw && isImageOnlyCell(astCell)) {
+  if (astCell && isImageOnlyCell(astCell)) {
     return TABLE_CELL_IMAGE_ICON;
   }
-  if (astCell && !showRaw) {
+  if (astCell) {
     return extractCellPlainText(astCell);
   }
   return cellText.trim();
 }
 
-export function computeColumnWidths(tableNode: Table, source: string): number[] {
+export type TableCellRenderContext = {
+  displayContent: string;
+  displayWidth: number;
+  cellStyle?: {
+    fontWeight?: string;
+    fontStyle?: string;
+    textDecoration?: string;
+    inlineCode?: boolean;
+    link?: boolean;
+  };
+  cellType: 'tableCell' | 'tableCellImage';
+  cellUrl?: string;
+  /** Mixed inline cells use normal bold/italic/link decorations instead of a padded overlay. */
+  skipPaddedCell?: boolean;
+};
+
+export function resolveTableCellRenderContext(
+  rawContent: string,
+  astCell: TableCell | undefined,
+  options?: { cjkCorrection?: boolean },
+): TableCellRenderContext {
+  const trimmedContent = rawContent.trim();
+  const markdownCellStyle = detectCellStyle(trimmedContent);
+  const isWholeCellStrike = markdownCellStyle?.textDecoration === 'line-through';
+  const skipPaddedCell =
+    isWholeCellStrike ||
+    (!markdownCellStyle && astCell !== undefined && cellHasMixedFormatting(astCell));
+  const isLinkCell = !markdownCellStyle && !skipPaddedCell && !!astCell && isLinkOnlyCell(astCell);
+  const isImageCell = !markdownCellStyle && !skipPaddedCell && !!astCell && isImageOnlyCell(astCell);
+
+  let displayContent: string;
+  let displayWidthSource: string;
+  let cellType: 'tableCell' | 'tableCellImage' = 'tableCell';
+  let cellStyle = markdownCellStyle;
+  let cellUrl: string | undefined;
+
+  if (isImageCell && astCell) {
+    displayContent = TABLE_CELL_IMAGE_ICON;
+    displayWidthSource = displayContent;
+    cellType = 'tableCellImage';
+    cellUrl = imageOnlyCellUrl(astCell);
+    cellStyle = undefined;
+  } else if (isLinkCell && astCell) {
+    displayContent = extractCellPlainText(astCell);
+    displayWidthSource = displayContent;
+    cellStyle = { link: true };
+    cellUrl = linkOnlyCellUrl(astCell);
+  } else {
+    displayContent = cellDisplayText(rawContent, astCell);
+    displayWidthSource = displayContent;
+  }
+
+  const measureOpts = options?.cjkCorrection ? { cjkCorrection: true } : undefined;
+
+  return {
+    displayContent,
+    displayWidth: measureTextWidth(displayWidthSource, measureOpts),
+    cellStyle,
+    cellType,
+    cellUrl,
+    skipPaddedCell: skipPaddedCell || undefined,
+  };
+}
+
+export function computeColumnWidths(
+  tableNode: Table,
+  source: string,
+  options?: { cjkCorrection?: boolean },
+): number[] {
   let numCols = 0;
 
   for (const row of tableNode.children) {
@@ -279,20 +371,22 @@ export function computeColumnWidths(tableNode: Table, source: string): number[] 
     const { positions: pipes } = normalizePipePositions(source, lineStart, trimmed, rawPipes);
 
     for (let i = 0; i < pipes.length - 1 && i < numCols; i++) {
-      const cellText = source.substring(pipes[i] + 1, pipes[i + 1]).trim();
+      const rawContent = source.substring(pipes[i] + 1, pipes[i + 1]);
       const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
-      const cellStyle = detectCellStyle(cellText);
-      const showRaw = !cellStyle && astCell !== undefined && cellHasMixedFormatting(astCell);
-      const displayText = cellDisplayText(cellText, astCell, showRaw);
-      const width = measureTextWidth(displayText);
-      if (width > widths[i]) widths[i] = width;
+      const ctx = resolveTableCellRenderContext(rawContent, astCell, options);
+      if (ctx.displayWidth > widths[i]) widths[i] = ctx.displayWidth;
     }
   }
 
   return widths;
 }
 
-export function buildSeparatorDashReplacement(segContent: string): string {
-  const segWidth = measureTextWidth(segContent);
-  return '-'.repeat(Math.max(1, segWidth));
+export function buildSeparatorDashReplacement(
+  segContent: string,
+  _columnWidth?: number,
+  options?: { cjkCorrection?: boolean },
+): string {
+  const measureOpts = options?.cjkCorrection ? { cjkCorrection: true } : undefined;
+  const sourceWidth = measureTextWidth(segContent, measureOpts);
+  return '-'.repeat(Math.max(1, sourceWidth));
 }

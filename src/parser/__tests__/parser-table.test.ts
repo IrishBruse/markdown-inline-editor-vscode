@@ -85,6 +85,43 @@ describe('MarkdownParser - Tables', () => {
     });
   });
 
+  describe('unified column widths', () => {
+    it('pads shorter cells to the column max display width', () => {
+      const md = [
+        '| Short | MuchLongerHeader |',
+        '| ----- | ---------------- |',
+        '| x     | y                |',
+      ].join('\n');
+      const result = parser.extractDecorations(md);
+      const shortHeader = byType(result, 'tableCell').find((c) => c.replacement?.includes('Short'));
+      const shortData = byType(result, 'tableCell').find((c) => c.replacement?.includes('x'));
+      expect(shortHeader).toBeDefined();
+      expect(shortData).toBeDefined();
+      const headerContentIndex = shortHeader!.replacement!.indexOf('Short');
+      const dataContentIndex = shortData!.replacement!.indexOf('x');
+      expect(headerContentIndex).toBe(dataContentIndex);
+      expect(measureTextWidth(shortData!.replacement!)).toBe(
+        measureTextWidth(md.slice(shortData!.startPos, shortData!.endPos)),
+      );
+    });
+
+    it('aligns center column content to unified width', () => {
+      const md = [
+        '| Left | Center | Right |',
+        '|:-----|:------:|------:|',
+        '| L    |C    |     R |',
+      ].join('\n');
+      const result = parser.extractDecorations(md);
+      const headerCenter = byType(result, 'tableCell').find((c) => c.replacement?.includes('Center'));
+      const dataCenter = byType(result, 'tableCell').find((c) => c.replacement?.includes('C'));
+      expect(headerCenter).toBeDefined();
+      expect(dataCenter).toBeDefined();
+      const headerStart = headerCenter!.replacement!.indexOf('Center');
+      const dataStart = dataCenter!.replacement!.indexOf('C');
+      expect(headerStart).toBe(dataStart);
+    });
+  });
+
   describe('CJK wide characters', () => {
     it('should account for CJK double-width in column padding', () => {
       const md = '| Name | CJK  |\n|------|------|\n| AB   | \u4F60\u597D   |';
@@ -101,6 +138,10 @@ describe('MarkdownParser - Tables', () => {
         '| Name | CJK  |\n| ---- | ---- |\n| AB   | 你好 |',
         '| Col    | Val  |\n| ------ | ---- |\n| Hangul | 안녕 |',
         '| Col   | Val |\n| ----- | --- |\n| Emoji | 😀  |',
+        '| Col      | Val      |\n| -------- | -------- |\n| Hiragana | ひらがな |',
+        '| Col    | Val  |\n| ------ | ---- |\n| Family | 👨‍👩‍👧  |',
+        '| Col  | Val |\n| ---- | --- |\n| Flag | 🇯🇵  |',
+        '| Name | CJK  | Emoji |\n| ---- | ---- | ----- |\n| AB   | 你好 | 😀    |',
       ];
       for (const md of cases) {
         const result = parser.extractDecorations(md);
@@ -117,12 +158,15 @@ describe('MarkdownParser - Tables', () => {
   });
 
   describe('inline formatting in cells', () => {
-    it('should pad strikethrough-only cells with strike style on tableCell', () => {
+    it('should render whole-cell strikethrough via inline decorations', () => {
       const md = '| Col |\n|-----|\n| ~~strike~~ |';
       const result = parser.extractDecorations(md);
-      const cell = byType(result, 'tableCell').find((c) => c.replacement?.includes('strike'));
-      expect(cell).toBeDefined();
-      expect(cell!.cellStyle?.textDecoration).toBe('line-through');
+      const strikeCell = byType(result, 'tableCell').find((c) => {
+        const raw = md.slice(c.startPos, c.endPos);
+        return raw.includes('strike');
+      });
+      expect(strikeCell).toBeUndefined();
+      expect(byType(result, 'strikethrough').length).toBeGreaterThan(0);
     });
 
     it('should detect bold cell style', () => {
@@ -254,7 +298,7 @@ describe('MarkdownParser - Tables', () => {
     it.each(cases)('keeps padded width for %s rows', (_label, md) => {
       const result = parser.extractDecorations(md);
       const padded = result.filter((d) => d.type === 'tableCell' || d.type === 'tableCellImage');
-      expect(padded.length).toBeGreaterThanOrEqual(4);
+      expect(padded.length).toBeGreaterThanOrEqual(3);
       for (const cell of padded) {
         const raw = md.slice(cell.startPos, cell.endPos);
         expect(measureTextWidth(cell.replacement!)).toBe(measureTextWidth(raw));
@@ -284,14 +328,32 @@ describe('MarkdownParser - Tables', () => {
   });
 
   describe('mixed formatting fallback', () => {
-    it('should show raw syntax for mixed formatting cells', () => {
+    it('should render mixed formatting cells with inline decorations instead of padded tableCell', () => {
       const md = '| A |\n|---|\n| **bold** and plain |';
       const result = parser.extractDecorations(md);
       const cells = byType(result, 'tableCell');
-      const mixedCell = cells.find((c) => c.replacement!.includes('bold'));
-      expect(mixedCell).toBeDefined();
-      expect(mixedCell!.replacement).toContain('**');
-      expect(mixedCell!.cellStyle).toBeUndefined();
+      const mixedCell = cells.find((c) => {
+        const raw = md.slice(c.startPos, c.endPos);
+        return raw.includes('bold');
+      });
+      expect(mixedCell).toBeUndefined();
+      expect(byType(result, 'bold').length).toBeGreaterThan(0);
+      expect(byType(result, 'hide').length).toBeGreaterThan(0);
+    });
+
+    it('should render link mixed with plain text via inline link decorations', () => {
+      const md = '| Col | Note |\n| --- | --- |\n| see [docs](https://example.com) here | mixed |';
+      const result = parser.extractDecorations(md);
+      const mixedCell = byType(result, 'tableCell').find((c) => {
+        const raw = md.slice(c.startPos, c.endPos);
+        return raw.includes('[docs]');
+      });
+      expect(mixedCell).toBeUndefined();
+      const linkDec = byType(result, 'link').find((d) => {
+        const raw = md.slice(d.startPos, d.endPos);
+        return raw.includes('docs');
+      });
+      expect(linkDec).toBeDefined();
     });
   });
 });

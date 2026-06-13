@@ -239,7 +239,6 @@ describe('table decoration rendering', () => {
         endPos: 14,
         type: 'tableCell',
         replacement: ' strike ',
-        cellStyle: { textDecoration: 'line-through' },
       } as any,
       { startPos: 2, endPos: 4, type: 'hide' } as any,
       { startPos: 4, endPos: 10, type: 'strikethrough' } as any,
