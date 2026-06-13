@@ -4,8 +4,8 @@
   "version": "1.24.0",
   "description": "WYSIWYG inline markdown editor - hide syntax, focus on content",
   "license": "MIT",
-  "author": "Ethan Conneely",
-  "publisher": "irishbruse",
+  "author": "SeardnaSchmid",
+  "publisher": "CodeSmith",
   "private": true,
   "icon": "assets/icon.png",
   "repository": {
@@ -135,6 +135,12 @@
           "default": true,
           "description": "Render LaTeX math inline ($...$ and $$...$$)",
           "markdownDescription": "Render LaTeX math inline ($...$ and $$...$$). When disabled, math delimiters are shown as plain text."
+        },
+        "markdownInlineEditor.tables.forceRaw": {
+          "type": "boolean",
+          "default": false,
+          "description": "Always show tables as raw markdown",
+          "markdownDescription": "When enabled, GFM tables are always shown as plain source markdown (pipes, padding, and cell text). When disabled (default), tables render as an aligned inline grid until you move the cursor inside them."
         },
         "markdownInlineEditor.orderedLists.autoNumber": {
           "type": "boolean",
