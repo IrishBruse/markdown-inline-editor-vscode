@@ -97,27 +97,36 @@ function isZeroWidthCodePoint(code: number): boolean {
   return code === 0x200d || code === 0xfe0f;
 }
 
+const graphemeSegmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+
+function graphemeDisplayWidth(segment: string): number {
+  if (!segment) {
+    return 0;
+  }
+  const code = segment.codePointAt(0)!;
+  if (isZeroWidthCodePoint(code)) {
+    return 0;
+  }
+  return isWideCodePoint(code) ? 2 : 1;
+}
+
 export function measureTextWidth(plain: string, options?: { cjkCorrection?: boolean }): number {
   let width = 0;
   let cjkCount = 0;
-  for (const char of plain) {
-    const code = char.codePointAt(0)!;
+  for (const { segment } of graphemeSegmenter.segment(plain)) {
+    const code = segment.codePointAt(0)!;
     if (isZeroWidthCodePoint(code)) {
       continue;
     }
-    if (isWideCodePoint(code)) {
-      width += 2;
-      if (
-        (code >= 0x2e80 && code <= 0x9fff) ||
-        (code >= 0xf900 && code <= 0xfaff) ||
-        (code >= 0xfe30 && code <= 0xfe4f) ||
-        (code >= 0x20000 && code <= 0x2fa1f)
-      ) {
-        cjkCount++;
-      }
-    } else {
-      width += 1;
+    if (
+      (code >= 0x2e80 && code <= 0x9fff) ||
+      (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xfe30 && code <= 0xfe4f) ||
+      (code >= 0x20000 && code <= 0x2fa1f)
+    ) {
+      cjkCount++;
     }
+    width += graphemeDisplayWidth(segment);
   }
   if (options?.cjkCorrection && cjkCount > 0) {
     return width + Math.ceil(cjkCount * 0.25);
@@ -126,39 +135,34 @@ export function measureTextWidth(plain: string, options?: { cjkCorrection?: bool
 }
 
 /**
- * Padded replacement that fills the source cell span between pipes.
+ * Padded replacement that fills the shared column content slot.
  * Padding uses NBSP so VS Code preserves monospace width in before.contentText
  * (regular spaces collapse and break pipe column alignment).
  *
- * `columnWidth` is the max display width for the column so shorter cells pad
- * consistently within the shared content slot. Source and display widths both use
- * {@link measureTextWidth} without `cjkCorrection` so replacement length matches the
- * source cell span.
+ * All cells in a column share `columnWidth` so pipes line up visually even when
+ * source rows use different wide-character spans between pipes.
  */
 export function buildTableCellReplacement(
-  rawContent: string,
+  _rawContent: string,
   displayContent: string,
   displayWidth: number,
   columnWidth: number,
   align: 'left' | 'right' | 'center' | null,
 ): string {
-  const sourceWidth = measureTextWidth(rawContent);
   const pad = '\u00A0';
-  const maxSlot = Math.max(displayWidth, sourceWidth - 2);
-  const contentSlot = Math.min(Math.max(displayWidth, columnWidth), maxSlot);
-  const totalPad = Math.max(0, sourceWidth - contentSlot - 2);
+  const contentSlot = Math.max(displayWidth, columnWidth);
 
   if (align === 'right') {
     const slotPad = contentSlot - displayWidth;
-    return pad.repeat(totalPad + slotPad + 1) + displayContent + pad;
+    return pad.repeat(slotPad + 1) + displayContent + pad;
   }
   if (align === 'center') {
     const extraPad = contentSlot - displayWidth;
-    const padLeft = Math.floor((totalPad + extraPad) / 2);
-    const padRight = totalPad + extraPad - padLeft;
+    const padLeft = Math.floor(extraPad / 2);
+    const padRight = extraPad - padLeft;
     return pad.repeat(padLeft + 1) + displayContent + pad.repeat(padRight + 1);
   }
-  const padAfterContent = contentSlot - displayWidth + totalPad;
+  const padAfterContent = contentSlot - displayWidth;
   return pad + displayContent + pad.repeat(padAfterContent + 1);
 }
 
@@ -383,10 +387,12 @@ export function computeColumnWidths(
 
 export function buildSeparatorDashReplacement(
   segContent: string,
-  _columnWidth?: number,
+  columnWidth?: number,
   options?: { cjkCorrection?: boolean },
 ): string {
   const measureOpts = options?.cjkCorrection ? { cjkCorrection: true } : undefined;
-  const sourceWidth = measureTextWidth(segContent, measureOpts);
-  return '-'.repeat(Math.max(1, sourceWidth));
+  const targetWidth = columnWidth !== undefined
+    ? columnWidth + 2
+    : measureTextWidth(segContent, measureOpts);
+  return '-'.repeat(Math.max(1, targetWidth));
 }

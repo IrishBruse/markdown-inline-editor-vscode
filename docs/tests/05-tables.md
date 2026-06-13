@@ -363,5 +363,5 @@ Paragraph immediately above a table (blank line separates them).
 - Link-only and image-only cells participate in the padded grid (link color, image icon). Whole-cell `` ~~strike~~ `` uses inline strikethrough decorations (no padded overlay).
 - Mixed inline formatting in one cell (bold + plain, link + surrounding text, multiple code spans) uses normal inline decorations; column padding is not applied to those cells.
 - Inline code beside plain text in one cell uses inline code decorations; whole-cell `` `code` `` still uses padded inline-code styling.
-- CJK, emoji, and ZWJ sequences use heuristic double-width accounting; visual alignment may still differ slightly from the editor font.
+- CJK, emoji, and ZWJ sequences use grapheme-aware double-width accounting with unified column padding so pipes align visually across rows.
 - `custom` SVG wrapping mode: not yet implemented (see section above).

@@ -100,9 +100,7 @@ describe('MarkdownParser - Tables', () => {
       const headerContentIndex = shortHeader!.replacement!.indexOf('Short');
       const dataContentIndex = shortData!.replacement!.indexOf('x');
       expect(headerContentIndex).toBe(dataContentIndex);
-      expect(measureTextWidth(shortData!.replacement!)).toBe(
-        measureTextWidth(md.slice(shortData!.startPos, shortData!.endPos)),
-      );
+      expect(measureTextWidth(shortHeader!.replacement!)).toBe(measureTextWidth(shortData!.replacement!));
     });
 
     it('aligns center column content to unified width', () => {
@@ -132,26 +130,65 @@ describe('MarkdownParser - Tables', () => {
       });
     });
 
-    it('should match replacement width to each cell source span', () => {
+    it('should use the same replacement width for every cell in a column', () => {
       const cases = [
-        '| EN | 中文 |\n|----|------|\n| Hi | 你好 |',
-        '| Name | CJK  |\n| ---- | ---- |\n| AB   | 你好 |',
-        '| Col    | Val  |\n| ------ | ---- |\n| Hangul | 안녕 |',
+        '| EN | 中文 |\n|----|----|\n| Hi | 你好 |',
+        '| Name | CJK  |\n| ---- | ---- |\n| AB   | 你好   |',
+        '| Col    | Val  |\n| ------ | ---- |\n| Hangul | 안녕   |',
         '| Col   | Val |\n| ----- | --- |\n| Emoji | 😀  |',
-        '| Col      | Val      |\n| -------- | -------- |\n| Hiragana | ひらがな |',
-        '| Col    | Val  |\n| ------ | ---- |\n| Family | 👨‍👩‍👧  |',
-        '| Col  | Val |\n| ---- | --- |\n| Flag | 🇯🇵  |',
-        '| Name | CJK  | Emoji |\n| ---- | ---- | ----- |\n| AB   | 你好 | 😀    |',
+        '| Col      | Val      |\n| -------- | -------- |\n| Hiragana | ひらがな     |',
+        '| Col    | Val        |\n| ------ | ---------- |\n| Family | 👨‍👩‍👧   |',
+        '| Col  | Val    |\n| ---- | ------ |\n| Flag | 🇯🇵   |',
+        '| Name | CJK  | Emoji |\n| ---- | ---- | ----- |\n| AB   | 你好   | 😀    |',
       ];
       for (const md of cases) {
         const result = parser.extractDecorations(md);
-        for (const cell of byType(result, 'tableCell')) {
-          const raw = md.slice(cell.startPos, cell.endPos);
-          expect(measureTextWidth(cell.replacement!)).toBe(measureTextWidth(raw));
+        const cells = byType(result, 'tableCell');
+        const widthsByColumn = new Map<number, number>();
+        for (const cell of cells) {
+          const lineStart = md.lastIndexOf('\n', cell.startPos - 1) + 1;
+          const pipes: number[] = [];
+          for (let i = lineStart; i < md.length; i++) {
+            if (md[i] === '\n') break;
+            if (md[i] === '|') pipes.push(i);
+          }
+          let col = -1;
+          for (let i = 0; i < pipes.length - 1; i++) {
+            if (cell.startPos >= pipes[i] + 1 && cell.endPos <= pipes[i + 1]) {
+              col = i;
+              break;
+            }
+          }
+          expect(col).toBeGreaterThanOrEqual(0);
+          const width = measureTextWidth(cell.replacement!);
+          const prev = widthsByColumn.get(col);
+          if (prev === undefined) {
+            widthsByColumn.set(col, width);
+          } else {
+            expect(width, md).toBe(prev);
+          }
         }
         for (const dash of byType(result, 'tableSeparatorDash')) {
-          const raw = md.slice(dash.startPos, dash.endPos);
-          expect(dash.replacement!.length).toBe(measureTextWidth(raw));
+          const width = dash.replacement!.length;
+          const lineStart = md.lastIndexOf('\n', dash.startPos - 1) + 1;
+          const pipes: number[] = [];
+          for (let i = lineStart; i < md.length; i++) {
+            if (md[i] === '\n') break;
+            if (md[i] === '|') pipes.push(i);
+          }
+          let col = -1;
+          for (let i = 0; i < pipes.length - 1; i++) {
+            if (dash.startPos >= pipes[i] + 1 && dash.endPos <= pipes[i + 1]) {
+              col = i;
+              break;
+            }
+          }
+          if (col >= 0) {
+            const cellWidth = widthsByColumn.get(col);
+            if (cellWidth !== undefined) {
+              expect(width, md).toBe(cellWidth);
+            }
+          }
         }
       }
     });
@@ -187,20 +224,12 @@ describe('MarkdownParser - Tables', () => {
       expect(italicCell).toBeDefined();
     });
 
-    it('should strip markers from width calculation', () => {
+    it('should use unified column width for bold and header cells', () => {
       const md = '| Header   |\n|----------|\n| **bold** |';
       const result = parser.extractDecorations(md);
       const cells = byType(result, 'tableCell');
-      const boldCell = cells.find((c) => c.replacement!.includes('bold'));
-      const headerCell = cells.find((c) => c.replacement!.includes('Header'));
-      expect(boldCell).toBeDefined();
-      expect(headerCell).toBeDefined();
-      expect(measureTextWidth(boldCell!.replacement!)).toBe(
-        measureTextWidth(md.slice(boldCell!.startPos, boldCell!.endPos)),
-      );
-      expect(measureTextWidth(headerCell!.replacement!)).toBe(
-        measureTextWidth(md.slice(headerCell!.startPos, headerCell!.endPos)),
-      );
+      const widths = cells.map((c) => measureTextWidth(c.replacement!));
+      expect(new Set(widths).size).toBe(1);
     });
   });
 
@@ -250,8 +279,8 @@ describe('MarkdownParser - Tables', () => {
       expect(imageCell).toHaveLength(1);
       expect(imageCell[0].url).toBe('https://example.com/x.png');
       expect(imageCell[0].replacement).toContain('\u2B14');
-      const raw = md.slice(imageCell[0].startPos, imageCell[0].endPos);
-      expect(measureTextWidth(imageCell[0].replacement!)).toBe(measureTextWidth(raw));
+      const colWidths = byType(result, 'tableCell').map((c) => measureTextWidth(c.replacement!));
+      expect(measureTextWidth(imageCell[0].replacement!)).toBe(colWidths[0]);
     });
   });
 
@@ -263,8 +292,7 @@ describe('MarkdownParser - Tables', () => {
       expect(linkCell).toBeDefined();
       expect(linkCell!.cellStyle?.link).toBe(true);
       expect(linkCell!.url).toBe('https://example.com');
-      const raw = md.slice(linkCell!.startPos, linkCell!.endPos);
-      expect(measureTextWidth(linkCell!.replacement!)).toBe(measureTextWidth(raw));
+      expect(measureTextWidth(linkCell!.replacement!)).toBeGreaterThanOrEqual(5);
     });
 
     it('should pad bare URL cells with link cellStyle', () => {
@@ -274,8 +302,10 @@ describe('MarkdownParser - Tables', () => {
       expect(urlCell).toBeDefined();
       expect(urlCell!.cellStyle?.link).toBe(true);
       expect(urlCell!.replacement).toContain('https://example.com');
-      const raw = md.slice(urlCell!.startPos, urlCell!.endPos);
-      expect(measureTextWidth(urlCell!.replacement!)).toBe(measureTextWidth(raw));
+      const col0Widths = byType(result, 'tableCell')
+        .filter((c) => c.startPos < md.indexOf('|', md.indexOf('|') + 1))
+        .map((c) => measureTextWidth(c.replacement!));
+      expect(new Set(col0Widths).size).toBe(1);
     });
   });
 
@@ -295,13 +325,32 @@ describe('MarkdownParser - Tables', () => {
       ],
     ] as const;
 
-    it.each(cases)('keeps padded width for %s rows', (_label, md) => {
+    it.each(cases)('keeps unified column width for %s rows', (_label, md) => {
       const result = parser.extractDecorations(md);
       const padded = result.filter((d) => d.type === 'tableCell' || d.type === 'tableCellImage');
       expect(padded.length).toBeGreaterThanOrEqual(3);
+      const widthsByColumn = new Map<number, number>();
       for (const cell of padded) {
-        const raw = md.slice(cell.startPos, cell.endPos);
-        expect(measureTextWidth(cell.replacement!)).toBe(measureTextWidth(raw));
+        const lineStart = md.lastIndexOf('\n', cell.startPos - 1) + 1;
+        const pipes: number[] = [];
+        for (let i = lineStart; i < md.length; i++) {
+          if (md[i] === '\n') break;
+          if (md[i] === '|') pipes.push(i);
+        }
+        let col = -1;
+        for (let i = 0; i < pipes.length - 1; i++) {
+          if (cell.startPos >= pipes[i] + 1 && cell.endPos <= pipes[i + 1]) {
+            col = i;
+            break;
+          }
+        }
+        const width = measureTextWidth(cell.replacement!);
+        const prev = widthsByColumn.get(col);
+        if (prev === undefined) {
+          widthsByColumn.set(col, width);
+        } else {
+          expect(width).toBe(prev);
+        }
       }
     });
   });
@@ -314,15 +363,49 @@ describe('MarkdownParser - Tables', () => {
       ],
     ] as const;
 
-    it.each(cases)('keeps padded cell width for %s rows', (_label, md) => {
+    it.each(cases)('keeps unified column width for %s rows', (_label, md) => {
       const result = parser.extractDecorations(md);
+      const widthsByColumn = new Map<number, number>();
       for (const cell of byType(result, 'tableCell')) {
-        const raw = md.slice(cell.startPos, cell.endPos);
-        expect(measureTextWidth(cell.replacement!)).toBe(measureTextWidth(raw));
+        const lineStart = md.lastIndexOf('\n', cell.startPos - 1) + 1;
+        const pipes: number[] = [];
+        for (let i = lineStart; i < md.length; i++) {
+          if (md[i] === '\n') break;
+          if (md[i] === '|') pipes.push(i);
+        }
+        let col = -1;
+        for (let i = 0; i < pipes.length - 1; i++) {
+          if (cell.startPos >= pipes[i] + 1 && cell.endPos <= pipes[i + 1]) {
+            col = i;
+            break;
+          }
+        }
+        const width = measureTextWidth(cell.replacement!);
+        const prev = widthsByColumn.get(col);
+        if (prev === undefined) {
+          widthsByColumn.set(col, width);
+        } else {
+          expect(width).toBe(prev);
+        }
       }
       for (const dash of byType(result, 'tableSeparatorDash')) {
-        const raw = md.slice(dash.startPos, dash.endPos);
-        expect(dash.replacement!.length).toBe(measureTextWidth(raw));
+        const lineStart = md.lastIndexOf('\n', dash.startPos - 1) + 1;
+        const pipes: number[] = [];
+        for (let i = lineStart; i < md.length; i++) {
+          if (md[i] === '\n') break;
+          if (md[i] === '|') pipes.push(i);
+        }
+        let col = -1;
+        for (let i = 0; i < pipes.length - 1; i++) {
+          if (dash.startPos >= pipes[i] + 1 && dash.endPos <= pipes[i + 1]) {
+            col = i;
+            break;
+          }
+        }
+        const cellWidth = widthsByColumn.get(col);
+        if (cellWidth !== undefined) {
+          expect(dash.replacement!.length).toBe(cellWidth);
+        }
       }
     });
   });

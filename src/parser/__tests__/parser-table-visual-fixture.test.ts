@@ -66,15 +66,34 @@ describe('05-tables.md visual fixture alignment', () => {
     });
   }
 
-  it('pads link and image rich cells to source width', () => {
+  it('uses unified column widths in rich cells tables', () => {
     const section = extractSection('## Rich cells');
     const blocks = tableBlocks(section).slice(0, 3);
     for (const block of blocks) {
       const decs = parser.extractDecorations(block);
       const padded = decs.filter((d) => d.type === 'tableCell' || d.type === 'tableCellImage');
+      const widthsByColumn = new Map<number, number>();
       for (const cell of padded) {
-        const raw = block.slice(cell.startPos, cell.endPos);
-        expect(measureTextWidth(cell.replacement!)).toBe(measureTextWidth(raw));
+        const lineStart = block.lastIndexOf('\n', cell.startPos - 1) + 1;
+        const pipes: number[] = [];
+        for (let i = lineStart; i < block.length; i++) {
+          if (block[i] === '\n') break;
+          if (block[i] === '|') pipes.push(i);
+        }
+        let col = -1;
+        for (let i = 0; i < pipes.length - 1; i++) {
+          if (cell.startPos >= pipes[i] + 1 && cell.endPos <= pipes[i + 1]) {
+            col = i;
+            break;
+          }
+        }
+        const width = measureTextWidth(cell.replacement!);
+        const prev = widthsByColumn.get(col);
+        if (prev === undefined) {
+          widthsByColumn.set(col, width);
+        } else {
+          expect(width).toBe(prev);
+        }
       }
     }
   });
@@ -98,8 +117,8 @@ describe('05-tables.md visual fixture alignment', () => {
     expect(linkCell).toBeDefined();
     expect(linkCell!.replacement).toContain('Docs');
     expect(linkCell!.url).toContain('README.md');
-    const raw = block.slice(linkCell!.startPos, linkCell!.endPos);
-    expect(measureTextWidth(linkCell!.replacement!)).toBe(measureTextWidth(raw));
+    const widths = decs.filter((d) => d.type === 'tableCell').map((c) => measureTextWidth(c.replacement!));
+    expect(new Set(widths).size).toBe(1);
   });
 
   it('pads long bare URL cell in long and dense fixture', () => {
@@ -108,8 +127,45 @@ describe('05-tables.md visual fixture alignment', () => {
     const urlCell = decs.find((d) => d.type === 'tableCell' && d.cellStyle?.link);
     expect(urlCell).toBeDefined();
     expect(urlCell!.replacement).toContain('https://example.com');
-    const raw = block.slice(urlCell!.startPos, urlCell!.endPos);
-    expect(measureTextWidth(urlCell!.replacement!)).toBe(measureTextWidth(raw));
+    const col0Cells = decs.filter((d) => {
+      if (d.type !== 'tableCell') return false;
+      const lineStart = block.lastIndexOf('\n', d.startPos - 1) + 1;
+      const firstPipe = block.indexOf('|', lineStart);
+      const secondPipe = block.indexOf('|', firstPipe + 1);
+      return d.startPos > firstPipe && d.endPos <= secondPipe;
+    });
+    const widths = col0Cells.map((c) => measureTextWidth(c.replacement!));
+    expect(new Set(widths).size).toBe(1);
+  });
+
+  it('uses unified column widths in CJK and emoji tables', () => {
+    const section = extractSection('## CJK and emoji width');
+    for (const block of tableBlocks(section)) {
+      const decs = parser.extractDecorations(block);
+      const widthsByColumn = new Map<number, number>();
+      for (const cell of decs.filter((d) => d.type === 'tableCell')) {
+        const lineStart = block.lastIndexOf('\n', cell.startPos - 1) + 1;
+        const pipes: number[] = [];
+        for (let i = lineStart; i < block.length; i++) {
+          if (block[i] === '\n') break;
+          if (block[i] === '|') pipes.push(i);
+        }
+        let col = -1;
+        for (let i = 0; i < pipes.length - 1; i++) {
+          if (cell.startPos >= pipes[i] + 1 && cell.endPos <= pipes[i + 1]) {
+            col = i;
+            break;
+          }
+        }
+        const width = measureTextWidth(cell.replacement!);
+        const prev = widthsByColumn.get(col);
+        if (prev === undefined) {
+          widthsByColumn.set(col, width);
+        } else {
+          expect(width, block).toBe(prev);
+        }
+      }
+    }
   });
 
   it('mixed inline cells render via inline bold/italic decorations', () => {
