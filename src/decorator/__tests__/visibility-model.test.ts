@@ -4,6 +4,8 @@ vi.mock('../../parser', () => ({
   },
 }));
 
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { config } from '../../config';
 import { filterDecorationsForEditor } from '../visibility-model';
 import type { ScopeEntry } from '../visibility-model';
 import type { DecorationRange } from '../../parser';
@@ -86,13 +88,182 @@ describe('emoji decoration', () => {
 });
 
 
-describe('table syntax transparency', () => {
-  it('routes hide markers to transparent inside table scopes', () => {
-    const text = '| **bold** | plain |\n| --- | --- |\n| x | y |\n\nafter';
+describe('table decoration rendering', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders tablePipe with replacement text when cursor is off the table', () => {
+    const text = '| A |\n| - |\nother';
     const decs: DecorationRange[] = [
+      { startPos: 0, endPos: 1, type: 'tablePipe', replacement: '│' } as any,
+    ];
+    const editor = makeEditor(text, 2, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    const pipes = result.get('tablePipe') as any[];
+    expect(pipes).toBeDefined();
+    expect(pipes[0].renderOptions?.before?.contentText).toBe('│');
+  });
+
+  it('skips table decorations when cursor is on the table (whole-block reveal)', () => {
+    const text = '| A |\n| - |';
+    const decs: DecorationRange[] = [
+      { startPos: 0, endPos: 1, type: 'tablePipe', replacement: '│' } as any,
+    ];
+    const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
+    const tableScope: ScopeEntry = {
+      startPos: 0,
+      endPos: 11,
+      range: new Range(new Position(0, 0), new Position(1, 5)) as any,
+      kind: 'table',
+    };
+    const editor = makeEditor(text, 0, 2);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [tableScope],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('tablePipe')).toBe(false);
+  });
+
+  it('skips table decorations when forceRaw is enabled', () => {
+    vi.spyOn(config.tables, 'forceRaw').mockReturnValue(true);
+    const text = '| A |\n| - |\nother';
+    const decs: DecorationRange[] = [
+      { startPos: 0, endPos: 1, type: 'tablePipe', replacement: '│' } as any,
+    ];
+    const editor = makeEditor(text, 2, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('tablePipe')).toBe(false);
+  });
+
+  it('skips inline bold and hide decorations inside padded tableCell ranges', () => {
+    const text = '| **bold** and plain | note |\nother';
+    const decs: DecorationRange[] = [
+      {
+        startPos: 1,
+        endPos: 21,
+        type: 'tableCell',
+        replacement: ' **bold** and plain ',
+      } as any,
       { startPos: 2, endPos: 4, type: 'hide' } as any,
-      { startPos: 8, endPos: 10, type: 'hide' } as any,
       { startPos: 4, endPos: 8, type: 'bold' } as any,
+      { startPos: 8, endPos: 10, type: 'hide' } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('tableCell')).toBe(true);
+    expect(result.has('bold')).toBe(false);
+    expect(result.has('hide')).toBe(false);
+  });
+
+  it('renders tableCell with inlineCode color matching CodeDecorationType', () => {
+    const text = '| `code` |\nother';
+    const decs: DecorationRange[] = [
+      {
+        startPos: 0,
+        endPos: 1,
+        type: 'tableCell',
+        replacement: ' code ',
+        cellStyle: { inlineCode: true },
+      } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    const cells = result.get('tableCell') as any[];
+    expect(cells).toBeDefined();
+    expect(cells[0].renderOptions?.before?.contentText).toBe(' code ');
+    expect(cells[0].renderOptions?.before?.color?.id).toBe('textPreformat.foreground');
+    expect(cells[0].renderOptions?.before?.backgroundColor).toBe('rgba(255, 255, 255, 0.1)');
+  });
+
+  it('renders tableCell with link color and no underline on padding', () => {
+    const text = '| [label](https://example.com) |\nother';
+    const decs: DecorationRange[] = [
+      {
+        startPos: 2,
+        endPos: 32,
+        type: 'tableCell',
+        replacement: ' label ',
+        cellStyle: { link: true },
+        url: 'https://example.com',
+      } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    const cells = result.get('tableCell') as any[];
+    expect(cells).toBeDefined();
+    expect(cells[0].renderOptions?.before?.contentText).toBe(' label ');
+    expect(cells[0].renderOptions?.before?.color?.id).toBe('textLink.foreground');
+    expect(cells[0].renderOptions?.before?.textDecoration).toBe('none');
+    expect(cells[0].renderOptions?.before?.cursor).toBe('pointer');
+  });
+
+  it('skips strikethrough and hide decorations inside padded tableCell ranges', () => {
+    const text = '| ~~strike~~ |\nother';
+    const decs: DecorationRange[] = [
+      {
+        startPos: 2,
+        endPos: 14,
+        type: 'tableCell',
+        replacement: ' strike ',
+        cellStyle: { textDecoration: 'line-through' },
+      } as any,
+      { startPos: 2, endPos: 4, type: 'hide' } as any,
+      { startPos: 4, endPos: 10, type: 'strikethrough' } as any,
+      { startPos: 10, endPos: 12, type: 'hide' } as any,
+    ];
+    const editor = makeEditor(text, 1, 0);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+    );
+    expect(result.has('tableCell')).toBe(true);
+    expect(result.has('strikethrough')).toBe(false);
+    expect(result.has('hide')).toBe(false);
+  });
+
+  it('routes hide markers to transparent inside table scopes without padded cells', () => {
+    const text = '| [label](https://example.com) | plain |\n| --- | --- |\n| x | y |\n\nafter';
+    const decs: DecorationRange[] = [
+      { startPos: 2, endPos: 3, type: 'hide' } as any,
+      { startPos: 8, endPos: 9, type: 'hide' } as any,
+      { startPos: 3, endPos: 8, type: 'link', url: 'https://example.com' } as any,
     ];
     const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
     const tableScope: ScopeEntry = {
@@ -109,35 +280,9 @@ describe('table syntax transparency', () => {
       text,
       (s, e, t) => simpleRangeFactory(s, e, t),
     );
-    const hideItems = result.get('hide') as any[] | undefined;
-    expect(hideItems).toBeUndefined();
-    const transparentItems = result.get('transparent') as any[];
-    expect(transparentItems).toBeDefined();
-    expect(transparentItems).toHaveLength(2);
-    expect(transparentItems[0]).not.toHaveProperty('renderOptions');
-    expect(transparentItems[1]).not.toHaveProperty('renderOptions');
-    const boldItems = result.get('bold') as any[];
-    expect(boldItems).toBeDefined();
-    expect(boldItems).toHaveLength(1);
-  });
-
-  it('uses normal hide outside table scopes', () => {
-    const text = '**bold**';
-    const decs: DecorationRange[] = [
-      { startPos: 0, endPos: 2, type: 'hide' } as any,
-      { startPos: 6, endPos: 8, type: 'hide' } as any,
-    ];
-    const editor = makeEditor(text, 1, 0);
-    const result = filterDecorationsForEditor(
-      editor as any,
-      decs,
-      [],
-      text,
-      (s, e, t) => simpleRangeFactory(s, e, t),
-    );
-    const hideItems = result.get('hide') as any[];
-    expect(hideItems).toBeDefined();
-    expect(hideItems[0]).not.toHaveProperty('renderOptions');
+    expect(result.get('hide')).toBeUndefined();
+    expect(result.get('transparent')?.length).toBe(2);
+    expect(result.get('link')?.length).toBe(1);
   });
 
   it('ignores scope entries with missing ranges instead of throwing', () => {

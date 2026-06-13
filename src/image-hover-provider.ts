@@ -6,6 +6,7 @@ import {
   createDecorationRange,
   findDecorationAtOffset,
   isLinkDecoration,
+  isTableCellImageDecoration,
   resolveInteractionTarget,
   toInteractionUri,
 } from './link-interactions/shared';
@@ -44,6 +45,13 @@ export class MarkdownImageHoverProvider implements vscode.HoverProvider {
     const hoverOffset = document.offsetAt(position);
     const singleClickEnabled = config.links.singleClickOpen();
     const decoration =
+      findDecorationAtOffset(
+        decorations,
+        text,
+        hoverOffset,
+        document,
+        (candidate) => isTableCellImageDecoration(candidate),
+      ) ??
       findDecorationAtOffset(
         decorations,
         text,

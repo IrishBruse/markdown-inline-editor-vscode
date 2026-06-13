@@ -14,6 +14,7 @@ import type {
   ThematicBreak,
   Text,
   Table,
+  TableCell,
 } from "mdast";
 import {
   addMarkerDecorations as addMarkerDecorationsHelper,
@@ -31,6 +32,23 @@ import {
   filterDecorationsInCodeBlocks as filterDecorationsInCodeBlocksHelper,
   scanMentionAndIssueRefs as scanMentionAndIssueRefsHelper,
 } from "./mentions";
+import {
+  cellHasMixedFormatting as cellHasMixedFormattingHelper,
+  imageOnlyCellUrl as imageOnlyCellUrlHelper,
+  isImageOnlyCell as isImageOnlyCellHelper,
+  isLinkOnlyCell as isLinkOnlyCellHelper,
+  linkOnlyCellUrl as linkOnlyCellUrlHelper,
+  TABLE_CELL_IMAGE_ICON,
+  buildSeparatorDashReplacement as buildSeparatorDashReplacementHelper,
+  buildTableCellReplacement as buildTableCellReplacementHelper,
+  detectCellStyle as detectCellStyleHelper,
+  extractCellPlainText as extractCellPlainTextHelper,
+  findPipePositions as findPipePositionsHelper,
+  getLineRange as getLineRangeHelper,
+  measureTextWidth as measureTextWidthHelper,
+  normalizePipePositions as normalizePipePositionsHelper,
+  trimLineEnd as trimLineEndHelper,
+} from "./tables";
 import {
   processEmphasis as processEmphasisHelper,
   processHeading as processHeadingHelper,
@@ -354,8 +372,10 @@ export class MarkdownParser {
               break;
 
             case "table":
-              this.processTableScope(
+              this.processTable(
                 node as Table,
+                text,
+                decorations,
                 scopes,
                 currentAncestors,
               );
@@ -1244,12 +1264,10 @@ export class MarkdownParser {
     processFrontmatterHelper(text, decorations, scopes);
   }
 
-  /**
-   * Registers a scope for GFM tables so decorators can preserve column width
-   * when hiding markdown syntax inside cells (transparent instead of display:none).
-   */
-  private processTableScope(
+  private processTable(
     node: Table,
+    text: string,
+    decorations: DecorationRange[],
     scopes: ScopeRange[],
     ancestors: Node[],
   ): void {
@@ -1259,7 +1277,192 @@ export class MarkdownParser {
 
     const tableStart = node.position!.start.offset!;
     const tableEnd = node.position!.end.offset!;
+    const colAligns = node.align ?? [];
+
     this.addScope(scopes, tableStart, tableEnd, "table");
+
+    for (let rowIdx = 0; rowIdx < node.children.length; rowIdx++) {
+      const row = node.children[rowIdx];
+      if (
+        !row.position ||
+        row.position.start.offset === undefined ||
+        row.position.end.offset === undefined
+      ) {
+        continue;
+      }
+
+      const rowStartOffset = row.position.start.offset;
+      const [lineStart, lineEnd] = this.getLineRange(text, rowStartOffset);
+      const trimmedLineEnd = this.trimLineEnd(text, lineStart, lineEnd);
+      const rawPipes = this.findPipePositions(text, lineStart, trimmedLineEnd);
+      const { positions: pipes, isVirtual } = this.normalizePipePositions(
+        text, lineStart, trimmedLineEnd, rawPipes,
+      );
+
+      for (let pIdx = 0; pIdx < pipes.length; pIdx++) {
+        if (!isVirtual[pIdx]) {
+          decorations.push({
+            startPos: pipes[pIdx],
+            endPos: pipes[pIdx] + 1,
+            type: "tablePipe",
+            replacement: "\u2502",
+          });
+        }
+      }
+
+      for (let i = 0; i < pipes.length - 1; i++) {
+        const cellRangeStart = pipes[i] + 1;
+        const cellRangeEnd = pipes[i + 1];
+        if (cellRangeStart >= cellRangeEnd) continue;
+
+        const rawContent = text.substring(cellRangeStart, cellRangeEnd);
+        const trimmedContent = rawContent.trim();
+
+        const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
+        const markdownCellStyle = this.detectCellStyle(trimmedContent);
+        const showRaw = !markdownCellStyle && astCell && this.cellHasMixedFormatting(astCell);
+        const isLinkCell = !markdownCellStyle && !showRaw && !!astCell && isLinkOnlyCellHelper(astCell);
+        const isImageCell = !markdownCellStyle && !showRaw && !!astCell && isImageOnlyCellHelper(astCell);
+        const isStrikeCell = markdownCellStyle?.textDecoration === 'line-through';
+
+        let displayContent: string;
+        let cellType: "tableCell" | "tableCellImage" = "tableCell";
+        let cellStyle = markdownCellStyle;
+        let cellUrl: string | undefined;
+
+        if (isImageCell && astCell) {
+          displayContent = TABLE_CELL_IMAGE_ICON;
+          cellType = "tableCellImage";
+          cellUrl = imageOnlyCellUrlHelper(astCell);
+          cellStyle = undefined;
+        } else if (isLinkCell && astCell) {
+          displayContent = this.extractCellPlainText(astCell);
+          cellStyle = { link: true };
+          cellUrl = linkOnlyCellUrlHelper(astCell);
+        } else if (isStrikeCell) {
+          displayContent = astCell
+            ? this.extractCellPlainText(astCell)
+            : trimmedContent.slice(2, -2);
+        } else {
+          displayContent = (astCell && !showRaw)
+            ? this.extractCellPlainText(astCell)
+            : trimmedContent;
+        }
+
+        const displayWidth = this.measureTextWidth(displayContent, { cjkCorrection: true });
+        const align = i < colAligns.length ? colAligns[i] : null;
+
+        const replacement = this.buildTableCellReplacement(
+          rawContent, displayContent, displayWidth, align,
+        );
+
+        decorations.push({
+          startPos: cellRangeStart,
+          endPos: cellRangeEnd,
+          type: cellType,
+          replacement,
+          cellStyle,
+          url: cellUrl,
+        });
+      }
+
+      if (rowIdx === 0) {
+        const headerEndOffset = row.position.end.offset;
+
+        let sepLineStart = text.indexOf("\n", headerEndOffset);
+        if (sepLineStart === -1) continue;
+        sepLineStart += 1;
+
+        let sepLineEnd: number;
+        if (node.children.length > 1 && node.children[1].position) {
+          const nextRowStart = node.children[1].position.start.offset!;
+          sepLineEnd = text.lastIndexOf("\n", nextRowStart - 1);
+          if (sepLineEnd === -1 || sepLineEnd < sepLineStart) {
+            sepLineEnd = nextRowStart;
+          }
+        } else {
+          sepLineEnd = text.indexOf("\n", sepLineStart);
+          if (sepLineEnd === -1) sepLineEnd = tableEnd;
+        }
+
+        const trimmedSepEnd = this.trimLineEnd(text, sepLineStart, sepLineEnd);
+        const rawSepPipes = this.findPipePositions(text, sepLineStart, trimmedSepEnd);
+        const { positions: sepPipes, isVirtual: sepIsVirtual } = this.normalizePipePositions(
+          text, sepLineStart, trimmedSepEnd, rawSepPipes,
+        );
+
+        for (let pIdx = 0; pIdx < sepPipes.length; pIdx++) {
+          if (!sepIsVirtual[pIdx]) {
+            decorations.push({
+              startPos: sepPipes[pIdx],
+              endPos: sepPipes[pIdx] + 1,
+              type: "tableSeparatorPipe",
+              replacement: "\u2502",
+            });
+          }
+        }
+
+        for (let pIdx = 0; pIdx < sepPipes.length - 1; pIdx++) {
+          const segStart = sepPipes[pIdx] + 1;
+          const segEnd = sepPipes[pIdx + 1];
+          if (segStart >= segEnd) continue;
+
+          const segContent = text.substring(segStart, segEnd);
+          decorations.push({
+            startPos: segStart,
+            endPos: segEnd,
+            type: "tableSeparatorDash",
+            replacement: buildSeparatorDashReplacementHelper(segContent),
+          });
+        }
+      }
+    }
+  }
+
+  private getLineRange(text: string, offset: number): [number, number] {
+    return getLineRangeHelper(text, offset);
+  }
+
+  private trimLineEnd(text: string, lineStart: number, lineEnd: number): number {
+    return trimLineEndHelper(text, lineStart, lineEnd);
+  }
+
+  private findPipePositions(text: string, lineStart: number, lineEnd: number): number[] {
+    return findPipePositionsHelper(text, lineStart, lineEnd);
+  }
+
+  private normalizePipePositions(
+    text: string,
+    lineStart: number,
+    trimmedLineEnd: number,
+    pipes: number[],
+  ): { positions: number[]; isVirtual: boolean[] } {
+    return normalizePipePositionsHelper(text, lineStart, trimmedLineEnd, pipes);
+  }
+
+  private extractCellPlainText(cell: TableCell): string {
+    return extractCellPlainTextHelper(cell);
+  }
+
+  private cellHasMixedFormatting(cell: TableCell): boolean {
+    return cellHasMixedFormattingHelper(cell);
+  }
+
+  private detectCellStyle(trimmed: string) {
+    return detectCellStyleHelper(trimmed);
+  }
+
+  private measureTextWidth(plain: string, options?: { cjkCorrection?: boolean }): number {
+    return measureTextWidthHelper(plain, options);
+  }
+
+  private buildTableCellReplacement(
+    rawContent: string,
+    displayContent: string,
+    displayWidth: number,
+    align: 'left' | 'right' | 'center' | null,
+  ): string {
+    return buildTableCellReplacementHelper(rawContent, displayContent, displayWidth, align);
   }
 
 }

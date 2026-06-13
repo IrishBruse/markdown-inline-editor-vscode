@@ -54,12 +54,19 @@ export function resolveInteractionTarget(
   decoration: DecorationRange,
   documentUri: vscode.Uri
 ): InteractionTarget | undefined {
-  if (decoration.type === 'image' && decoration.url) {
+  if (
+    (decoration.type === 'image' || decoration.type === 'tableCellImage') &&
+    decoration.url
+  ) {
     const uri = resolveImageTarget(decoration.url, documentUri);
     return uri ? { kind: 'uri', uri } : undefined;
   }
 
-  if (decoration.type === 'link' && decoration.url) {
+  if (
+    (decoration.type === 'link' ||
+      (decoration.type === 'tableCell' && decoration.cellStyle?.link)) &&
+    decoration.url
+  ) {
     const resolved = resolveLinkTarget(decoration.url, documentUri);
     if (!resolved) {
       return undefined;
@@ -110,11 +117,28 @@ export function getInteractionDisplayValue(
   decoration: DecorationRange,
   target: InteractionTarget
 ): string {
-  if (decoration.type === 'link' || decoration.type === 'image') {
+  if (
+    decoration.type === 'link' ||
+    decoration.type === 'image' ||
+    decoration.type === 'tableCellImage' ||
+    (decoration.type === 'tableCell' && decoration.cellStyle?.link)
+  ) {
     return decoration.url ?? toInteractionUri(target).toString();
   }
 
   return toInteractionUri(target).toString();
+}
+
+export function isTableCellLinkDecoration(decoration: DecorationRange): boolean {
+  return (
+    decoration.type === 'tableCell' &&
+    decoration.cellStyle?.link === true &&
+    typeof decoration.url === 'string'
+  );
+}
+
+export function isTableCellImageDecoration(decoration: DecorationRange): boolean {
+  return decoration.type === 'tableCellImage' && typeof decoration.url === 'string';
 }
 
 export function isLinkDecoration(decoration: DecorationRange): boolean {
@@ -126,6 +150,8 @@ export function isLinkDecoration(decoration: DecorationRange): boolean {
 
 export function isLinkLikeDecoration(decoration: DecorationRange): boolean {
   return isLinkDecoration(decoration) ||
+    isTableCellLinkDecoration(decoration) ||
+    isTableCellImageDecoration(decoration) ||
     (decoration.type === 'mention' && typeof decoration.slug === 'string') ||
     (decoration.type === 'issueReference' && typeof decoration.issueNumber === 'number');
 }

@@ -31,6 +31,11 @@ import {
   FrontmatterDecorationType,
   FrontmatterDelimiterDecorationType,
   EmojiDecorationType,
+  TablePipeDecorationType,
+  TableSeparatorPipeDecorationType,
+  TableSeparatorDashDecorationType,
+  TableCellDecorationType,
+  TableCellImageDecorationType,
 } from '../decorations';
 import type { DecorationType } from '../parser';
 
@@ -88,6 +93,11 @@ export class DecorationTypeRegistry {
   private frontmatterDecorationType!: TextEditorDecorationType;
   private frontmatterDelimiterDecorationType!: TextEditorDecorationType;
   private emojiDecorationType!: TextEditorDecorationType;
+  private tablePipeDecorationType!: TextEditorDecorationType;
+  private tableSeparatorPipeDecorationType!: TextEditorDecorationType;
+  private tableSeparatorDashDecorationType!: TextEditorDecorationType;
+  private tableCellDecorationType!: TextEditorDecorationType;
+  private tableCellImageDecorationType!: TextEditorDecorationType;
 
   private decorationTypeMap = new Map<DecorationType, TextEditorDecorationType>();
 
@@ -126,6 +136,11 @@ export class DecorationTypeRegistry {
     this.frontmatterDecorationType = FrontmatterDecorationType();
     this.frontmatterDelimiterDecorationType = FrontmatterDelimiterDecorationType(this.options.getFrontmatterDelimiterOpacity());
     this.emojiDecorationType = EmojiDecorationType();
+    this.tablePipeDecorationType = TablePipeDecorationType();
+    this.tableSeparatorPipeDecorationType = TableSeparatorPipeDecorationType();
+    this.tableSeparatorDashDecorationType = TableSeparatorDashDecorationType();
+    this.tableCellDecorationType = TableCellDecorationType();
+    this.tableCellImageDecorationType = TableCellImageDecorationType(this.options.getImageColor?.());
 
     this.decorationTypeMap = new Map<DecorationType, TextEditorDecorationType>([
       ['hide', this.hideDecorationType],
@@ -157,6 +172,11 @@ export class DecorationTypeRegistry {
       ['frontmatter', this.frontmatterDecorationType],
       ['frontmatterDelimiter', this.frontmatterDelimiterDecorationType],
       ['emoji', this.emojiDecorationType],
+      ['tablePipe', this.tablePipeDecorationType],
+      ['tableSeparatorPipe', this.tableSeparatorPipeDecorationType],
+      ['tableSeparatorDash', this.tableSeparatorDashDecorationType],
+      ['tableCell', this.tableCellDecorationType],
+      ['tableCellImage', this.tableCellImageDecorationType],
       // Keep this last so it is applied after backgrounds.
       ['selectionOverlay', this.selectionOverlayDecorationType],
     ]);
@@ -214,6 +234,7 @@ export class DecorationTypeRegistry {
     this.recreateDecorationType(this.italicDecorationType, () => ItalicDecorationType(this.options.getEmphasisColor?.()), (t) => { this.italicDecorationType = t; }, 'italic');
     this.recreateDecorationType(this.boldItalicDecorationType, () => BoldItalicDecorationType(this.options.getEmphasisColor?.()), (t) => { this.boldItalicDecorationType = t; }, 'boldItalic');
     this.recreateDecorationType(this.imageDecorationType, () => ImageDecorationType(this.options.getImageColor?.()), (t) => { this.imageDecorationType = t; }, 'image');
+    this.recreateDecorationType(this.tableCellImageDecorationType, () => TableCellImageDecorationType(this.options.getImageColor?.()), (t) => { this.tableCellImageDecorationType = t; }, 'tableCellImage');
     this.recreateDecorationType(this.mentionDecorationType, () => MentionDecorationType(this.options.getLinkColor?.()), (t) => { this.mentionDecorationType = t; }, 'mention');
     this.recreateDecorationType(this.issueReferenceDecorationType, () => IssueReferenceDecorationType(this.options.getLinkColor?.()), (t) => { this.issueReferenceDecorationType = t; }, 'issueReference');
     this.recreateDecorationType(this.horizontalRuleDecorationType, () => HorizontalRuleDecorationType(this.options.getHorizontalRuleColor?.()), (t) => { this.horizontalRuleDecorationType = t; }, 'horizontalRule');

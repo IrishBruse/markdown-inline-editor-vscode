@@ -76,7 +76,7 @@ describe('05-tables.md rendering', () => {
     ).not.toThrow();
   });
 
-  it('renders decorations with cursor on a table line', async () => {
+  it('renders table grid decorations with cursor outside the table', async () => {
     const parser = await MarkdownParser.create();
     const { decorations, scopes } = parser.extractDecorationsWithScopes(TABLES_MD);
     const doc = new TextDocument(Uri.file('docs/tests/05-tables.md'), 'markdown', 1, TABLES_MD);
@@ -91,16 +91,16 @@ describe('05-tables.md rendering', () => {
       (startPos, endPos, text) => createRange(editor, startPos, endPos, text),
     );
 
-    expect(result.get('heading2')?.length).toBeGreaterThan(0);
-    expect(result.get('bold')?.length).toBeGreaterThan(0);
+    expect(result.get('tablePipe')?.length).toBeGreaterThan(0);
+    expect(result.get('tableCell')?.length).toBeGreaterThan(0);
   });
 
-  it('routes table hide markers to transparent for strikethrough cells', async () => {
-    const markdown = '| Col      | Note   |\n| -------- | ------ |\n| ~~gone~~ | delete |';
+  it('applies strike style on padded tableCell when cursor is outside a strike-only cell', async () => {
+    const markdown = '| Col      | Note   |\n| -------- | ------ |\n| ~~gone~~ | delete |\n\nafter';
     const parser = await MarkdownParser.create();
     const { decorations, scopes } = parser.extractDecorationsWithScopes(markdown);
     const doc = new TextDocument(Uri.file('docs/tests/05-tables.md'), 'markdown', 1, markdown);
-    const editor = new TextEditor(doc, [new Selection(new Position(0, 0), new Position(0, 0))]);
+    const editor = new TextEditor(doc, [new Selection(new Position(4, 0), new Position(4, 0))]);
     const scopeEntries = buildScopeEntries(editor, scopes, markdown);
 
     const filtered = filterDecorationsForEditor(
@@ -111,8 +111,9 @@ describe('05-tables.md rendering', () => {
       (startPos, endPos, text) => createRange(editor, startPos, endPos, text),
     );
 
-    expect(filtered.get('strikethrough')?.length).toBe(1);
-    expect(filtered.get('transparent')?.length).toBe(2);
-    expect(filtered.get('hide')).toBeUndefined();
+    expect(filtered.get('tableCell')?.find?.((c: { renderOptions?: { before?: { textDecoration?: string } } }) =>
+      c.renderOptions?.before?.textDecoration === 'line-through',
+    )).toBeDefined();
+    expect(filtered.get('strikethrough')).toBeUndefined();
   });
 });

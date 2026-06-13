@@ -554,6 +554,80 @@ export function CheckboxCheckedDecorationType(color?: string | ThemeColor) {
 }
 
 /**
+ * Creates a decoration type for table pipe characters (|).
+ *
+ * Hides the original pipe and renders a box-drawing vertical line via
+ * per-range `renderOptions.before.contentText`.
+ */
+export function TablePipeDecorationType() {
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: {
+      contentText: '',
+      color: new ThemeColor('editorLineNumber.foreground'),
+    },
+  });
+}
+
+/**
+ * Creates a decoration type for table separator row pipe characters.
+ */
+export function TableSeparatorPipeDecorationType() {
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: {
+      contentText: '',
+      color: new ThemeColor('editorLineNumber.foreground'),
+    },
+  });
+}
+
+/**
+ * Creates a decoration type for table separator row dash segments.
+ *
+ * Uses ASCII hyphen runs (not box-drawing) to stay monospace-safe.
+ */
+export function TableSeparatorDashDecorationType() {
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: {
+      contentText: '',
+      color: new ThemeColor('editorLineNumber.foreground'),
+    },
+  });
+}
+
+/**
+ * Creates a decoration type for table cell content.
+ *
+ * Hides the original cell text and renders aligned content via
+ * per-range `renderOptions.before.contentText`.
+ */
+export function TableCellDecorationType() {
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: {
+      contentText: '',
+    },
+  });
+}
+
+/**
+ * Creates a decoration type for inline-rendered table cells that contain only an image.
+ */
+export function TableCellImageDecorationType(color?: string | ThemeColor) {
+  const resolvedColor = color ?? new ThemeColor('textLink.foreground');
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    cursor: 'pointer',
+    before: {
+      contentText: '',
+      color: resolvedColor,
+    },
+  });
+}
+
+/**
  * Creates a decoration type for mermaid hover indicator.
  *
  * Adds a small visual indicator (⧉) at the start of mermaid code blocks

@@ -316,7 +316,6 @@ GFM treats every unescaped `|` on a table line as a column boundary. The header 
 
 ## Custom mode: long cell wrapping
 
-Set `markdownInlineEditor.tables.renderingMode` to `custom` for preview-style HTML tables rendered as SVG overlays (same technique as Mermaid diagrams).
 
 | Section Header | Detailed Placeholder Content                                                                                                                                                                                                                                                                                                                                                                   |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

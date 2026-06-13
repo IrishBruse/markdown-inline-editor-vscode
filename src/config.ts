@@ -83,6 +83,12 @@ export const config = {
       return getSetting('math.enabled', true);
     },
   },
+  tables: {
+    /** When true, tables always show as raw GFM source with no grid decorations. */
+    forceRaw(): boolean {
+      return getSetting('tables.forceRaw', false);
+    },
+  },
   orderedLists: {
     /** When true, ordered list markers are hidden and replaced with computed numbers (lazy `1.` numbering, etc.). When false, the source text is shown as written. */
     autoNumber(): boolean {

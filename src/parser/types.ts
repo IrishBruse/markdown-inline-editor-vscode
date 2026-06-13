@@ -6,6 +6,13 @@ export interface DecorationRange {
   level?: number;
   emoji?: string;
   replacement?: string;
+  cellStyle?: {
+    fontWeight?: string;
+    fontStyle?: string;
+    textDecoration?: string;
+    inlineCode?: boolean;
+    link?: boolean;
+  };
   slug?: string;
   issueNumber?: number;
   ownerRepo?: string;
@@ -71,4 +78,9 @@ export type DecorationType =
   | "frontmatter"
   | "frontmatterDelimiter"
   | "mention"
-  | "issueReference";
+  | "issueReference"
+  | "tablePipe"
+  | "tableSeparatorPipe"
+  | "tableSeparatorDash"
+  | "tableCell"
+  | "tableCellImage";

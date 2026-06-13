@@ -1,5 +1,6 @@
-import { Range, ThemeColor, type DecorationOptions, type Position, type TextEditor } from 'vscode';
+import { ColorThemeKind, Range, ThemeColor, window, type DecorationOptions, type Position, type TextEditor } from 'vscode';
 import type { DecorationRange, DecorationType } from '../parser';
+import { config } from '../config';
 import { isMarkerDecorationType } from './decoration-categories';
 import { DECORATION_DEBUG, dbgDecoration } from './debug-decoration-trace';
 
@@ -64,10 +65,6 @@ export function filterDecorationsForEditor(
   const cursorPositions: Position[] = [];
   const activeLines = new Set<number>(); // Lines with selections or cursors
   const safeScopes = scopes.filter((scope) => isValidRange(scope.range));
-  // Table scopes exist only for monospace space-replacement of hidden syntax.
-  // They must not trigger the generic scope raw-reveal path (that was for removed
-  // table grid rendering and would force the whole table back to source markdown).
-  const revealScopes = safeScopes.filter((scope) => scope.kind !== 'table');
 
   for (const selection of editor.selections) {
     const selectionStart = isValidPosition(selection.start)
@@ -95,12 +92,12 @@ export function filterDecorationsForEditor(
   }
 
   const rawRanges = mergeRanges([
-    ...collectRawRanges(selectedRanges, revealScopes),
-    ...collectCursorScopeRanges(cursorPositions, revealScopes),
+    ...collectRawRanges(selectedRanges, safeScopes),
+    ...collectCursorScopeRanges(cursorPositions, safeScopes),
   ]);
 
   if (DECORATION_DEBUG) {
-    const cursorScopeKinds = revealScopes
+    const cursorScopeKinds = safeScopes
       .filter((scope) =>
         cursorPositions.some((position) => {
           if (!isValidPosition(position) || !isValidRange(scope.range)) {
@@ -118,8 +115,7 @@ export function filterDecorationsForEditor(
       .map((scope) => scope.kind ?? 'none');
     dbgDecoration('visibility rawRanges', {
       rawRangeCount: rawRanges.length,
-      revealScopeCount: revealScopes.length,
-      tableScopeCount: safeScopes.length - revealScopes.length,
+      scopeCount: safeScopes.length,
       cursorLines: [...activeLines],
       cursorScopeKinds,
     });
@@ -132,7 +128,6 @@ export function filterDecorationsForEditor(
         hideRaw: 0,
         hideGhost: 0,
         hideApplied: 0,
-        hideTableTransparent: 0,
         markerRaw: 0,
         markerGhost: 0,
         cursorLineSamples: [] as Array<Record<string, unknown>>,
@@ -162,7 +157,43 @@ export function filterDecorationsForEditor(
     }
   }
 
+  const tableTypes = new Set<DecorationType>([
+    'tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell', 'tableCellImage',
+  ]);
+
+  const tablesForceRaw = config.tables.forceRaw();
+
   const tableScopes = safeScopes.filter((scope) => scope.kind === 'table');
+  const rawTableRanges: Range[] = [];
+  if (!tablesForceRaw) {
+    for (const tableScope of tableScopes) {
+      let tableIsActive = false;
+      for (let line = tableScope.range.start.line; line <= tableScope.range.end.line; line++) {
+        if (activeLines.has(line)) {
+          tableIsActive = true;
+          break;
+        }
+      }
+      if (tableIsActive) {
+        rawTableRanges.push(tableScope.range);
+      }
+    }
+  }
+
+  const paddedTableCellRanges: Range[] = [];
+  for (const decoration of decorations) {
+    if (decoration.type !== 'tableCell' && decoration.type !== 'tableCellImage') {
+      continue;
+    }
+    const cellRange = rangeFactory(decoration.startPos, decoration.endPos, originalText);
+    if (cellRange) {
+      paddedTableCellRanges.push(cellRange);
+    }
+  }
+
+  const tableCellInlineConflictTypes = new Set<DecorationType>([
+    'bold', 'italic', 'boldItalic', 'hide', 'code', 'transparent', 'strikethrough', 'link', 'image',
+  ]);
 
   const filtered = new Map<DecorationType, FilteredDecoration[]>();
   const ghostFaintRanges: Range[] = [];
@@ -185,6 +216,13 @@ export function filterDecorationsForEditor(
       continue;
     }
     const isActiveLine = activeLines.size > 0 && activeLines.has(range.start.line);
+
+    if (
+      tableCellInlineConflictTypes.has(decoration.type) &&
+      paddedTableCellRanges.some((cellRange) => safeIntersection(range, cellRange) !== undefined)
+    ) {
+      continue;
+    }
 
     // Code blocks and frontmatter use opaque, whole-line backgrounds.
     // On some themes, VS Code's native selection highlight is drawn "under" those
@@ -270,12 +308,13 @@ export function filterDecorationsForEditor(
         ghostFaintRanges.push(range);
         continue;
       }
-      // Rendered state: hide markers normally. Inside tables, use transparent
-      // (color: transparent) instead of hide (display: none) so marker characters
-      // stay in the monospace layout and pipe columns stay aligned.
+      // Rendered state: hide markers normally. Inside tables without padded cell
+      // replacement, use transparent so marker chars stay in the monospace layout.
       const ranges = filtered.get(decoration.type) || [];
-      if (decoration.type === 'hide' && isInsideTableScope(range, tableScopes)) {
-        debugSkip && debugSkip.hideTableTransparent++;
+      if (
+        decoration.type === 'hide' &&
+        isInsideTableScopeWithoutPaddedCell(range, tableScopes, paddedTableCellRanges)
+      ) {
         const transparentRanges = filtered.get('transparent') || [];
         transparentRanges.push(range);
         filtered.set('transparent', transparentRanges);
@@ -302,6 +341,37 @@ export function filterDecorationsForEditor(
             before: {
               contentText: decoration.emoji,
             },
+          },
+        });
+        filtered.set(decoration.type, ranges);
+      }
+      continue;
+    }
+
+    if (tableTypes.has(decoration.type)) {
+      if (tablesForceRaw || rangeIntersectsAny(range, rawTableRanges)) {
+        continue;
+      }
+      if (decoration.replacement !== undefined) {
+        const ranges = filtered.get(decoration.type) || [];
+        const beforeOpts: Record<string, unknown> = {
+          contentText: decoration.replacement,
+        };
+        if (decoration.cellStyle) {
+          if (decoration.cellStyle.fontWeight) beforeOpts.fontWeight = decoration.cellStyle.fontWeight;
+          if (decoration.cellStyle.fontStyle) beforeOpts.fontStyle = decoration.cellStyle.fontStyle;
+          if (decoration.cellStyle.textDecoration) beforeOpts.textDecoration = decoration.cellStyle.textDecoration;
+          if (decoration.cellStyle.inlineCode) {
+            Object.assign(beforeOpts, inlineCodeTableCellBeforeStyle());
+          }
+          if (decoration.cellStyle.link) {
+            Object.assign(beforeOpts, inlineLinkTableCellBeforeStyle());
+          }
+        }
+        ranges.push({
+          range,
+          renderOptions: {
+            before: beforeOpts,
           },
         });
         filtered.set(decoration.type, ranges);
@@ -458,17 +528,51 @@ function mergeRanges(ranges: Range[]): Range[] {
   return merged;
 }
 
-function isInsideTableScope(range: Range, tableScopes: ScopeEntry[]): boolean {
+function isInsideTableScopeWithoutPaddedCell(
+  range: Range,
+  tableScopes: ScopeEntry[],
+  paddedTableCellRanges: Range[],
+): boolean {
   if (!isValidRange(range)) {
     return false;
   }
-  return tableScopes.some((scope) => {
+  const insideTable = tableScopes.some((scope) => {
     if (!isValidRange(scope.range)) {
       return false;
     }
-    const intersection = safeIntersection(range, scope.range);
-    return intersection !== undefined;
+    return safeIntersection(range, scope.range) !== undefined
+      || safeContains(scope.range, range.start);
   });
+  if (!insideTable) {
+    return false;
+  }
+  return !paddedTableCellRanges.some((cellRange) => safeIntersection(range, cellRange) !== undefined);
+}
+
+/** Matches {@link CodeDecorationType} defaults for tableCell inline-code cells. */
+function inlineCodeTableCellBeforeStyle(): Record<string, unknown> {
+  const opts: Record<string, unknown> = {};
+  const color = config.colors.inlineCode();
+  const backgroundColor = config.colors.inlineCodeBackground();
+  opts.color = color ?? new ThemeColor('textPreformat.foreground');
+  if (backgroundColor) {
+    opts.backgroundColor = backgroundColor;
+  } else {
+    const themeKind = window.activeColorTheme.kind;
+    const isDark = themeKind === ColorThemeKind.Dark || themeKind === ColorThemeKind.HighContrast;
+    opts.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+  }
+  return opts;
+}
+
+/** Link-colored table cells: no underline so padding NBSPs stay clean. */
+function inlineLinkTableCellBeforeStyle(): Record<string, unknown> {
+  const color = config.colors.link();
+  return {
+    color: color ?? new ThemeColor('textLink.foreground'),
+    cursor: 'pointer',
+    textDecoration: 'none',
+  };
 }
 
 function rangeIntersectsAny(range: Range, ranges: Range[]): boolean {
@@ -478,6 +582,9 @@ function rangeIntersectsAny(range: Range, ranges: Range[]): boolean {
   return ranges.some((candidate) => {
     if (!isValidRange(candidate)) {
       return false;
+    }
+    if (safeContains(candidate, range.start)) {
+      return true;
     }
     const intersection = safeIntersection(range, candidate);
     return intersection !== undefined;

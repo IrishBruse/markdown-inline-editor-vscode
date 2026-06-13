@@ -51,6 +51,10 @@ export function registerEventHandlers(
         decorator.recreateLinkDecorationType();
       }
 
+      if (configAffectsConfiguration(event, 'tables.forceRaw')) {
+        decorator.updateDecorationsForSelection();
+      }
+
       if (configAffectsConfiguration(event, 'colors')) {
         decorator.recreateColorDependentTypes();
       }
