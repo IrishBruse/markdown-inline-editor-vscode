@@ -73,8 +73,8 @@ function isDecorationOptionsEntry(entry: Range | DecorationOptions): entry is De
 
 /**
  * VS Code requires setDecorations to receive either Range[] or DecorationOptions[],
- * never a mixed array. Table hide markers use DecorationOptions (space replacement)
- * alongside plain Range hide entries, so normalize when needed.
+ * never a mixed array. Some marker types (e.g. blockquote) may emit DecorationOptions
+ * alongside plain Range entries, so normalize when needed.
  */
 export function prepareDecorationPayload(
   entries: Array<Range | DecorationOptions> | undefined

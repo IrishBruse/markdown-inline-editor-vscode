@@ -132,7 +132,7 @@ export function filterDecorationsForEditor(
         hideRaw: 0,
         hideGhost: 0,
         hideApplied: 0,
-        hideTableSpaces: 0,
+        hideTableTransparent: 0,
         markerRaw: 0,
         markerGhost: 0,
         cursorLineSamples: [] as Array<Record<string, unknown>>,
@@ -270,25 +270,20 @@ export function filterDecorationsForEditor(
         ghostFaintRanges.push(range);
         continue;
       }
-      // Rendered state: hide markers normally. Inside tables, replace syntax with
-      // spaces so monospace column alignment is preserved (e.g. **bold** -> "  bold  ").
+      // Rendered state: hide markers normally. Inside tables, use transparent
+      // (color: transparent) instead of hide (display: none) so marker characters
+      // stay in the monospace layout and pipe columns stay aligned.
       const ranges = filtered.get(decoration.type) || [];
       if (decoration.type === 'hide' && isInsideTableScope(range, tableScopes)) {
-        debugSkip && debugSkip.hideTableSpaces++;
-        const spaceCount = decoration.endPos - decoration.startPos;
-        ranges.push({
-          range,
-          renderOptions: {
-            before: {
-              contentText: ' '.repeat(spaceCount),
-            },
-          },
-        });
+        debugSkip && debugSkip.hideTableTransparent++;
+        const transparentRanges = filtered.get('transparent') || [];
+        transparentRanges.push(range);
+        filtered.set('transparent', transparentRanges);
       } else {
         debugSkip && debugSkip.hideApplied++;
         ranges.push(range);
+        filtered.set(decoration.type, ranges);
       }
-      filtered.set(decoration.type, ranges);
       continue;
     }
 

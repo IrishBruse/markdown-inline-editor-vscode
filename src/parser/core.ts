@@ -1246,7 +1246,7 @@ export class MarkdownParser {
 
   /**
    * Registers a scope for GFM tables so decorators can preserve column width
-   * when hiding markdown syntax inside cells (spaces instead of display:none).
+   * when hiding markdown syntax inside cells (transparent instead of display:none).
    */
   private processTableScope(
     node: Table,

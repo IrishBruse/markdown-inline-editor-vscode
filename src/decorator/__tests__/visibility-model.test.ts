@@ -86,8 +86,8 @@ describe('emoji decoration', () => {
 });
 
 
-describe('table syntax space replacement', () => {
-  it('replaces hide markers with spaces inside table scopes', () => {
+describe('table syntax transparency', () => {
+  it('routes hide markers to transparent inside table scopes', () => {
     const text = '| **bold** | plain |\n| --- | --- |\n| x | y |\n\nafter';
     const decs: DecorationRange[] = [
       { startPos: 2, endPos: 4, type: 'hide' } as any,
@@ -109,11 +109,13 @@ describe('table syntax space replacement', () => {
       text,
       (s, e, t) => simpleRangeFactory(s, e, t),
     );
-    const hideItems = result.get('hide') as any[];
-    expect(hideItems).toBeDefined();
-    expect(hideItems).toHaveLength(2);
-    expect(hideItems[0].renderOptions?.before?.contentText).toBe('  ');
-    expect(hideItems[1].renderOptions?.before?.contentText).toBe('  ');
+    const hideItems = result.get('hide') as any[] | undefined;
+    expect(hideItems).toBeUndefined();
+    const transparentItems = result.get('transparent') as any[];
+    expect(transparentItems).toBeDefined();
+    expect(transparentItems).toHaveLength(2);
+    expect(transparentItems[0]).not.toHaveProperty('renderOptions');
+    expect(transparentItems[1]).not.toHaveProperty('renderOptions');
     const boldItems = result.get('bold') as any[];
     expect(boldItems).toBeDefined();
     expect(boldItems).toHaveLength(1);

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { MarkdownParser } from '../../parser';
-import { applyFilteredDecorations, buildScopeEntries, createRange } from '../editor-decoration-applier';
+import { buildScopeEntries, createRange } from '../editor-decoration-applier';
 import { filterDecorationsForEditor } from '../visibility-model';
 import { TextDocument, TextEditor, Selection, Position, Uri } from '../../test/__mocks__/vscode';
 
@@ -95,35 +95,24 @@ describe('05-tables.md rendering', () => {
     expect(result.get('bold')?.length).toBeGreaterThan(0);
   });
 
-  it('applies mixed hide decorations from the tables fixture without throwing', async () => {
+  it('routes table hide markers to transparent for strikethrough cells', async () => {
+    const markdown = '| Col      | Note   |\n| -------- | ------ |\n| ~~gone~~ | delete |';
     const parser = await MarkdownParser.create();
-    const { decorations, scopes } = parser.extractDecorationsWithScopes(TABLES_MD);
-    const doc = new TextDocument(Uri.file('docs/tests/05-tables.md'), 'markdown', 1, TABLES_MD);
-    const editor = new TextEditor(doc, [new Selection(new Position(31, 0), new Position(31, 0))]);
-    editor.setDecorations = vi.fn();
-    const scopeEntries = buildScopeEntries(editor, scopes, TABLES_MD);
+    const { decorations, scopes } = parser.extractDecorationsWithScopes(markdown);
+    const doc = new TextDocument(Uri.file('docs/tests/05-tables.md'), 'markdown', 1, markdown);
+    const editor = new TextEditor(doc, [new Selection(new Position(0, 0), new Position(0, 0))]);
+    const scopeEntries = buildScopeEntries(editor, scopes, markdown);
 
     const filtered = filterDecorationsForEditor(
       editor as any,
       decorations,
       scopeEntries,
-      TABLES_MD,
+      markdown,
       (startPos, endPos, text) => createRange(editor, startPos, endPos, text),
     );
 
-    const hideItems = filtered.get('hide') ?? [];
-    const hasMixedHide =
-      hideItems.some((item) => 'range' in (item as object)) &&
-      hideItems.some((item) => !('range' in (item as object)));
-    expect(hasMixedHide).toBe(true);
-
-    const registry = {
-      getMap: () => new Map([['hide', { key: 'hide' }]]),
-      getGhostFaintDecorationType: () => ({ key: 'ghostFaint' }),
-    };
-
-    expect(() =>
-      applyFilteredDecorations(editor as any, filtered, registry as any),
-    ).not.toThrow();
+    expect(filtered.get('strikethrough')?.length).toBe(1);
+    expect(filtered.get('transparent')?.length).toBe(2);
+    expect(filtered.get('hide')).toBeUndefined();
   });
 });

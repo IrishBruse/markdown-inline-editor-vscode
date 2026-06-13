@@ -42,7 +42,7 @@
 
 | Left | Center | Right |
 |:-----|:------:|------:|
-| L    |C    |     R 
+| L    |C    |     R |
 | long |  mid|   1.0 |
 
 | Left | Center | Right |
@@ -167,7 +167,7 @@
 
 ## Rich cells (native padding)
 
-| Col                          | Note |
+| Col | Note |
 | ---------------------------- | ---- |
 | [label](https://example.com) | link |
 
