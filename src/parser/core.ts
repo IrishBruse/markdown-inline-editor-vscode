@@ -1317,9 +1317,6 @@ export class MarkdownParser {
 
         const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
         const ctx = resolveTableCellRenderContextHelper(rawContent, astCell);
-        if (ctx.skipPaddedCell) {
-          continue;
-        }
         const align = i < colAligns.length ? colAligns[i] : null;
         const columnWidth = i < columnWidths.length ? columnWidths[i] : ctx.displayWidth;
 

@@ -11,3 +11,7 @@ Guidelines for AI agents and contributors working in this repository.
 - Supports links, images, headings, lists, code blocks, tables, Mermaid, math, mentions, and more
 
 **Tech stack:** TypeScript (strict), VS Code Extension API, remark, Vitest, esbuild.
+
+## Visual table testing
+
+Fully automatic via the [visual-test-tables](.agents/skills/visual-test-tables/SKILL.md) skill. Agents must run `npm run visual:tables` after table changes without asking. One-time hook setup: `npm run visual:tables:setup-hooks`.

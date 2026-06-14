@@ -55,6 +55,8 @@ describe('05-tables.md visual fixture alignment', () => {
     '## Strikethrough whole cell',
     '## Mixed inline in one cell',
     '## Inline code beside text',
+    '## Dollar math heuristic',
+    '## Autolink-style',
   ] as const;
 
   for (const sectionTitle of sections) {
@@ -98,16 +100,16 @@ describe('05-tables.md visual fixture alignment', () => {
     }
   });
 
-  it('whole-cell strike uses inline strikethrough decorations', () => {
+  it('whole-cell strike uses padded tableCell with combining strike on text', () => {
     const md = '| ~~strike~~ | strikethrough |\n| ---------- | ------------- |\n| ~~gone~~ | delete |';
     const decs = parser.extractDecorations(md);
-    const strikeOverlay = decs.find(
-      (d) => d.type === 'tableCell' && md.slice(d.startPos, d.endPos).includes('~~'),
+    const strikeCell = decs.find(
+      (d) => d.type === 'tableCell' && d.replacement?.replace(/\u0336/g, '').includes('gone'),
     );
-    expect(strikeOverlay).toBeUndefined();
-    expect(decs.some((d) => d.type === 'strikethrough')).toBe(true);
-    const plain = decs.find((d) => d.type === 'tableCell' && d.replacement?.includes('strikethrough'));
-    expect(plain?.cellStyle?.textDecoration).toBeUndefined();
+    expect(strikeCell).toBeDefined();
+    expect(strikeCell!.cellStyle?.textDecoration).toBeUndefined();
+    expect(strikeCell!.replacement).toContain('\u0336');
+    expect(strikeCell!.replacement).not.toContain('~');
   });
 
   it('renders link-only Docs cell in links fixture with grid padding', () => {
@@ -175,45 +177,39 @@ describe('05-tables.md visual fixture alignment', () => {
     }
   });
 
-  it('mixed inline cells render via inline bold/italic decorations', () => {
+  it('mixed inline cells use padded plain text without markdown markers', () => {
     const section = extractSection('## Mixed inline in one cell');
     for (const block of tableBlocks(section)) {
       const decs = parser.extractDecorations(block);
-      const dataLine = block.split('\n')[2];
-      const mixedCellStart = dataLine.indexOf('|') + 1;
-      const mixedCellEnd = dataLine.indexOf('|', mixedCellStart + 1);
-      const mixedRaw = dataLine.slice(mixedCellStart, mixedCellEnd);
-      const mixedTableCell = decs.find((d) =>
-        d.type === 'tableCell' &&
-        d.startPos >= block.indexOf(dataLine) + mixedCellStart &&
-        d.endPos <= block.indexOf(dataLine) + mixedCellEnd,
-      );
-      expect(mixedTableCell, block).toBeUndefined();
-
-      const hasInlineFormat = decs.some((d) =>
-        (d.type === 'bold' || d.type === 'italic' || d.type === 'boldItalic') &&
-        d.startPos >= block.indexOf(dataLine) &&
-        d.endPos <= block.indexOf(dataLine) + dataLine.length,
-      );
-      expect(hasInlineFormat || !/\*\*|_[^_]+_/.test(mixedRaw), block).toBe(true);
+      const dataCells = decs.filter((d) => {
+        if (d.type !== 'tableCell') return false;
+        const line = block.split('\n')[2];
+        const lineStart = block.indexOf(line);
+        return d.startPos >= lineStart && d.endPos <= lineStart + line.length;
+      });
+      const mixed = dataCells.find((d) => d.replacement && !d.replacement.includes('mixed'));
+      expect(mixed, block).toBeDefined();
+      expect(mixed!.replacement).not.toMatch(/(\*\*|~~|`|_\w)/);
     }
   });
 
-  it('inline code beside text cells use inline code decorations', () => {
+  it('inline code beside text uses padded plain text without backticks', () => {
     const section = extractSection('## Inline code beside text');
-    const blocks = tableBlocks(section);
-    const beforeCode = parser.extractDecorations(blocks[0]);
-    const beforeCell = beforeCode.find((d) => d.type === 'tableCell' && d.replacement?.includes('`'));
-    expect(beforeCell).toBeUndefined();
-    expect(beforeCode.some((d) => d.type === 'code')).toBe(true);
-
-    const twoSpans = parser.extractDecorations(blocks[1]);
-    const twoCell = twoSpans.find((d) => {
-      if (d.type !== 'tableCell') return false;
-      const raw = blocks[1].slice(d.startPos, d.endPos);
-      return raw.includes('`one`');
-    });
-    expect(twoCell).toBeUndefined();
-    expect(twoSpans.filter((d) => d.type === 'code').length).toBeGreaterThanOrEqual(2);
+    for (const block of tableBlocks(section)) {
+      const decs = parser.extractDecorations(block);
+      const dataLine = block.split('\n')[2];
+      const lineStart = block.indexOf(dataLine);
+      const cell = decs.find(
+        (d) =>
+          d.type === 'tableCell' &&
+          d.startPos >= lineStart &&
+          d.endPos <= lineStart + dataLine.length &&
+          d.replacement &&
+          !d.replacement.includes('two spans') &&
+          !d.replacement.includes('code span'),
+      );
+      expect(cell, block).toBeDefined();
+      expect(cell!.replacement).not.toContain('`');
+    }
   });
 });

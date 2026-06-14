@@ -357,11 +357,11 @@ Paragraph immediately above a table (blank line separates them).
 
 **Checks**
 
-- Rendered: pipe grid, aligned columns, markers hidden. Column padding uses the widest display text per column so short cells line up with neighbors.
+- Rendered: pipe grid, aligned columns, markers hidden. Column padding uses the widest raw cell span per column so pipes line up across rows.
 - Cursor anywhere in table: **entire table** goes raw (all rows).
 - `markdownInlineEditor.tables.forceRaw` (default `false`): when `true`, tables always show as plain GFM with no grid decorations.
-- Link-only and image-only cells participate in the padded grid (link color, image icon). Whole-cell `` ~~strike~~ `` uses inline strikethrough decorations (no padded overlay).
-- Mixed inline formatting in one cell (bold + plain, link + surrounding text, multiple code spans) uses normal inline decorations; column padding is not applied to those cells.
-- Inline code beside plain text in one cell uses inline code decorations; whole-cell `` `code` `` still uses padded inline-code styling.
+- Link-only and image-only cells participate in the padded grid (link color, image icon). Whole-cell `` ~~strike~~ `` uses padded plain text with line-through styling.
+- Mixed inline formatting in one cell (bold + plain, link + surrounding text, multiple code spans) uses padded plain text; column width follows the raw source span so pipes stay aligned.
+- Inline code beside plain text in one cell uses padded plain text without backticks; whole-cell `` `code` `` still uses inline-code styling.
 - CJK, emoji, and ZWJ sequences use grapheme-aware overlay padding (one cell per grapheme in `before.contentText`) with unified column widths so pipes align across rows.
 - `custom` SVG wrapping mode: not yet implemented (see section above).

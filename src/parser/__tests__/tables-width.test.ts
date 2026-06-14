@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyCombiningStrike,
   buildTableCellReplacement,
+  COMBINING_LONG_STROKE_OVERLAY,
   detectCellStyle,
   measureOverlayWidth,
   measureTextWidth,
@@ -33,5 +35,14 @@ describe('tables width helpers', () => {
   it('does not treat multiple inline code spans as whole-cell code', () => {
     expect(detectCellStyle('`one` and `two`')).toBeUndefined();
     expect(detectCellStyle('`code`')).toEqual({ inlineCode: true });
+  });
+
+  it('applies combining strike only to display graphemes, not padding', () => {
+    const struck = applyCombiningStrike('strike');
+    expect(struck).toContain(COMBINING_LONG_STROKE_OVERLAY);
+    expect(measureOverlayWidth(struck)).toBe(measureOverlayWidth('strike'));
+    const replacement = buildTableCellReplacement(' ~~strike~~ ', struck, measureOverlayWidth(struck), 8, 'left');
+    expect(replacement.startsWith('\u00A0')).toBe(true);
+    expect(replacement.slice(0, replacement.indexOf('s'))).not.toContain(COMBINING_LONG_STROKE_OVERLAY);
   });
 });

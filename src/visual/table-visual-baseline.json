@@ -1,0 +1,10 @@
+{
+  "knownMisaligned": [
+    "CJK and emoji width #5",
+    "CJK and emoji width #6",
+    "CJK and emoji width #7",
+    "CJK and emoji width #8",
+    "Pipes and escapes inside cells #1",
+    "Pipes and escapes inside cells #3"
+  ]
+}

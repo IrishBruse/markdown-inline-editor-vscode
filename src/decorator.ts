@@ -21,7 +21,6 @@ import { MermaidHoverIndicatorDecorationType } from './decorations';
 import { isSupportedMarkdownLanguage } from './language-support';
 import { logDebug, logError, logPerformanceMetric } from './logging';
 import { applyMathDecorationsForEditor } from './decorator/math-region-application';
-import { DECORATION_DEBUG, dbgDecoration, dbgDecorationError } from './decorator/debug-decoration-trace';
 
 /**
  * Performance and caching constants.
@@ -287,9 +286,6 @@ export class Decorator {
     try {
       this.updateDecorationsInternalUnsafe();
     } catch (error) {
-      dbgDecorationError('updateDecorationsInternal FAILED', error, {
-        uri: this.activeEditor?.document.uri.toString(),
-      });
       logError('Decoration update failed', error);
     }
   }
@@ -301,41 +297,20 @@ export class Decorator {
 
     const document = this.activeEditor.document;
     const uri = document.uri.toString();
-    const cursorLine = this.activeEditor.selection.active.line;
-
-    if (DECORATION_DEBUG) {
-      dbgDecoration('update start', {
-        uri,
-        fileName: document.fileName,
-        languageId: document.languageId,
-        version: document.version,
-        lineCount: document.lineCount,
-        cursorLine,
-        selections: this.activeEditor.selections.length,
-        enabled: this.isEnabledForUri(uri),
-        isMarkdown: this.isMarkdownDocument(),
-      });
-    }
 
     // Early exit if decorations are disabled for this file
     if (!this.isEnabledForUri(uri)) {
-      dbgDecoration('update skipped: decorations disabled for file', { uri });
       logDebug('skip decoration update for disabled file', { uri });
       return;
     }
 
     // Early exit for non-markdown files
     if (!this.isMarkdownDocument()) {
-      dbgDecoration('update skipped: unsupported language', {
-        uri,
-        languageId: document.languageId,
-      });
       return;
     }
 
     // Check if we should skip decorations in diff mode
     if (this.skipDecorationsInDiffView && this.isDiffEditor()) {
-      dbgDecoration('update skipped: diff view', { uri });
       logDebug('skip decoration update in diff view', { uri });
       this.clearAllDecorations();
       return;
@@ -346,27 +321,6 @@ export class Decorator {
     const version = document.version;
     const { decorations, scopes, text, mermaidBlocks, mathRegions } = this.parseDocument(document);
     const parseDurationMs = Date.now() - cycleStart;
-
-    if (DECORATION_DEBUG) {
-      const decorationTypes = decorations.reduce<Record<string, number>>((acc, d) => {
-        acc[d.type] = (acc[d.type] ?? 0) + 1;
-        return acc;
-      }, {});
-      const scopeKinds = scopes.reduce<Record<string, number>>((acc, s) => {
-        const kind = s.kind ?? 'none';
-        acc[kind] = (acc[kind] ?? 0) + 1;
-        return acc;
-      }, {});
-      const cursorLineText = document.lineAt(cursorLine).text;
-      dbgDecoration('parse complete', {
-        decorationCount: decorations.length,
-        decorationTypes,
-        scopeCount: scopes.length,
-        scopeKinds,
-        parseMs: parseDurationMs,
-        cursorLineText,
-      });
-    }
 
     // Re-validate version before applying (race condition protection)
     if (document.version !== version) {
@@ -382,26 +336,6 @@ export class Decorator {
     const filterStart = Date.now();
     const filtered = this.filterDecorations(decorations, scopes, text);
     const filterDurationMs = Date.now() - filterStart;
-
-    if (DECORATION_DEBUG) {
-      const filteredSummary: Record<string, number> = {};
-      let filteredTotal = 0;
-      for (const [type, ranges] of filtered.entries()) {
-        filteredSummary[type] = ranges.length;
-        filteredTotal += ranges.length;
-      }
-      dbgDecoration('filter complete', {
-        filteredTotal,
-        filteredSummary,
-        filterMs: filterDurationMs,
-      });
-      if (filteredTotal === 0 && decorations.length > 0) {
-        dbgDecoration('WARNING: parser produced decorations but filter returned none', {
-          cursorLine,
-          decorationCount: decorations.length,
-        });
-      }
-    }
 
     // Apply decorations
     this.applyDecorations(filtered);
@@ -425,12 +359,6 @@ export class Decorator {
         mermaidBlocks: mermaidBlocks.length,
         mathRegions: mathRegions.length,
         filteredDecorationTypes: filtered.size,
-      });
-    }
-    if (DECORATION_DEBUG) {
-      dbgDecoration('update complete', {
-        uri,
-        totalMs: Date.now() - cycleStart,
       });
     }
   }
@@ -572,21 +500,13 @@ export class Decorator {
       return new Map();
     }
 
-    try {
-      return filterDecorationsForEditor(
-        this.activeEditor,
-        decorations,
-        scopes,
-        originalText,
-        (startPos, endPos, text) => this.createRange(startPos, endPos, text)
-      );
-    } catch (error) {
-      dbgDecorationError('filterDecorations FAILED', error, {
-        decorationCount: decorations.length,
-        scopeCount: scopes.length,
-      });
-      throw error;
-    }
+    return filterDecorationsForEditor(
+      this.activeEditor,
+      decorations,
+      scopes,
+      originalText,
+      (startPos, endPos, text) => this.createRange(startPos, endPos, text)
+    );
   }
 
   /**

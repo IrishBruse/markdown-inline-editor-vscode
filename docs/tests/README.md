@@ -27,6 +27,28 @@ Markdown files for **manual** testing of [Markdown Inline Editor](../../README.m
 | [12-edge-cases.md](12-edge-cases.md) | Nested/mixed constructs, tricky boundaries |
 | [smoke-all.md](smoke-all.md) | One-page pass over common features |
 
+## Automated overlay preview (tables)
+
+From the repo root:
+
+```bash
+npm run visual:tables
+```
+
+Regenerates reports, runs table regression tests, and fails on new pipe misalignments. Outputs:
+
+- `dist/visual/report.json` - machine-readable pass/fail summary
+- `dist/visual/05-tables.txt` - source vs rendered overlay text
+- `dist/visual/05-tables.html` - browser preview
+
+Known edge-case misalignments are listed in `src/visual/table-visual-baseline.json`.
+
+Optional Cursor hook (auto-runs after table-related edits):
+
+```bash
+npm run visual:tables:setup-hooks
+```
+
 ## Tips
 
 - Toggle decorations per file to compare raw vs rendered.

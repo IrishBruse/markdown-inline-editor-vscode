@@ -195,15 +195,14 @@ describe('MarkdownParser - Tables', () => {
   });
 
   describe('inline formatting in cells', () => {
-    it('should render whole-cell strikethrough via inline decorations', () => {
+    it('should pad whole-cell strikethrough with combining strike on display text only', () => {
       const md = '| Col |\n|-----|\n| ~~strike~~ |';
       const result = parser.extractDecorations(md);
-      const strikeCell = byType(result, 'tableCell').find((c) => {
-        const raw = md.slice(c.startPos, c.endPos);
-        return raw.includes('strike');
-      });
-      expect(strikeCell).toBeUndefined();
-      expect(byType(result, 'strikethrough').length).toBeGreaterThan(0);
+      const cell = byType(result, 'tableCell').find((c) => c.replacement?.includes('\u0336'));
+      expect(cell).toBeDefined();
+      expect(cell!.cellStyle?.textDecoration).toBeUndefined();
+      expect(cell!.replacement).not.toContain('~');
+      expect(cell!.replacement).toMatch(/^\u00A0+\S/);
     });
 
     it('should detect bold cell style', () => {
@@ -411,32 +410,30 @@ describe('MarkdownParser - Tables', () => {
   });
 
   describe('mixed formatting fallback', () => {
-    it('should render mixed formatting cells with inline decorations instead of padded tableCell', () => {
+    it('should pad mixed formatting cells with plain text and unified column width', () => {
       const md = '| A |\n|---|\n| **bold** and plain |';
       const result = parser.extractDecorations(md);
-      const cells = byType(result, 'tableCell');
-      const mixedCell = cells.find((c) => {
+      const mixedCell = byType(result, 'tableCell').find((c) => {
         const raw = md.slice(c.startPos, c.endPos);
         return raw.includes('bold');
       });
-      expect(mixedCell).toBeUndefined();
-      expect(byType(result, 'bold').length).toBeGreaterThan(0);
-      expect(byType(result, 'hide').length).toBeGreaterThan(0);
+      expect(mixedCell).toBeDefined();
+      expect(mixedCell!.replacement).toContain('bold and plain');
+      expect(mixedCell!.replacement).not.toMatch(/\*\*/);
+      expect(mixedCell!.cellStyle).toBeUndefined();
     });
 
-    it('should render link mixed with plain text via inline link decorations', () => {
+    it('should pad link mixed with plain text without link-only cell style', () => {
       const md = '| Col | Note |\n| --- | --- |\n| see [docs](https://example.com) here | mixed |';
       const result = parser.extractDecorations(md);
       const mixedCell = byType(result, 'tableCell').find((c) => {
         const raw = md.slice(c.startPos, c.endPos);
         return raw.includes('[docs]');
       });
-      expect(mixedCell).toBeUndefined();
-      const linkDec = byType(result, 'link').find((d) => {
-        const raw = md.slice(d.startPos, d.endPos);
-        return raw.includes('docs');
-      });
-      expect(linkDec).toBeDefined();
+      expect(mixedCell).toBeDefined();
+      expect(mixedCell!.replacement).toContain('see docs here');
+      expect(mixedCell!.replacement).not.toContain('[');
+      expect(mixedCell!.cellStyle?.link).toBeUndefined();
     });
   });
 });

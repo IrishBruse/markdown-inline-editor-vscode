@@ -2,7 +2,6 @@ import { ColorThemeKind, Range, ThemeColor, window, type DecorationOptions, type
 import type { DecorationRange, DecorationType } from '../parser';
 import { config } from '../config';
 import { isMarkerDecorationType } from './decoration-categories';
-import { DECORATION_DEBUG, dbgDecoration } from './debug-decoration-trace';
 
 export type ScopeEntry = {
   startPos: number;
@@ -96,44 +95,6 @@ export function filterDecorationsForEditor(
     ...collectCursorScopeRanges(cursorPositions, safeScopes),
   ]);
 
-  if (DECORATION_DEBUG) {
-    const cursorScopeKinds = safeScopes
-      .filter((scope) =>
-        cursorPositions.some((position) => {
-          if (!isValidPosition(position) || !isValidRange(scope.range)) {
-            return false;
-          }
-          return (
-            safeContains(scope.range, position) ||
-            (position.line === scope.range.start.line &&
-              position.character === scope.range.start.character) ||
-            (position.line === scope.range.end.line &&
-              position.character === scope.range.end.character)
-          );
-        }),
-      )
-      .map((scope) => scope.kind ?? 'none');
-    dbgDecoration('visibility rawRanges', {
-      rawRangeCount: rawRanges.length,
-      scopeCount: safeScopes.length,
-      cursorLines: [...activeLines],
-      cursorScopeKinds,
-    });
-  }
-
-  const debugSkip = DECORATION_DEBUG
-    ? {
-        rangeNull: 0,
-        headingActiveLine: 0,
-        hideRaw: 0,
-        hideGhost: 0,
-        hideApplied: 0,
-        markerRaw: 0,
-        markerGhost: 0,
-        cursorLineSamples: [] as Array<Record<string, unknown>>,
-      }
-    : undefined;
-
   const selectionOnlyMarkerTypes = new Set<DecorationType>([
     'blockquote',
     'listItem',
@@ -212,7 +173,6 @@ export function filterDecorationsForEditor(
   for (const decoration of decorations) {
     const range = rangeFactory(decoration.startPos, decoration.endPos, originalText);
     if (!range) {
-      debugSkip && debugSkip.rangeNull++;
       continue;
     }
     const isActiveLine = activeLines.size > 0 && activeLines.has(range.start.line);
@@ -265,7 +225,6 @@ export function filterDecorationsForEditor(
     }
 
     if (headingTypes.has(decoration.type) && isActiveLine) {
-      debugSkip && debugSkip.headingActiveLine++;
       // Show raw heading text (no heading styling) on active lines
       continue;
     }
@@ -276,16 +235,6 @@ export function filterDecorationsForEditor(
         headingMarkerEndPositions.has(decoration.endPos);
 
       if (intersectsRaw) {
-        debugSkip && debugSkip.hideRaw++;
-        if (debugSkip && isActiveLine && debugSkip.cursorLineSamples.length < 12) {
-          debugSkip.cursorLineSamples.push({
-            type: decoration.type,
-            reason: 'intersectsRaw',
-            startPos: decoration.startPos,
-            endPos: decoration.endPos,
-            snippet: originalText.slice(decoration.startPos, decoration.endPos),
-          });
-        }
         // Raw state: skip (show actual syntax)
         continue;
       }
@@ -294,16 +243,6 @@ export function filterDecorationsForEditor(
         continue;
       }
       if (isActiveLine) {
-        debugSkip && debugSkip.hideGhost++;
-        if (debugSkip && debugSkip.cursorLineSamples.length < 12) {
-          debugSkip.cursorLineSamples.push({
-            type: decoration.type,
-            reason: 'activeLineGhost',
-            startPos: decoration.startPos,
-            endPos: decoration.endPos,
-            snippet: originalText.slice(decoration.startPos, decoration.endPos),
-          });
-        }
         // Ghost state: show faint markers on active lines
         ghostFaintRanges.push(range);
         continue;
@@ -319,7 +258,6 @@ export function filterDecorationsForEditor(
         transparentRanges.push(range);
         filtered.set('transparent', transparentRanges);
       } else {
-        debugSkip && debugSkip.hideApplied++;
         ranges.push(range);
         filtered.set(decoration.type, ranges);
       }
@@ -383,12 +321,10 @@ export function filterDecorationsForEditor(
       const intersectsRaw = rangeIntersectsAny(range, rawRanges);
 
       if (intersectsRaw) {
-        debugSkip && debugSkip.markerRaw++;
         // Raw state: skip marker decorations (show actual syntax)
         continue;
       }
       if (isActiveLine) {
-        debugSkip && debugSkip.markerGhost++;
         // Ghost state: show faint markers on active lines
         ghostFaintRanges.push(range);
         continue;
@@ -408,10 +344,6 @@ export function filterDecorationsForEditor(
 
   if (selectionOverlayRanges.length > 0) {
     filtered.set('selectionOverlay', mergeRanges(selectionOverlayRanges));
-  }
-
-  if (debugSkip) {
-    dbgDecoration('visibility skip summary', debugSkip);
   }
 
   return filtered;

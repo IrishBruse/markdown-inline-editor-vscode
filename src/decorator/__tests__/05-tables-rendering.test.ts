@@ -95,7 +95,7 @@ describe('05-tables.md rendering', () => {
     expect(result.get('tableCell')?.length).toBeGreaterThan(0);
   });
 
-  it('applies inline strikethrough when cursor is outside a strike-only cell', async () => {
+  it('applies strike style on padded tableCell when cursor is outside a strike-only cell', async () => {
     const markdown = '| Col      | Note   |\n| -------- | ------ |\n| ~~gone~~ | delete |\n\nafter';
     const parser = await MarkdownParser.create();
     const { decorations, scopes } = parser.extractDecorationsWithScopes(markdown);
@@ -111,10 +111,12 @@ describe('05-tables.md rendering', () => {
       (startPos, endPos, text) => createRange(editor, startPos, endPos, text),
     );
 
-    expect(filtered.get('strikethrough')?.length).toBeGreaterThan(0);
-    const strikeOverlay = decorations.find(
-      (d) => d.type === 'tableCell' && markdown.slice(d.startPos, d.endPos).includes('~~gone~~'),
-    );
-    expect(strikeOverlay).toBeUndefined();
+    const strikeCell = filtered.get('tableCell')?.find?.((c: {
+      renderOptions?: { before?: { contentText?: string; textDecoration?: string } };
+    }) => c.renderOptions?.before?.contentText?.replace(/\u0336/g, '').includes('gone'));
+    expect(strikeCell).toBeDefined();
+    expect(strikeCell?.renderOptions?.before?.textDecoration).toBeUndefined();
+    expect(strikeCell?.renderOptions?.before?.contentText).toContain('\u0336');
+    expect(filtered.get('strikethrough')).toBeUndefined();
   });
 });

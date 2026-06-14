@@ -93,8 +93,11 @@ function isWideCodePoint(code: number): boolean {
   return false;
 }
 
+/** Combining long stroke overlay for whole-cell strike without CSS line-through on padding. */
+export const COMBINING_LONG_STROKE_OVERLAY = '\u0336';
+
 function isZeroWidthCodePoint(code: number): boolean {
-  return code === 0x200d || code === 0xfe0f;
+  return code === 0x200d || code === 0xfe0f || code === 0x336;
 }
 
 const graphemeSegmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
@@ -121,6 +124,20 @@ export function measureOverlayWidth(plain: string): number {
     width += 1;
   }
   return width;
+}
+
+/** Applies per-grapheme combining strike so padding NBSPs stay unstruck. */
+export function applyCombiningStrike(plain: string): string {
+  let result = '';
+  for (const { segment } of graphemeSegmenter.segment(plain)) {
+    const code = segment.codePointAt(0)!;
+    if (isZeroWidthCodePoint(code)) {
+      result += segment;
+      continue;
+    }
+    result += segment + COMBINING_LONG_STROKE_OVERLAY;
+  }
+  return result;
 }
 
 export function measureTextWidth(plain: string, options?: { cjkCorrection?: boolean }): number {
@@ -309,23 +326,17 @@ export type TableCellRenderContext = {
   };
   cellType: 'tableCell' | 'tableCellImage';
   cellUrl?: string;
-  /** Mixed inline cells use normal bold/italic/link decorations instead of a padded overlay. */
-  skipPaddedCell?: boolean;
 };
 
 export function resolveTableCellRenderContext(
   rawContent: string,
   astCell: TableCell | undefined,
-  options?: { cjkCorrection?: boolean },
+  _options?: { cjkCorrection?: boolean },
 ): TableCellRenderContext {
   const trimmedContent = rawContent.trim();
   const markdownCellStyle = detectCellStyle(trimmedContent);
-  const isWholeCellStrike = markdownCellStyle?.textDecoration === 'line-through';
-  const skipPaddedCell =
-    isWholeCellStrike ||
-    (!markdownCellStyle && astCell !== undefined && cellHasMixedFormatting(astCell));
-  const isLinkCell = !markdownCellStyle && !skipPaddedCell && !!astCell && isLinkOnlyCell(astCell);
-  const isImageCell = !markdownCellStyle && !skipPaddedCell && !!astCell && isImageOnlyCell(astCell);
+  const isLinkCell = !markdownCellStyle && !!astCell && isLinkOnlyCell(astCell);
+  const isImageCell = !markdownCellStyle && !!astCell && isImageOnlyCell(astCell);
 
   let displayContent: string;
   let displayWidthSource: string;
@@ -349,13 +360,18 @@ export function resolveTableCellRenderContext(
     displayWidthSource = displayContent;
   }
 
+  if (cellStyle?.textDecoration === 'line-through') {
+    displayContent = applyCombiningStrike(displayContent);
+    displayWidthSource = displayContent;
+    cellStyle = undefined;
+  }
+
   return {
     displayContent,
     displayWidth: measureOverlayWidth(displayWidthSource),
     cellStyle,
     cellType,
     cellUrl,
-    skipPaddedCell: skipPaddedCell || undefined,
   };
 }
 
