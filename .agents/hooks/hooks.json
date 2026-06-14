@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "command": ".cursor/hooks/visual-test-tables.sh",
+        "matcher": "Write|StrReplace|EditNotebook|Delete"
+      }
+    ],
+    "stop": [
+      {
+        "command": ".cursor/hooks/visual-test-tables-stop.sh"
+      }
+    ]
+  }
+}
