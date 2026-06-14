@@ -110,6 +110,19 @@ function graphemeDisplayWidth(segment: string): number {
   return isWideCodePoint(code) ? 2 : 1;
 }
 
+/** Width of text as rendered in VS Code `before.contentText` (one cell per grapheme). */
+export function measureOverlayWidth(plain: string): number {
+  let width = 0;
+  for (const { segment } of graphemeSegmenter.segment(plain)) {
+    const code = segment.codePointAt(0)!;
+    if (isZeroWidthCodePoint(code)) {
+      continue;
+    }
+    width += 1;
+  }
+  return width;
+}
+
 export function measureTextWidth(plain: string, options?: { cjkCorrection?: boolean }): number {
   let width = 0;
   let cjkCount = 0;
@@ -150,20 +163,20 @@ export function buildTableCellReplacement(
   align: 'left' | 'right' | 'center' | null,
 ): string {
   const pad = '\u00A0';
-  const contentSlot = Math.max(displayWidth, columnWidth);
+  const totalTarget = Math.max(columnWidth, displayWidth + 2);
 
   if (align === 'right') {
-    const slotPad = contentSlot - displayWidth;
-    return pad.repeat(slotPad + 1) + displayContent + pad;
+    const leadingPad = totalTarget - displayWidth - 2;
+    return pad.repeat(Math.max(0, leadingPad) + 1) + displayContent + pad;
   }
   if (align === 'center') {
-    const extraPad = contentSlot - displayWidth;
+    const extraPad = totalTarget - displayWidth - 2;
     const padLeft = Math.floor(extraPad / 2);
     const padRight = extraPad - padLeft;
     return pad.repeat(padLeft + 1) + displayContent + pad.repeat(padRight + 1);
   }
-  const padAfterContent = contentSlot - displayWidth;
-  return pad + displayContent + pad.repeat(padAfterContent + 1);
+  const padAfter = totalTarget - displayWidth - 2;
+  return pad + displayContent + pad.repeat(Math.max(0, padAfter) + 1);
 }
 
 export function detectCellStyle(
@@ -336,11 +349,9 @@ export function resolveTableCellRenderContext(
     displayWidthSource = displayContent;
   }
 
-  const measureOpts = options?.cjkCorrection ? { cjkCorrection: true } : undefined;
-
   return {
     displayContent,
-    displayWidth: measureTextWidth(displayWidthSource, measureOpts),
+    displayWidth: measureOverlayWidth(displayWidthSource),
     cellStyle,
     cellType,
     cellUrl,
@@ -351,7 +362,7 @@ export function resolveTableCellRenderContext(
 export function computeColumnWidths(
   tableNode: Table,
   source: string,
-  options?: { cjkCorrection?: boolean },
+  _options?: { cjkCorrection?: boolean },
 ): number[] {
   let numCols = 0;
 
@@ -376,9 +387,8 @@ export function computeColumnWidths(
 
     for (let i = 0; i < pipes.length - 1 && i < numCols; i++) {
       const rawContent = source.substring(pipes[i] + 1, pipes[i + 1]);
-      const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
-      const ctx = resolveTableCellRenderContext(rawContent, astCell, options);
-      if (ctx.displayWidth > widths[i]) widths[i] = ctx.displayWidth;
+      const overlay = measureOverlayWidth(rawContent);
+      if (overlay > widths[i]) widths[i] = overlay;
     }
   }
 
@@ -388,11 +398,8 @@ export function computeColumnWidths(
 export function buildSeparatorDashReplacement(
   segContent: string,
   columnWidth?: number,
-  options?: { cjkCorrection?: boolean },
+  _options?: { cjkCorrection?: boolean },
 ): string {
-  const measureOpts = options?.cjkCorrection ? { cjkCorrection: true } : undefined;
-  const targetWidth = columnWidth !== undefined
-    ? columnWidth + 2
-    : measureTextWidth(segContent, measureOpts);
+  const targetWidth = columnWidth ?? measureOverlayWidth(segContent);
   return '-'.repeat(Math.max(1, targetWidth));
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { MarkdownParser } from '../../parser';
-import { measureTextWidth } from '../tables';
+import { measureOverlayWidth } from '../tables';
 
 function assertUnifiedColumnWidths(md: string, decs: { startPos: number; endPos: number; replacement?: string }[]): void {
   const widthsByColumn = new Map<number, number>();
@@ -20,7 +20,7 @@ function assertUnifiedColumnWidths(md: string, decs: { startPos: number; endPos:
       }
     }
     expect(col).toBeGreaterThanOrEqual(0);
-    const width = measureTextWidth(cell.replacement!);
+    const width = measureOverlayWidth(cell.replacement!);
     const prev = widthsByColumn.get(col);
     if (prev === undefined) {
       widthsByColumn.set(col, width);
@@ -49,7 +49,7 @@ describe('05-tables.md basic grid alignment', () => {
       }
       for (let i = 0; i < pipes.length - 1; i++) {
         if (cell.startPos >= pipes[i] + 1 && cell.endPos <= pipes[i + 1]) {
-          cellWidths.set(i, measureTextWidth(cell.replacement!));
+          cellWidths.set(i, measureOverlayWidth(cell.replacement!));
         }
       }
     }

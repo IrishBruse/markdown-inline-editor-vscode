@@ -1,5 +1,5 @@
 import { MarkdownParser, DecorationRange } from '../../parser';
-import { measureTextWidth } from '../tables';
+import { measureOverlayWidth } from '../tables';
 
 describe('MarkdownParser - Tables', () => {
   let parser: MarkdownParser;
@@ -100,7 +100,7 @@ describe('MarkdownParser - Tables', () => {
       const headerContentIndex = shortHeader!.replacement!.indexOf('Short');
       const dataContentIndex = shortData!.replacement!.indexOf('x');
       expect(headerContentIndex).toBe(dataContentIndex);
-      expect(measureTextWidth(shortHeader!.replacement!)).toBe(measureTextWidth(shortData!.replacement!));
+      expect(measureOverlayWidth(shortHeader!.replacement!)).toBe(measureOverlayWidth(shortData!.replacement!));
     });
 
     it('aligns center column content to unified width', () => {
@@ -160,7 +160,7 @@ describe('MarkdownParser - Tables', () => {
             }
           }
           expect(col).toBeGreaterThanOrEqual(0);
-          const width = measureTextWidth(cell.replacement!);
+          const width = measureOverlayWidth(cell.replacement!);
           const prev = widthsByColumn.get(col);
           if (prev === undefined) {
             widthsByColumn.set(col, width);
@@ -228,7 +228,7 @@ describe('MarkdownParser - Tables', () => {
       const md = '| Header   |\n|----------|\n| **bold** |';
       const result = parser.extractDecorations(md);
       const cells = byType(result, 'tableCell');
-      const widths = cells.map((c) => measureTextWidth(c.replacement!));
+      const widths = cells.map((c) => measureOverlayWidth(c.replacement!));
       expect(new Set(widths).size).toBe(1);
     });
   });
@@ -279,8 +279,8 @@ describe('MarkdownParser - Tables', () => {
       expect(imageCell).toHaveLength(1);
       expect(imageCell[0].url).toBe('https://example.com/x.png');
       expect(imageCell[0].replacement).toContain('\u2B14');
-      const colWidths = byType(result, 'tableCell').map((c) => measureTextWidth(c.replacement!));
-      expect(measureTextWidth(imageCell[0].replacement!)).toBe(colWidths[0]);
+      const colWidths = byType(result, 'tableCell').map((c) => measureOverlayWidth(c.replacement!));
+      expect(measureOverlayWidth(imageCell[0].replacement!)).toBe(colWidths[0]);
     });
   });
 
@@ -292,7 +292,7 @@ describe('MarkdownParser - Tables', () => {
       expect(linkCell).toBeDefined();
       expect(linkCell!.cellStyle?.link).toBe(true);
       expect(linkCell!.url).toBe('https://example.com');
-      expect(measureTextWidth(linkCell!.replacement!)).toBeGreaterThanOrEqual(5);
+      expect(measureOverlayWidth(linkCell!.replacement!)).toBeGreaterThanOrEqual(5);
     });
 
     it('should pad bare URL cells with link cellStyle', () => {
@@ -304,7 +304,7 @@ describe('MarkdownParser - Tables', () => {
       expect(urlCell!.replacement).toContain('https://example.com');
       const col0Widths = byType(result, 'tableCell')
         .filter((c) => c.startPos < md.indexOf('|', md.indexOf('|') + 1))
-        .map((c) => measureTextWidth(c.replacement!));
+        .map((c) => measureOverlayWidth(c.replacement!));
       expect(new Set(col0Widths).size).toBe(1);
     });
   });
@@ -344,7 +344,7 @@ describe('MarkdownParser - Tables', () => {
             break;
           }
         }
-        const width = measureTextWidth(cell.replacement!);
+        const width = measureOverlayWidth(cell.replacement!);
         const prev = widthsByColumn.get(col);
         if (prev === undefined) {
           widthsByColumn.set(col, width);
@@ -380,7 +380,7 @@ describe('MarkdownParser - Tables', () => {
             break;
           }
         }
-        const width = measureTextWidth(cell.replacement!);
+        const width = measureOverlayWidth(cell.replacement!);
         const prev = widthsByColumn.get(col);
         if (prev === undefined) {
           widthsByColumn.set(col, width);

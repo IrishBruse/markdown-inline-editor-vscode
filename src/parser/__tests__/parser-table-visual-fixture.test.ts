@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { MarkdownParser } from '../../parser';
 import {
   findPipePositions,
-  measureTextWidth,
+  measureOverlayWidth,
   normalizePipePositions,
   trimLineEnd,
 } from '../tables';
@@ -87,7 +87,7 @@ describe('05-tables.md visual fixture alignment', () => {
             break;
           }
         }
-        const width = measureTextWidth(cell.replacement!);
+        const width = measureOverlayWidth(cell.replacement!);
         const prev = widthsByColumn.get(col);
         if (prev === undefined) {
           widthsByColumn.set(col, width);
@@ -117,7 +117,14 @@ describe('05-tables.md visual fixture alignment', () => {
     expect(linkCell).toBeDefined();
     expect(linkCell!.replacement).toContain('Docs');
     expect(linkCell!.url).toContain('README.md');
-    const widths = decs.filter((d) => d.type === 'tableCell').map((c) => measureTextWidth(c.replacement!));
+    const col0Cells = decs.filter((d) => {
+      if (d.type !== 'tableCell') return false;
+      const lineStart = block.lastIndexOf('\n', d.startPos - 1) + 1;
+      const firstPipe = block.indexOf('|', lineStart);
+      const secondPipe = block.indexOf('|', firstPipe + 1);
+      return d.startPos > firstPipe && d.endPos <= secondPipe;
+    });
+    const widths = col0Cells.map((c) => measureOverlayWidth(c.replacement!));
     expect(new Set(widths).size).toBe(1);
   });
 
@@ -134,7 +141,7 @@ describe('05-tables.md visual fixture alignment', () => {
       const secondPipe = block.indexOf('|', firstPipe + 1);
       return d.startPos > firstPipe && d.endPos <= secondPipe;
     });
-    const widths = col0Cells.map((c) => measureTextWidth(c.replacement!));
+    const widths = col0Cells.map((c) => measureOverlayWidth(c.replacement!));
     expect(new Set(widths).size).toBe(1);
   });
 
@@ -157,7 +164,7 @@ describe('05-tables.md visual fixture alignment', () => {
             break;
           }
         }
-        const width = measureTextWidth(cell.replacement!);
+        const width = measureOverlayWidth(cell.replacement!);
         const prev = widthsByColumn.get(col);
         if (prev === undefined) {
           widthsByColumn.set(col, width);
