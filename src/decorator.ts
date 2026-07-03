@@ -1,4 +1,4 @@
-import { DecorationOptions, Range, TextEditor, TextDocument, TextDocumentChangeEvent, window, TextEditorSelectionChangeKind, Memento } from 'vscode';
+import { DecorationOptions, Range, TextEditor, TextDocument, TextDocumentChangeEvent, TextEditorSelectionChangeKind, Memento } from 'vscode';
 import { DecorationRange, DecorationType, MermaidBlock, MathRegion, ScopeRange } from './parser';
 import { config } from './config';
 import { isDiffLikeUri } from './diff-context';
@@ -219,6 +219,13 @@ export class Decorator {
     const uri = this.activeEditor?.document.uri.toString();
     if (!uri) { return true; }
     return this.isEnabledForUri(uri);
+  }
+
+  /**
+   * Exposed for integration tests — whether the active editor is a diff/merge document.
+   */
+  isActiveEditorDiffView(): boolean {
+    return this.isDiffEditor();
   }
 
   /**
