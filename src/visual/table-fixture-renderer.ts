@@ -99,6 +99,7 @@ function buildOverlayLines(
   decorations: DecorationRange[],
   tableBlocks: TableBlock[],
   responsiveRanges: { startPos: number; endPos: number }[],
+  viewportColumns: number,
 ): OverlayBuildResult {
   const lineStarts = lineStartOffsets(text);
   const sourceLines = text.split('\n');
@@ -122,7 +123,7 @@ function buildOverlayLines(
 
     const responsiveRow = responsiveRows.get(lineIdx);
     if (responsiveRow) {
-      lines.push(layoutResponsiveTableRow(responsiveRow.table, responsiveRow.rowIdx));
+      lines.push(layoutResponsiveTableRow(responsiveRow.table, responsiveRow.rowIdx, viewportColumns));
       sourceLineForOverlayLine.push(lineIdx);
       continue;
     }
@@ -248,7 +249,7 @@ function buildSections(
 
 export async function renderTablesOverlay(
   md: string,
-  _viewportColumns?: number,
+  viewportColumns: number = 120,
 ): Promise<TablesOverlayResult> {
   const parser = await MarkdownParser.create();
   const { decorations, tableBlocks } = parser.extractDecorationsWithScopes(md);
@@ -259,6 +260,7 @@ export async function renderTablesOverlay(
     tableDecorations,
     tableBlocks,
     responsiveRanges,
+    viewportColumns,
   );
   const sections = buildSections(
     md,

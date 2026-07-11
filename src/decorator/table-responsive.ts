@@ -1,7 +1,10 @@
 import { createHash } from 'crypto';
 import { ColorThemeKind, type Range, type TextEditor, window, workspace } from 'vscode';
 import type { TableBlock } from '../parser/types';
-import { estimateEditorContentWidthPx } from '../mermaid/editor-width';
+import {
+  estimateEditorContentWidthPx,
+  layoutColumnsFromContentWidthPx,
+} from '../mermaid/editor-width';
 import { svgToDataUri } from '../mermaid/svg-processor';
 import {
   layoutResponsiveTableRow,
@@ -77,13 +80,6 @@ export function applyResponsiveTableDecorations(
   const lineHeight = getEditorLineHeight(fontSize);
   const contentWidthPx = estimateEditorContentWidthPx(editor);
   const theme = getResponsiveTableTheme(isDarkTheme);
-  const svgOptions = {
-    fontFamily,
-    fontSize,
-    lineHeight,
-    contentWidthPx,
-    theme,
-  };
 
   const rangesByKey = new Map<string, Range[]>();
   const dataUrisByKey = new Map<string, string>();
@@ -104,12 +100,24 @@ export function applyResponsiveTableDecorations(
         continue;
       }
 
-      const line = layoutResponsiveTableRow(table, rowIdx);
+      const layoutWidth = layoutColumnsFromContentWidthPx(
+        contentWidthPx,
+        fontSize,
+        range.start.character,
+      );
+      const line = layoutResponsiveTableRow(table, rowIdx, layoutWidth);
       if (!line) {
         continue;
       }
 
-      const svg = renderResponsiveRowSvg(line, svgOptions);
+      const svg = renderResponsiveRowSvg(line, {
+        fontFamily,
+        fontSize,
+        lineHeight,
+        contentWidthPx,
+        layoutWidth,
+        theme,
+      });
       const key = rowCacheKey(table, rowIdx, line, contentWidthPx, isDarkTheme, fontFamily);
       dataUrisByKey.set(key, svgToDataUri(svg));
       const ranges = rangesByKey.get(key) ?? [];

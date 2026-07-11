@@ -48,6 +48,22 @@ describe('responsive-svg', () => {
     expect(lines[2]).toContain('B:');
   });
 
+  it('shows more content before ellipsis at wider layout width', async () => {
+    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
+    const md = [
+      '| Section Header | Detailed Placeholder Content |',
+      '| -------------- | ---------------------------- |',
+      `| Row 1          | ${longText} |`,
+    ].join('\n');
+    const parser = await MarkdownParser.create();
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const narrow = layoutResponsiveTableRow(tableBlocks[0], 2, 80);
+    const wide = layoutResponsiveTableRow(tableBlocks[0], 2, 200);
+
+    expect(narrow).toContain('...');
+    expect(wide.length).toBeGreaterThan(narrow.length);
+  });
+
   it('renders per-row svg at one line height', async () => {
     const md = '| A | B |\n|---|---|\n| x | y |';
     const parser = await MarkdownParser.create();

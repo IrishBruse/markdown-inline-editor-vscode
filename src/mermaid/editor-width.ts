@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { config } from '../config';
 
-const CHAR_WIDTH_RATIO = 0.6;
+export const CHAR_WIDTH_RATIO = 0.6;
 const DEFAULT_COLUMNS = 120;
 const MIN_MAX_WIDTH_PX = 320;
 const MAX_MAX_WIDTH_PX = 4096;
@@ -23,6 +23,17 @@ export function estimateEditorContentWidthPx(editor: vscode.TextEditor): number 
 /** Buckets width for render cache keys so minor viewport changes do not churn the cache. */
 export function bucketWidthForCache(widthPx: number): number {
   return Math.round(widthPx / WIDTH_BUCKET_PX) * WIDTH_BUCKET_PX;
+}
+
+/** Character columns available for inline preview text from the given start column. */
+export function layoutColumnsFromContentWidthPx(
+  contentWidthPx: number,
+  fontSize: number,
+  startColumn: number = 0,
+): number {
+  const charWidth = Math.max(1, fontSize * CHAR_WIDTH_RATIO);
+  const totalColumns = Math.floor(contentWidthPx / charWidth);
+  return Math.max(1, totalColumns - startColumn);
 }
 
 export function estimateVisibleColumns(editor: vscode.TextEditor): number {
