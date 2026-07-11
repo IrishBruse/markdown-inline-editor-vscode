@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing! This guide covers the workflow and conventions specific to this project.
 
-**Quick Start:** See the [README](README.md#getting-started-developers) for setup instructions.
+**Quick Start:** See the [README](README.md#development) for setup instructions.
 
 ## Development Workflow
 
@@ -60,7 +60,7 @@ extractDecorations(text: string): DecorationRange[] {
 
 ### 4. Testing
 
-**All changes must include tests.** The project uses Vitest for testing with **770+ passing tests** across 60+ test files.
+**All changes must include tests.** The project uses Vitest for testing with **800+ passing tests** across 60+ test files.
 
 **Run tests:**
 ```bash
@@ -123,19 +123,12 @@ Before committing, ensure your code passes linting and type checking:
 ```bash
 npm run lint           # Check code style
 npm run compile        # Type check and compile
-npm run lint:docs      # Validate feature file outlines (if editing docs/features/)
+npm run validate       # lint + test + crlf + build (before PR)
 ```
 
 **Fix linting issues:**
 - Most issues can be auto-fixed with your editor's ESLint integration
 - Follow the project's ESLint configuration
-
-**Feature File Validation:**
-If you're editing files in `docs/features/`, you must ensure they follow the correct outline structure:
-- YAML frontmatter with `status`, `updateDate`, and `priority`
-- H1 title
-- Required H2 sections in order: Overview, Implementation, Acceptance Criteria, Notes, Examples
-- Run `npm run lint:docs` to validate all feature files
 
 ### 6. Commit Your Changes
 
@@ -207,7 +200,7 @@ This extension prioritizes performance, especially for:
    - ✅ All tests pass (`npm test`)
    - ✅ Code compiles without errors (`npm run compile`)
    - ✅ Linting passes (`npm run lint`)
-   - ✅ Feature file validation passes (`npm run lint:docs`) - if editing `docs/features/`
+   - ✅ Validation passes (`npm run validate`)
    - ✅ No performance regressions
    - ✅ Documentation updated if needed
    - ✅ Follows Conventional Commits
@@ -241,8 +234,8 @@ This extension prioritizes performance, especially for:
 
 4. **Update documentation:**
    - Update README.md if it's a user-facing feature
-   - Update AGENTS.md if it affects architecture
-   - If editing feature files in `docs/features/`, ensure they pass validation (`npm run lint:docs`)
+   - Update AGENTS.md if it affects architecture or agent workflow
+   - Add or update fixtures in `docs/tests/` for manual visual checks when UI changes (see [docs/tests/README.md](docs/tests/README.md))
 
 ### Debugging
 
@@ -260,74 +253,12 @@ This extension prioritizes performance, especially for:
 When contributing, please update relevant documentation:
 
 - **README.md** - User-facing features, installation, usage
-- **AGENTS.md** - Architecture and development guidelines
+- **AGENTS.md** - Architecture and agent guidelines (if structure or workflow changes)
 - **CONTRIBUTING.md** - This file (if workflow changes)
-- **FAQ.md** - Common issues and solutions (if user-facing changes)
 - **Code comments** - JSDoc for public APIs
+- **docs/tests/** - Markdown fixtures for manual visual QA ([README](docs/tests/README.md))
 
-### Feature File Structure
-
-Files in `docs/features/` must follow a specific outline structure. The validation script (`npm run lint:docs`) enforces:
-
-1. **YAML Frontmatter** (required):
-   ```yaml
-   ---
-   status: ✅ Implemented
-   updateDate: 2024-12-19
-   priority: Core Feature
-   ---
-   ```
-
-2. **Required Sections** (in order):
-   - `# Title` (H1 - exactly one)
-   - `## Overview` (H2)
-   - `## Implementation` (H2)
-   - `## Acceptance Criteria` (H2 - with Gherkin scenarios)
-   - `## Notes` (H2)
-   - `## Examples` (H2)
-
-3. **Validation:**
-   - Run `npm run lint:docs` before committing changes to feature files
-   - The script validates frontmatter fields, heading structure, and section order
-   - Headings inside code blocks are automatically ignored
-
-**Example structure:**
-```markdown
----
-status: ✅ Implemented
-updateDate: 2024-12-19
-priority: Core Feature
----
-
-# Feature Name
-
-## Overview
-
-Brief description of the feature.
-
-## Implementation
-
-How the feature works.
-
-## Acceptance Criteria
-
-### Basic Functionality
-```gherkin
-Feature: Feature name
-  Scenario: Basic case
-    When I type <markdown>
-    Then the expected behavior occurs
-```
-
-## Notes
-
-- Additional context
-- Requirements
-
-## Examples
-
-- `markdown` → rendered output
-```
+This fork does not maintain `docs/FAQ.md` or `docs/features/`; put troubleshooting notes in README or issue templates instead.
 
 ## Getting Help
 
@@ -350,4 +281,4 @@ Contributors will be credited in:
 - GitHub contributors page
 - Project documentation (where appropriate)
 
-Thank you for contributing to Markdown Inline Editor! 🎉
+Thank you for contributing to Markdown Inline Editor!

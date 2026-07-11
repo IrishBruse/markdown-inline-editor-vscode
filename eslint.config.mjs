@@ -90,5 +90,19 @@ export default defineConfig(
       '@typescript-eslint/no-require-imports': 'off',
       'no-console': 'off',
     },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+      },
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+    },
+    rules: {
+      'no-console': 'off',
+    },
   }
 );
