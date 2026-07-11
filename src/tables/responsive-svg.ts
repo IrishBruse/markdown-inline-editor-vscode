@@ -1,8 +1,9 @@
-import type { TableBlock, TableBlockCell, TableBlockRow } from '../parser/types';
+import type { TableBlock } from '../parser/types';
 import { measureTextWidth } from '../parser/tables';
 import {
+  computeViewportColumnWidths,
   RESPONSIVE_LAYOUT_WIDTH,
-  buildResponsiveSeparatorLine,
+  wrapCellLines,
 } from './responsive-layout';
 
 export interface ResponsiveTableTheme {
@@ -20,85 +21,118 @@ export interface ResponsiveTableSvgOptions {
   theme: ResponsiveTableTheme;
 }
 
-const ELLIPSIS = '...';
+const NBSP = '\u00A0';
+const PIPE = '\u2502';
+const MIN_FALLBACK_COL_WIDTH = 3;
 
-export function truncateToWidth(
-  text: string,
-  maxWidth: number,
-  suffix: string = ELLIPSIS,
+function padCell(
+  content: string,
+  colWidth: number,
+  align: null | 'left' | 'center' | 'right',
 ): string {
-  if (maxWidth <= 0) {
-    return suffix;
+  const displayWidth = measureTextWidth(content);
+  const totalPad = Math.max(0, colWidth - displayWidth);
+  if (align === 'right') {
+    return NBSP.repeat(totalPad + 1) + content + NBSP;
   }
-  if (measureTextWidth(text) <= maxWidth) {
-    return text;
+  if (align === 'center') {
+    const padLeft = Math.floor(totalPad / 2);
+    const padRight = totalPad - padLeft;
+    return NBSP.repeat(padLeft + 1) + content + NBSP.repeat(padRight + 1);
   }
-
-  const suffixWidth = measureTextWidth(suffix);
-  let low = 0;
-  let high = text.length;
-
-  while (low < high) {
-    const mid = Math.ceil((low + high) / 2);
-    if (measureTextWidth(text.slice(0, mid)) + suffixWidth <= maxWidth) {
-      low = mid;
-    } else {
-      high = mid - 1;
-    }
-  }
-
-  return low > 0 ? text.slice(0, low) + suffix : suffix;
+  return NBSP + content + NBSP.repeat(totalPad + 1);
 }
 
-export function buildCompactHeaderLine(
-  headers: string[],
-  layoutWidth: number = RESPONSIVE_LAYOUT_WIDTH,
-): string {
-  return truncateToWidth(headers.join(' | '), layoutWidth);
-}
-
-export function buildCompactSeparatorLine(
-  layoutWidth: number = RESPONSIVE_LAYOUT_WIDTH,
-): string {
-  return buildResponsiveSeparatorLine(layoutWidth);
-}
-
-export function buildCompactDataRowLine(
-  cells: TableBlockCell[],
-  headers: string[],
-  layoutWidth: number = RESPONSIVE_LAYOUT_WIDTH,
+export function formatGridLine(
+  cells: string[],
+  colWidths: number[],
+  colAligns: (null | 'left' | 'center' | 'right')[],
 ): string {
   const parts = cells.map((cell, index) => {
-    const header = index < headers.length ? headers[index] : `Column ${index + 1}`;
-    return `${header}: ${cell.displayText}`;
+    const colWidth = index < colWidths.length ? colWidths[index] : MIN_FALLBACK_COL_WIDTH;
+    const align = index < colAligns.length ? colAligns[index] : null;
+    return padCell(cell, colWidth, align);
   });
-  return truncateToWidth(parts.join(' | '), layoutWidth);
+  return PIPE + parts.join(PIPE) + PIPE;
 }
 
+export function formatSeparatorGridLine(colWidths: number[]): string {
+  const segments = colWidths.map((width) => '-'.repeat(width + 2));
+  return PIPE + segments.join(PIPE) + PIPE;
+}
+
+function buildWrappedRowLines(
+  cellTexts: string[],
+  colWidths: number[],
+  colAligns: (null | 'left' | 'center' | 'right')[],
+): string[] {
+  const wrappedCells = cellTexts.map((text, index) => {
+    const colWidth = index < colWidths.length ? colWidths[index] : MIN_FALLBACK_COL_WIDTH;
+    return wrapCellLines(text, colWidth);
+  });
+  const numLines = Math.max(1, ...wrappedCells.map((lines) => lines.length));
+  const lines: string[] = [];
+
+  for (let lineIdx = 0; lineIdx < numLines; lineIdx++) {
+    const cells = wrappedCells.map((cellLines) =>
+      lineIdx < cellLines.length ? cellLines[lineIdx] : '',
+    );
+    lines.push(formatGridLine(cells, colWidths, colAligns));
+  }
+
+  return lines;
+}
+
+export function layoutWrappedGridRow(
+  table: TableBlock,
+  rowIdx: number,
+  viewportColumns: number = RESPONSIVE_LAYOUT_WIDTH,
+): string[] {
+  const colWidths = computeViewportColumnWidths(table.colWidths, viewportColumns);
+
+  if (rowIdx === 0) {
+    return buildWrappedRowLines(table.headers, colWidths, table.colAligns);
+  }
+  if (rowIdx === 1) {
+    return [formatSeparatorGridLine(colWidths)];
+  }
+
+  const dataRow = table.rows[rowIdx - 2];
+  if (!dataRow) {
+    return [];
+  }
+
+  return buildWrappedRowLines(
+    dataRow.cells.map((cell) => cell.displayText),
+    colWidths,
+    table.colAligns,
+  );
+}
+
+export function layoutWrappedGridTable(
+  table: TableBlock,
+  viewportColumns: number = RESPONSIVE_LAYOUT_WIDTH,
+): string[][] {
+  return table.rowRanges.map((_, rowIdx) =>
+    layoutWrappedGridRow(table, rowIdx, viewportColumns),
+  );
+}
+
+/** @deprecated Use layoutWrappedGridRow and join lines when a single string is needed. */
 export function layoutResponsiveTableRow(
   table: TableBlock,
   rowIdx: number,
-  layoutWidth: number = RESPONSIVE_LAYOUT_WIDTH,
+  viewportColumns: number = RESPONSIVE_LAYOUT_WIDTH,
 ): string {
-  if (rowIdx === 0) {
-    return buildCompactHeaderLine(table.headers, layoutWidth);
-  }
-  if (rowIdx === 1) {
-    return buildCompactSeparatorLine(layoutWidth);
-  }
-
-  const dataRow: TableBlockRow | undefined = table.rows[rowIdx - 2];
-  if (!dataRow) {
-    return '';
-  }
-  return buildCompactDataRowLine(dataRow.cells, table.headers, layoutWidth);
+  return layoutWrappedGridRow(table, rowIdx, viewportColumns).join('\n');
 }
 
+/** @deprecated Use layoutWrappedGridTable. */
 export function layoutResponsiveTable(
   table: TableBlock,
-  layoutWidth: number = RESPONSIVE_LAYOUT_WIDTH,
+  viewportColumns: number = RESPONSIVE_LAYOUT_WIDTH,
 ): string[] {
-  return table.rowRanges.map((_, rowIdx) => layoutResponsiveTableRow(table, rowIdx, layoutWidth));
+  return layoutWrappedGridTable(table, viewportColumns).map((lines) => lines.join('\n'));
 }
 
 function escapeSvgText(value: string): string {
@@ -109,37 +143,65 @@ function escapeSvgText(value: string): string {
     .replaceAll('"', '&quot;');
 }
 
-function isSeparatorLine(line: string): boolean {
-  return /^-+$/.test(line.trim());
+function isGridSeparatorLine(line: string): boolean {
+  return line.includes(PIPE) && /-/.test(line) && !/[A-Za-z0-9]/.test(line.replaceAll(PIPE, '').replaceAll('-', '').replaceAll(NBSP, '').replaceAll(' ', ''));
 }
 
 export function renderResponsiveRowSvg(
-  line: string,
+  lines: string[],
   options: ResponsiveTableSvgOptions,
 ): string {
-  const layoutWidth = options.layoutWidth ?? RESPONSIVE_LAYOUT_WIDTH;
-  const widthPx = Math.max(
-    options.contentWidthPx,
-    Math.round(layoutWidth * options.fontSize * 0.6) + 16,
-  );
-  const heightPx = options.lineHeight;
+  if (lines.length === 0) {
+    lines = [''];
+  }
 
+  const widthPx = options.contentWidthPx;
+  const heightPx = lines.length * options.lineHeight;
   const textElements: string[] = [];
-  if (isSeparatorLine(line)) {
-    const yLine = Math.round(options.lineHeight * 0.65);
+
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const y = Math.round((index + 1) * options.lineHeight * 0.8);
+    const fill = isGridSeparatorLine(line)
+      ? options.theme.mutedForeground
+      : options.theme.foreground;
     textElements.push(
-      `<line x1="0" y1="${yLine}" x2="${widthPx}" y2="${yLine}" stroke="${options.theme.separator}" stroke-width="1"/>`,
-    );
-  } else {
-    textElements.push(
-      `<text x="0" y="${Math.round(options.lineHeight * 0.8)}" fill="${options.theme.foreground}" font-family="${escapeSvgText(options.fontFamily)}" font-size="${options.fontSize}px">${escapeSvgText(line)}</text>`,
+      `<text x="0" y="${y}" fill="${fill}" font-family="${escapeSvgText(options.fontFamily)}" font-size="${options.fontSize}px">${escapeSvgText(line)}</text>`,
     );
   }
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}" viewBox="0 0 ${widthPx} ${heightPx}">`,
-    `<rect width="100%" height="100%" fill="transparent"/>`,
+    '<rect width="100%" height="100%" fill="transparent"/>',
     ...textElements,
     '</svg>',
   ].join('');
+}
+
+export function getClipLineCount(
+  sourceLine: number,
+  wrapCount: number,
+  activeLines: Set<number>,
+): number {
+  for (let offset = 1; offset < wrapCount; offset++) {
+    if (activeLines.has(sourceLine + offset)) {
+      return offset;
+    }
+  }
+  return wrapCount;
+}
+
+export function buildCoveredLines(
+  sourceLines: number[],
+  wrapCounts: number[],
+): Set<number> {
+  const coveredLines = new Set<number>();
+  for (let index = 0; index < sourceLines.length; index++) {
+    const wrapCount = wrapCounts[index];
+    const sourceLine = sourceLines[index];
+    for (let offset = 1; offset < wrapCount; offset++) {
+      coveredLines.add(sourceLine + offset);
+    }
+  }
+  return coveredLines;
 }

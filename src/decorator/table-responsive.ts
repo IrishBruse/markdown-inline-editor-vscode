@@ -7,7 +7,9 @@ import {
 } from '../mermaid/editor-width';
 import { svgToDataUri } from '../mermaid/svg-processor';
 import {
-  layoutResponsiveTableRow,
+  buildCoveredLines,
+  getClipLineCount,
+  layoutWrappedGridRow,
   renderResponsiveRowSvg,
 } from '../tables/responsive-svg';
 import { shouldUseResponsiveLayout } from '../tables/responsive-layout';
@@ -33,7 +35,7 @@ function getEditorLineHeight(fontSize: number): number {
 function rowCacheKey(
   table: TableBlock,
   rowIdx: number,
-  line: string,
+  lines: string[],
   contentWidthPx: number,
   isDarkTheme: boolean,
   fontFamily: string,
@@ -42,7 +44,7 @@ function rowCacheKey(
     table.startPos,
     table.endPos,
     rowIdx,
-    line,
+    lines.join('\n'),
     contentWidthPx,
     isDarkTheme,
     fontFamily,
@@ -89,6 +91,14 @@ export function applyResponsiveTableDecorations(
       continue;
     }
 
+    const layoutWidth = layoutColumnsFromContentWidthPx(contentWidthPx, fontSize, 0);
+    const rowLayouts: {
+      rowIdx: number;
+      range: Range;
+      lines: string[];
+      sourceLine: number;
+    }[] = [];
+
     for (let rowIdx = 0; rowIdx < table.rowRanges.length; rowIdx++) {
       const rowRange = table.rowRanges[rowIdx];
       const range = createRange(editor, rowRange.startPos, rowRange.endPos, normalizedText);
@@ -96,21 +106,43 @@ export function applyResponsiveTableDecorations(
         continue;
       }
 
-      if (activeLines.has(range.start.line)) {
+      const lines = layoutWrappedGridRow(table, rowIdx, layoutWidth);
+      if (lines.length === 0) {
         continue;
       }
 
-      const layoutWidth = layoutColumnsFromContentWidthPx(
-        contentWidthPx,
-        fontSize,
-        range.start.character,
+      rowLayouts.push({
+        rowIdx,
+        range,
+        lines,
+        sourceLine: range.start.line,
+      });
+    }
+
+    const coveredLines = buildCoveredLines(
+      rowLayouts.map((layout) => layout.sourceLine),
+      rowLayouts.map((layout) => layout.lines.length),
+    );
+
+    for (const layout of rowLayouts) {
+      if (activeLines.has(layout.sourceLine)) {
+        continue;
+      }
+      if (coveredLines.has(layout.sourceLine)) {
+        continue;
+      }
+
+      const clipCount = getClipLineCount(
+        layout.sourceLine,
+        layout.lines.length,
+        activeLines,
       );
-      const line = layoutResponsiveTableRow(table, rowIdx, layoutWidth);
-      if (!line) {
+      const lines = layout.lines.slice(0, clipCount);
+      if (lines.length === 0) {
         continue;
       }
 
-      const svg = renderResponsiveRowSvg(line, {
+      const svg = renderResponsiveRowSvg(lines, {
         fontFamily,
         fontSize,
         lineHeight,
@@ -118,10 +150,17 @@ export function applyResponsiveTableDecorations(
         layoutWidth,
         theme,
       });
-      const key = rowCacheKey(table, rowIdx, line, contentWidthPx, isDarkTheme, fontFamily);
+      const key = rowCacheKey(
+        table,
+        layout.rowIdx,
+        lines,
+        contentWidthPx,
+        isDarkTheme,
+        fontFamily,
+      );
       dataUrisByKey.set(key, svgToDataUri(svg));
       const ranges = rangesByKey.get(key) ?? [];
-      ranges.push(range);
+      ranges.push(layout.range);
       rangesByKey.set(key, ranges);
     }
   }

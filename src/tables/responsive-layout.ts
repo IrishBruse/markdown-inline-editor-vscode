@@ -25,6 +25,84 @@ export function shouldUseResponsiveLayout(colWidths: number[]): boolean {
   return colWidths.some((width) => width > RESPONSIVE_COLUMN_THRESHOLD);
 }
 
+const MIN_COLUMN_WIDTH = 3;
+
+/** Cap column widths so the pipe grid fits within the viewport; long cells wrap vertically. */
+export function computeViewportColumnWidths(
+  colWidths: number[],
+  viewportColumns: number,
+): number[] {
+  if (colWidths.length === 0) {
+    return [];
+  }
+
+  const numCols = colWidths.length;
+  const contentBudget = viewportColumns - (numCols + 1) - numCols * 2;
+  if (contentBudget <= numCols * MIN_COLUMN_WIDTH) {
+    return colWidths.map(() => MIN_COLUMN_WIDTH);
+  }
+
+  const result = colWidths.map((width) => Math.max(MIN_COLUMN_WIDTH, width));
+  if (estimateGridWidth(result) <= viewportColumns) {
+    return result;
+  }
+
+  const shortCols: number[] = [];
+  const longCols: number[] = [];
+  for (let i = 0; i < numCols; i++) {
+    if (colWidths[i] <= RESPONSIVE_COLUMN_THRESHOLD) {
+      shortCols.push(i);
+    } else {
+      longCols.push(i);
+    }
+  }
+
+  let used = 0;
+  for (const i of shortCols) {
+    const width = Math.max(MIN_COLUMN_WIDTH, colWidths[i]);
+    result[i] = width;
+    used += width;
+  }
+
+  const remaining = contentBudget - used;
+  if (longCols.length === 0 || remaining < longCols.length * MIN_COLUMN_WIDTH) {
+    const scale = contentBudget / result.reduce((sum, width) => sum + width, 0);
+    for (let i = 0; i < numCols; i++) {
+      result[i] = Math.max(MIN_COLUMN_WIDTH, Math.floor(result[i] * scale));
+    }
+  } else {
+    const longNaturalSum = longCols.reduce(
+      (sum, i) => sum + Math.max(MIN_COLUMN_WIDTH, colWidths[i]),
+      0,
+    );
+    for (const i of longCols) {
+      const natural = Math.max(MIN_COLUMN_WIDTH, colWidths[i]);
+      result[i] = Math.max(
+        MIN_COLUMN_WIDTH,
+        Math.floor((natural / longNaturalSum) * remaining),
+      );
+    }
+  }
+
+  while (estimateGridWidth(result) > viewportColumns) {
+    const maxWidth = Math.max(...result);
+    const maxIdx = result.indexOf(maxWidth);
+    if (result[maxIdx] <= MIN_COLUMN_WIDTH) {
+      break;
+    }
+    result[maxIdx]--;
+  }
+
+  return result;
+}
+
+export function wrapCellLines(
+  text: string,
+  colWidth: number,
+): string[] {
+  return wrapTextToWidth(text, colWidth);
+}
+
 export function wrapTextToWidth(
   text: string,
   maxWidth: number,

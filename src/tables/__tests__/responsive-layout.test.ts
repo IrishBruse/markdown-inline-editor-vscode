@@ -7,6 +7,8 @@ import {
   RESPONSIVE_LAYOUT_WIDTH,
   shouldUseResponsiveLayout,
   wrapTextToWidth,
+  computeViewportColumnWidths,
+  wrapCellLines,
 } from '../responsive-layout';
 import type { TableBlockCell } from '../../parser/types';
 
@@ -58,6 +60,30 @@ describe('responsive-layout', () => {
 
     it('returns original text when maxWidth is non-positive', () => {
       expect(wrapTextToWidth('hello world', 0, charWidth)).toEqual(['hello world']);
+    });
+  });
+
+  describe('wrapCellLines', () => {
+    it('delegates to wrapTextToWidth', () => {
+      expect(wrapCellLines('hello world', 5)).toEqual(['hello', 'world']);
+    });
+  });
+
+  describe('computeViewportColumnWidths', () => {
+    it('keeps short columns at natural width and caps long columns', () => {
+      const capped = computeViewportColumnWidths([14, 120], 80);
+      expect(capped[0]).toBe(14);
+      expect(capped[1]).toBeLessThan(120);
+    });
+
+    it('returns minimum widths when viewport is very narrow', () => {
+      const capped = computeViewportColumnWidths([14, 120], 10);
+      expect(capped).toEqual([3, 3]);
+    });
+
+    it('preserves natural widths when the grid already fits', () => {
+      const capped = computeViewportColumnWidths([5, 8], 80);
+      expect(capped).toEqual([5, 8]);
     });
   });
 

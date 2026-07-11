@@ -1,20 +1,22 @@
 import { MarkdownParser } from '../../parser';
 import {
-  buildCompactDataRowLine,
-  buildCompactHeaderLine,
-  layoutResponsiveTable,
-  layoutResponsiveTableRow,
+  formatGridLine,
+  formatSeparatorGridLine,
+  layoutWrappedGridRow,
+  layoutWrappedGridTable,
   renderResponsiveRowSvg,
-  truncateToWidth,
 } from '../responsive-svg';
+import { computeViewportColumnWidths } from '../responsive-layout';
 
 describe('responsive-svg', () => {
-  it('truncates long text with ellipsis', () => {
-    const text = 'abcdefghijklmnopqrstuvwxyz';
-    expect(truncateToWidth(text, 10)).toBe('abcdefg...');
+  it('formats pipe grid lines with box drawing pipes', () => {
+    const line = formatGridLine(['A', 'B'], [3, 3], [null, null]);
+    expect(line).toContain('\u2502');
+    expect(line).toContain('A');
+    expect(line).toContain('B');
   });
 
-  it('includes every column on one compact data row line', async () => {
+  it('wraps long cell content across multiple grid lines', async () => {
     const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
     const md = [
       '| Section Header | Detailed Placeholder Content |',
@@ -23,16 +25,17 @@ describe('responsive-svg', () => {
     ].join('\n');
     const parser = await MarkdownParser.create();
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
-    const dataLine = layoutResponsiveTableRow(tableBlocks[0], 2);
+    const dataLines = layoutWrappedGridRow(tableBlocks[0], 2, 80);
 
-    expect(dataLine).toContain('Section Header: Row 1');
-    expect(dataLine).toContain('Detailed Placeholder Content:');
-    expect(dataLine).toContain('...');
-    expect(dataLine.split('\n')).toHaveLength(1);
+    expect(dataLines.length).toBeGreaterThan(1);
+    expect(dataLines[0]).toContain('Row 1');
+    expect(dataLines[0]).toContain('\u2502');
+    expect(dataLines.some((line) => line.includes('Lorem'))).toBe(true);
+    expect(dataLines.slice(1).every((line) => line.startsWith('\u2502'))).toBe(true);
   });
 
-  it('renders one compact preview line per source row', async () => {
-    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
+  it('uses empty padded cells on continuation lines', async () => {
+    const longText = 'one two three four five six seven eight nine ten';
     const md = [
       '| A | B |',
       '|---|---|',
@@ -40,15 +43,14 @@ describe('responsive-svg', () => {
     ].join('\n');
     const parser = await MarkdownParser.create();
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
-    const lines = layoutResponsiveTable(tableBlocks[0]);
+    const dataLines = layoutWrappedGridRow(tableBlocks[0], 2, 20);
 
-    expect(lines).toHaveLength(3);
-    expect(buildCompactHeaderLine(['A', 'B'])).toBe('A | B');
-    expect(lines[2]).toContain('A: x');
-    expect(lines[2]).toContain('B:');
+    expect(dataLines.length).toBeGreaterThan(1);
+    expect(dataLines[0]).toContain('x');
+    expect(dataLines[1]).toMatch(/^\u2502[\s\u00A0]+\u2502/);
   });
 
-  it('shows more content before ellipsis at wider layout width', async () => {
+  it('shows more wrap lines at wider viewport width', async () => {
     const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
     const md = [
       '| Section Header | Detailed Placeholder Content |',
@@ -57,19 +59,24 @@ describe('responsive-svg', () => {
     ].join('\n');
     const parser = await MarkdownParser.create();
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
-    const narrow = layoutResponsiveTableRow(tableBlocks[0], 2, 80);
-    const wide = layoutResponsiveTableRow(tableBlocks[0], 2, 200);
+    const narrow = layoutWrappedGridRow(tableBlocks[0], 2, 60);
+    const wide = layoutWrappedGridRow(tableBlocks[0], 2, 120);
 
-    expect(narrow).toContain('...');
-    expect(wide.length).toBeGreaterThan(narrow.length);
+    expect(wide.length).toBeLessThan(narrow.length);
   });
 
-  it('renders per-row svg at one line height', async () => {
+  it('renders separator row with dash cells', () => {
+    const line = formatSeparatorGridLine([5, 10]);
+    expect(line).toContain('\u2502');
+    expect(line).toContain('-------');
+  });
+
+  it('renders multi-line svg at dynamic height', async () => {
     const md = '| A | B |\n|---|---|\n| x | y |';
     const parser = await MarkdownParser.create();
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
-    const line = layoutResponsiveTableRow(tableBlocks[0], 2);
-    const svg = renderResponsiveRowSvg(line, {
+    const lines = layoutWrappedGridRow(tableBlocks[0], 2, 80);
+    const svg = renderResponsiveRowSvg(lines, {
       fontFamily: 'monospace',
       fontSize: 14,
       lineHeight: 20,
@@ -81,8 +88,25 @@ describe('responsive-svg', () => {
       },
     });
 
-    expect(svg).toContain('height="20"');
-    expect(svg).toContain('A: x');
-    expect(svg).toContain('B: y');
+    expect(svg).toContain(`height="${20 * lines.length}"`);
+    expect(svg).toContain('x');
+    expect(svg).toContain('y');
+  });
+
+  it('caps column widths to the viewport budget', () => {
+    const capped = computeViewportColumnWidths([14, 120], 80);
+    expect(capped[0]).toBe(14);
+    expect(computeViewportColumnWidths([14, 120], 80).reduce((sum, width) => sum + width, 0)).toBeLessThanOrEqual(80);
+  });
+
+  it('lays out every source row in wrapped grid mode', async () => {
+    const md = '| A | B |\n|---|---|\n| x | y |';
+    const parser = await MarkdownParser.create();
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const rows = layoutWrappedGridTable(tableBlocks[0], 80);
+
+    expect(rows).toHaveLength(3);
+    expect(rows[0][0]).toContain('A');
+    expect(rows[2][0]).toContain('x');
   });
 });

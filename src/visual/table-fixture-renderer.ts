@@ -1,7 +1,7 @@
 import { MarkdownParser } from '../parser';
 import type { DecorationRange, TableBlock } from '../parser/types';
 import { getResponsiveTableOffsetRanges } from '../decorator/table-responsive';
-import { layoutResponsiveTableRow } from '../tables/responsive-svg';
+import { layoutWrappedGridRow } from '../tables/responsive-svg';
 
 const GRID_TABLE_TYPES = new Set([
   'tablePipe',
@@ -123,7 +123,7 @@ function buildOverlayLines(
 
     const responsiveRow = responsiveRows.get(lineIdx);
     if (responsiveRow) {
-      lines.push(layoutResponsiveTableRow(responsiveRow.table, responsiveRow.rowIdx, viewportColumns));
+      lines.push(layoutWrappedGridRow(responsiveRow.table, responsiveRow.rowIdx, viewportColumns).join('\n'));
       sourceLineForOverlayLine.push(lineIdx);
       continue;
     }

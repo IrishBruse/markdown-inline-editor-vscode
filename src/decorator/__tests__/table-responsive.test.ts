@@ -1,7 +1,11 @@
 import { MarkdownParser } from '../../parser';
 import type { TableBlock } from '../../parser/types';
 import { getResponsiveTableOffsetRanges } from '../table-responsive';
-import { layoutResponsiveTableRow } from '../../tables/responsive-svg';
+import {
+  buildCoveredLines,
+  getClipLineCount,
+  layoutWrappedGridRow,
+} from '../../tables/responsive-svg';
 
 describe('table-responsive decorations', () => {
   let parser: MarkdownParser;
@@ -29,13 +33,26 @@ describe('table-responsive decorations', () => {
     return parser.extractDecorationsWithScopes(md).tableBlocks;
   }
 
-  it('layoutResponsiveTableRow includes both columns on one line', () => {
+  it('layoutWrappedGridRow renders both columns in a pipe grid', () => {
     const tableBlocks = parseLongCellTable();
-    const line = layoutResponsiveTableRow(tableBlocks[0], 2);
+    const lines = layoutWrappedGridRow(tableBlocks[0], 2, 80);
 
-    expect(line).toContain('Section Header: Row 1');
-    expect(line).toContain('Detailed Placeholder Content:');
-    expect(line).toContain('...');
+    expect(lines[0]).toContain('Row 1');
+    expect(lines.some((line) => line.includes('Lorem'))).toBe(true);
+    expect(lines.every((line) => line.includes('\u2502'))).toBe(true);
+  });
+
+  it('buildCoveredLines marks continuation source lines as covered', () => {
+    const covered = buildCoveredLines([10, 12], [3, 1]);
+    expect(covered.has(11)).toBe(true);
+    expect(covered.has(12)).toBe(true);
+    expect(covered.has(13)).toBe(false);
+  });
+
+  it('getClipLineCount shortens wrap span before an active line', () => {
+    const activeLines = new Set([12]);
+    expect(getClipLineCount(10, 4, activeLines)).toBe(2);
+    expect(getClipLineCount(10, 4, new Set())).toBe(4);
   });
 
   it('getResponsiveTableOffsetRanges returns table spans for long-cell tables', () => {
