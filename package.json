@@ -96,6 +96,12 @@
           "description": "Opacity for ghost faint decorations",
           "markdownDescription": "Opacity of syntax markers when cursor is on a line (0.0-1.0)."
         },
+        "markdownInlineEditor.decorations.ghostLinks.collapse": {
+          "type": "boolean",
+          "default": false,
+          "description": "Collapse ghost-state link syntax to zero width",
+          "markdownDescription": "When enabled, link URL syntax on the active line is fully hidden (zero width) instead of shown faintly. Only the link under the cursor expands to raw markdown."
+        },
         "markdownInlineEditor.decorations.frontmatterDelimiterOpacity": {
           "type": "number",
           "default": 0.3,
@@ -141,6 +147,14 @@
           "default": false,
           "description": "Always show tables as raw markdown",
           "markdownDescription": "When enabled, GFM tables are always shown as plain source markdown (pipes, padding, and cell text). When disabled (default), tables render as an aligned inline grid until you move the cursor inside them."
+        },
+        "markdownInlineEditor.mermaid.maxWidthColumns": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 500,
+          "description": "Maximum Mermaid diagram width in columns",
+          "markdownDescription": "Maximum width for scaling Mermaid diagrams, in monospace columns. `0` (default) estimates width from the visible editor viewport."
         },
         "markdownInlineEditor.orderedLists.autoNumber": {
           "type": "boolean",

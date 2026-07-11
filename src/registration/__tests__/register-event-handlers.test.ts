@@ -5,6 +5,8 @@ import { registerEventHandlers } from '../register-event-handlers';
 describe('registerEventHandlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vscode.window.onDidChangeTextEditorVisibleRanges = vi.fn(() => ({ dispose: vi.fn() })) as any;
+    vscode.window.onDidChangeWindowState = vi.fn(() => ({ dispose: vi.fn() })) as any;
   });
 
   it('registers editor, workspace, and theme listeners', () => {
@@ -20,6 +22,7 @@ describe('registerEventHandlers', () => {
       recreateCodeBlockLanguageDecorationType: vi.fn(),
       recreateColorDependentTypes: vi.fn(),
       clearMathDecorationCache: vi.fn(),
+      clearMermaidDecorationCache: vi.fn(),
     };
     const linkClickHandler = {
       setEnabled: vi.fn(),
@@ -27,7 +30,7 @@ describe('registerEventHandlers', () => {
 
     const disposables = registerEventHandlers(decorator as any, linkClickHandler as any);
 
-    expect(disposables).toHaveLength(6);
+    expect(disposables).toHaveLength(8);
   });
 
   it('routes editor and workspace events to the decorator', () => {
@@ -80,6 +83,7 @@ describe('registerEventHandlers', () => {
       recreateCodeBlockLanguageDecorationType: vi.fn(),
       recreateColorDependentTypes: vi.fn(),
       clearMathDecorationCache: vi.fn(),
+      clearMermaidDecorationCache: vi.fn(),
     };
 
     registerEventHandlers(decorator as any, { setEnabled: vi.fn() } as any);
@@ -129,6 +133,7 @@ describe('registerEventHandlers', () => {
       recreateCodeBlockLanguageDecorationType: vi.fn(),
       recreateColorDependentTypes: vi.fn(),
       clearMathDecorationCache: vi.fn(),
+      clearMermaidDecorationCache: vi.fn(),
     };
     const linkClickHandler = {
       setEnabled: vi.fn(),

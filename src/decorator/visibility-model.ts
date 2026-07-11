@@ -53,12 +53,17 @@ function safeContains(range: Range, position: Position): boolean {
   }
 }
 
+export type VisibilityFilterOptions = {
+  ghostLinksCollapse?: boolean;
+};
+
 export function filterDecorationsForEditor(
   editor: TextEditor,
   decorations: DecorationRange[],
   scopes: ScopeEntry[],
   originalText: string,
-  rangeFactory: RangeFactory
+  rangeFactory: RangeFactory,
+  options: VisibilityFilterOptions = {},
 ): Map<DecorationType, FilteredDecoration[]> {
   const selectedRanges: Range[] = [];
   const cursorPositions: Position[] = [];
@@ -159,6 +164,8 @@ export function filterDecorationsForEditor(
   const filtered = new Map<DecorationType, FilteredDecoration[]>();
   const ghostFaintRanges: Range[] = [];
   const selectionOverlayRanges: Range[] = [];
+  const linkScopes = scopes.filter((scope) => scope.kind === 'link');
+  const ghostLinksCollapse = options.ghostLinksCollapse === true;
 
   const selectionOrCursorOverlaps = (range: Range): boolean => {
     const selectionOverlaps = selectedRanges.some((selection) => {
@@ -243,6 +250,15 @@ export function filterDecorationsForEditor(
         continue;
       }
       if (isActiveLine) {
+        if (
+          ghostLinksCollapse &&
+          rangeOverlapsLinkScope(decoration.startPos, decoration.endPos, linkScopes)
+        ) {
+          const ranges = filtered.get(decoration.type) || [];
+          ranges.push(range);
+          filtered.set(decoration.type, ranges);
+          continue;
+        }
         // Ghost state: show faint markers on active lines
         ghostFaintRanges.push(range);
         continue;
@@ -521,4 +537,12 @@ function rangeIntersectsAny(range: Range, ranges: Range[]): boolean {
     const intersection = safeIntersection(range, candidate);
     return intersection !== undefined;
   });
+}
+
+function rangeOverlapsLinkScope(
+  startPos: number,
+  endPos: number,
+  linkScopes: ScopeEntry[],
+): boolean {
+  return linkScopes.some((scope) => startPos < scope.endPos && endPos > scope.startPos);
 }

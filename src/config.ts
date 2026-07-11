@@ -66,6 +66,9 @@ export const config = {
     ghostFaintOpacity(): number {
       return getSetting('decorations.ghostFaintOpacity', 0.3);
     },
+    ghostLinksCollapse(): boolean {
+      return getSetting('decorations.ghostLinks.collapse', false);
+    },
     frontmatterDelimiterOpacity(): number {
       return getSetting('decorations.frontmatterDelimiterOpacity', 0.3);
     },
@@ -87,6 +90,12 @@ export const config = {
     /** When true, tables always show as raw GFM source with no grid decorations. */
     forceRaw(): boolean {
       return getSetting('tables.forceRaw', false);
+    },
+  },
+  mermaid: {
+    /** Override max diagram width in columns; 0 uses auto viewport estimate. */
+    maxWidthColumns(): number {
+      return getSetting('mermaid.maxWidthColumns', 0);
     },
   },
   orderedLists: {
