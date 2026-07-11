@@ -316,7 +316,6 @@ GFM treats every unescaped `|` on a table line as a column boundary. The header 
 
 ## Custom mode: long cell wrapping
 
-_Not yet implemented._ The `custom` SVG overlay mode described below is planned but not available in the current build. Tables use the default inline grid renderer.
 
 | Section Header | Detailed Placeholder Content                                                                                                                                                                                                                                                                                                                                                                   |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -330,8 +329,6 @@ _Not yet implemented._ The `custom` SVG overlay mode described below is planned 
 | Row 8          | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident. |
 | Row 9          | Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.                                                                                            |
 | Row 10         | Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur. At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.                |
-
-Expected with `custom` (future): the table renders as a bordered grid with wrapped cells (like Markdown preview). Source GFM is hidden while the overlay is shown. Click inside the table to edit raw markdown (same as `selection-reveal`).
 
 ## Tables near other blocks
 
