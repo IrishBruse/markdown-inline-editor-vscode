@@ -64,10 +64,10 @@ export function assertAlignedPipes(rendered: string): boolean {
 }
 
 function findRenderedPipeColumns(line: string): number[] {
-  const trimmed = trimLineEnd(line, 0, line.length);
-  const visualAtIndex: number[] = new Array(trimmed.length).fill(-1);
+  const trimmedEnd = trimLineEnd(line, 0, line.length);
+  const visualAtIndex: number[] = new Array(trimmedEnd).fill(-1);
   let visualPos = 0;
-  for (let i = 0; i < trimmed.length; ) {
+  for (let i = 0; i < trimmedEnd; ) {
     visualAtIndex[i] = visualPos;
     if (line[i] === '|' || line[i] === '\u2502') {
       i++;
@@ -88,7 +88,7 @@ function findRenderedPipeColumns(line: string): number[] {
   }
 
   const columns: number[] = [];
-  for (let i = 0; i < trimmed.length; i++) {
+  for (let i = 0; i < trimmedEnd; i++) {
     if (line[i] === '|' || line[i] === '\u2502') {
       columns.push(visualAtIndex[i]);
     }

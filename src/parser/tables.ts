@@ -341,7 +341,7 @@ export function resolveTableCellRenderContext(
   let displayContent: string;
   let displayWidthSource: string;
   let cellType: 'tableCell' | 'tableCellImage' = 'tableCell';
-  let cellStyle = markdownCellStyle;
+  let cellStyle: TableCellRenderContext['cellStyle'] = markdownCellStyle;
   let cellUrl: string | undefined;
 
   if (isImageCell && astCell) {
