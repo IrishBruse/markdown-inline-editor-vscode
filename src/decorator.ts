@@ -14,7 +14,8 @@ import { FileDecorationStateStore } from './decorator/file-decoration-state';
 import { MermaidUpdateCoordinator } from './decorator/mermaid-update-coordinator';
 import { DecorationTypeRegistry } from './decorator/decoration-type-registry';
 import { filterDecorationsForEditor, ScopeEntry } from './decorator/visibility-model';
-import { buildResponsiveTableDecorations, getResponsiveTableOffsetRanges } from './decorator/table-responsive';
+import { applyResponsiveTableDecorations, getResponsiveTableOffsetRanges } from './decorator/table-responsive';
+import { ResponsiveTableDecorations } from './decorator/responsive-table-decorations';
 import { handleCheckboxClick } from './decorator/checkbox-toggle';
 import { MermaidDiagramDecorations } from './decorator/mermaid-diagram-decorations';
 import { DecoratorUpdateScheduler } from './decorator/update-scheduler';
@@ -67,6 +68,7 @@ export class Decorator {
 
   private decorationTypes: DecorationTypeRegistry;
   private mermaidDecorations = new MermaidDiagramDecorations();
+  private responsiveTableDecorations = new ResponsiveTableDecorations();
   private readonly mermaidCoordinator = new MermaidUpdateCoordinator(
     this.mermaidDecorations,
     PERFORMANCE_CONSTANTS.MERMAID_MAX_CONCURRENCY
@@ -293,6 +295,7 @@ export class Decorator {
     // Also clear ghost faint decoration (not in decorationTypeMap)
     this.activeEditor.setDecorations(this.decorationTypes.getGhostFaintDecorationType(), []);
     this.mermaidDecorations.clear(this.activeEditor);
+    this.responsiveTableDecorations.clear(this.activeEditor);
     this.mathDecorations.clear(this.activeEditor);
     this.activeEditor.setDecorations(this.mermaidHoverIndicatorDecorationType, []);
   }
@@ -314,6 +317,23 @@ export class Decorator {
     const filterDurationMs = Date.now() - cycleStart;
 
     this.applyDecorations(filtered);
+
+    if (!this.activeEditor) {
+      return;
+    }
+
+    const activeTableOffsets = this.getActiveTableOffsetRanges(scopes);
+    if (config.tables.forceRaw()) {
+      this.responsiveTableDecorations.clear(this.activeEditor);
+    } else {
+      applyResponsiveTableDecorations(
+        this.activeEditor,
+        tableBlocks,
+        text,
+        activeTableOffsets,
+        this.responsiveTableDecorations,
+      );
+    }
 
     const intersectsAsyncBlocks = this.selectionIntersectsAsyncBlocks(
       mermaidBlocks,
@@ -360,6 +380,24 @@ export class Decorator {
     const filterDurationMs = Date.now() - cycleStart;
 
     this.applyDecorations(filtered, true);
+
+    if (!this.activeEditor) {
+      return;
+    }
+
+    const activeTableOffsets = this.getActiveTableOffsetRanges(scopes);
+    if (config.tables.forceRaw()) {
+      this.responsiveTableDecorations.clear(this.activeEditor);
+    } else {
+      applyResponsiveTableDecorations(
+        this.activeEditor,
+        tableBlocks,
+        text,
+        activeTableOffsets,
+        this.responsiveTableDecorations,
+      );
+    }
+
     if (config.math.enabled() && mathRegions.length > 0) {
       this.applyMathDecorations(mathRegions, text);
     } else if (this.activeEditor) {
@@ -625,13 +663,10 @@ export class Decorator {
 
     const editor = this.activeEditor;
     const activeTableOffsets = this.getActiveTableOffsetRanges(scopes);
-    const responsiveDecorations = config.tables.forceRaw()
-      ? []
-      : buildResponsiveTableDecorations(tableBlocks, activeTableOffsets);
     const responsiveTableOffsetRanges = config.tables.forceRaw()
       ? []
       : getResponsiveTableOffsetRanges(tableBlocks, activeTableOffsets);
-    const allDecorations = [...decorations, ...responsiveDecorations];
+    const allDecorations = decorations;
 
     return filterDecorationsForEditor(
       editor,

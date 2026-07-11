@@ -369,5 +369,5 @@ Paragraph immediately above a table (blank line separates them).
 - Mixed inline formatting in one cell (bold + plain, link + surrounding text, multiple code spans) uses padded plain text; column width follows the raw source span so pipes stay aligned.
 - Inline code beside plain text in one cell uses padded plain text without backticks; whole-cell `` `code` `` still uses inline-code styling.
 - CJK, emoji, and ZWJ sequences use grapheme-aware overlay padding (one cell per grapheme in `before.contentText`) with unified column widths so pipes align across rows.
-- Responsive wrapping: when any column exceeds 80 characters of display width, the table switches to a stacked layout (header line, full-width separator, then `Header: value` blocks per row). Long values wrap at 80 columns inside each block. Cursor inside the table still reveals raw GFM.
+- Responsive wrapping: when any column exceeds 80 characters of display width, the table switches to an SVG-backed stacked layout (header line, separator, then `Header: value` blocks per row with wrapped text). Cursor inside the table still reveals raw GFM.
 - Three-column wide grid section: compact pipe alignment at wide viewports (`npm run visual:tables` checks viewport 200).

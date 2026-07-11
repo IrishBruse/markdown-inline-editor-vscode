@@ -1,5 +1,6 @@
 import { MarkdownParser, DecorationRange } from '../../parser';
-import { buildResponsiveTableDecorations } from '../../decorator/table-responsive';
+import { getResponsiveTableOffsetRanges } from '../../decorator/table-responsive';
+import { layoutResponsiveTable } from '../../tables/responsive-svg';
 
 vi.mock('../../config', () => ({
   config: {
@@ -281,7 +282,7 @@ describe('MarkdownParser - Tables', () => {
       expect(result.tableBlocks).toHaveLength(0);
     });
 
-    it('should support responsive row decorations when any column exceeds 80 characters', () => {
+    it('should support responsive layout when any column exceeds 80 characters', () => {
       const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
       const wideMd = [
         '| Section Header | Detailed Placeholder Content |',
@@ -289,10 +290,12 @@ describe('MarkdownParser - Tables', () => {
         `| Row 1          | ${longText} |`,
       ].join('\n');
       const { tableBlocks } = parser.extractDecorationsWithScopes(wideMd);
-      const responsive = buildResponsiveTableDecorations(tableBlocks, []);
+      const ranges = getResponsiveTableOffsetRanges(tableBlocks, []);
+      const lines = layoutResponsiveTable(tableBlocks[0]);
 
-      expect(responsive.length).toBeGreaterThan(0);
-      expect(responsive.every((d) => d.type === 'tableResponsiveRow')).toBe(true);
+      expect(ranges).toHaveLength(1);
+      expect(lines.some((line) => line.includes('Detailed Placeholder Content:'))).toBe(true);
+      expect(lines.some((line) => line.includes('Lorem ipsum'))).toBe(true);
     });
   });
 });

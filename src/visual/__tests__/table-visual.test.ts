@@ -200,7 +200,9 @@ describe('table visual fixture', () => {
 
     expect(longCellSection).toBeDefined();
     expect(longCellSection!.mode).toBe('responsive');
-    expect(longCellSection!.overlayLines.join('\n')).toContain('Section Header:');
+    const overlay = longCellSection!.overlayLines.join('\n');
+    expect(overlay).toContain('Section Header:');
+    expect(overlay).toContain('Detailed Placeholder Content:');
   });
 
   it('keeps the long-cell table responsive at viewport 200', () => {

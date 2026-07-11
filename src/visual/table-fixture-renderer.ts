@@ -1,16 +1,15 @@
 import { MarkdownParser } from '../parser';
 import type { DecorationRange, TableBlock } from '../parser/types';
-import {
-  buildResponsiveTableDecorations,
-  getResponsiveTableOffsetRanges,
-} from '../decorator/table-responsive';
+import { getResponsiveTableOffsetRanges } from '../decorator/table-responsive';
+import { layoutResponsiveTable } from '../tables/responsive-svg';
+
 const GRID_TABLE_TYPES = new Set([
   'tablePipe',
   'tableSeparatorPipe',
   'tableSeparatorDash',
   'tableCell',
 ]);
-const TABLE_OVERLAY_TYPES = new Set([...GRID_TABLE_TYPES, 'tableResponsiveRow']);
+const TABLE_OVERLAY_TYPES = new Set([...GRID_TABLE_TYPES]);
 const PIPE_CHARS = new Set(['|', '\u2502', '\u251c', '\u2524', '\u253c']);
 
 export interface TableRenderSection {
@@ -95,31 +94,43 @@ interface OverlayBuildResult {
   sourceLineForOverlayLine: number[];
 }
 
-function buildOverlayLines(text: string, decorations: DecorationRange[]): OverlayBuildResult {
+function buildOverlayLines(
+  text: string,
+  decorations: DecorationRange[],
+  tableBlocks: TableBlock[],
+  responsiveRanges: { startPos: number; endPos: number }[],
+): OverlayBuildResult {
   const lineStarts = lineStartOffsets(text);
   const sourceLines = text.split('\n');
   const lines: string[] = [];
   const sourceLineForOverlayLine: number[] = [];
+  const responsiveTables = new Map<number, TableBlock>();
+  for (const table of tableBlocks) {
+    if (responsiveRanges.some((range) => range.startPos === table.startPos && range.endPos === table.endPos)) {
+      responsiveTables.set(offsetToLine(table.startPos, lineStarts), table);
+    }
+  }
 
   for (let lineIdx = 0; lineIdx < sourceLines.length; lineIdx++) {
     const lineStart = lineStarts[lineIdx] ?? 0;
     const lineEnd =
       lineIdx + 1 < lineStarts.length ? lineStarts[lineIdx + 1] - 1 : text.length;
 
+    const responsiveTable = responsiveTables.get(lineIdx);
+    if (responsiveTable) {
+      const layoutLines = layoutResponsiveTable(responsiveTable);
+      for (const layoutLine of layoutLines) {
+        lines.push(layoutLine);
+        sourceLineForOverlayLine.push(lineIdx);
+      }
+      const endLine = offsetToLine(Math.max(responsiveTable.startPos, responsiveTable.endPos - 1), lineStarts);
+      lineIdx = endLine;
+      continue;
+    }
+
     const lineDecorations = decorations
       .filter((decoration) => decoration.startPos >= lineStart && decoration.startPos <= lineEnd)
       .sort((a, b) => a.startPos - b.startPos);
-
-    const responsiveRow = lineDecorations.find(
-      (decoration) => decoration.type === 'tableResponsiveRow',
-    );
-    if (responsiveRow?.replacement) {
-      for (const rowLine of responsiveRow.replacement.split('\n')) {
-        lines.push(rowLine);
-        sourceLineForOverlayLine.push(lineIdx);
-      }
-      continue;
-    }
 
     let overlay = '';
     let pos = lineStart;
@@ -242,15 +253,13 @@ export async function renderTablesOverlay(
 ): Promise<TablesOverlayResult> {
   const parser = await MarkdownParser.create();
   const { decorations, tableBlocks } = parser.extractDecorationsWithScopes(md);
-  const responsiveDecorations = buildResponsiveTableDecorations(tableBlocks, []);
   const responsiveRanges = getResponsiveTableOffsetRanges(tableBlocks, []);
-  const tableDecorations = filterTableDecorations(
-    [...decorations, ...responsiveDecorations],
-    responsiveRanges,
-  );
+  const tableDecorations = filterTableDecorations(decorations, responsiveRanges);
   const { lines: overlayLines, sourceLineForOverlayLine } = buildOverlayLines(
     md,
     tableDecorations,
+    tableBlocks,
+    responsiveRanges,
   );
   const sections = buildSections(
     md,

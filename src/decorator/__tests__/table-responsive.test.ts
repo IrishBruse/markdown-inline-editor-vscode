@@ -1,9 +1,7 @@
 import { MarkdownParser } from '../../parser';
 import type { TableBlock } from '../../parser/types';
-import {
-  buildResponsiveTableDecorations,
-  getResponsiveTableOffsetRanges,
-} from '../table-responsive';
+import { getResponsiveTableOffsetRanges } from '../table-responsive';
+import { layoutResponsiveTable } from '../../tables/responsive-svg';
 
 describe('table-responsive decorations', () => {
   let parser: MarkdownParser;
@@ -31,30 +29,13 @@ describe('table-responsive decorations', () => {
     return parser.extractDecorationsWithScopes(md).tableBlocks;
   }
 
-  it('buildResponsiveTableDecorations emits tableResponsiveRow for long-cell tables', () => {
+  it('layoutResponsiveTable includes every column for long-cell tables', () => {
     const tableBlocks = parseLongCellTable();
-    const decorations = buildResponsiveTableDecorations(tableBlocks, []);
+    const lines = layoutResponsiveTable(tableBlocks[0]);
 
-    expect(decorations.length).toBeGreaterThan(0);
-    expect(decorations.every((d) => d.type === 'tableResponsiveRow')).toBe(true);
-    expect(decorations[0].replacement).toBeDefined();
-    expect(decorations.some((d) => d.replacement?.includes('Section Header:'))).toBe(true);
-  });
-
-  it('skips responsive decorations for compact tables', () => {
-    const tableBlocks = parseCompactTable();
-    const decorations = buildResponsiveTableDecorations(tableBlocks, []);
-
-    expect(decorations).toHaveLength(0);
-  });
-
-  it('skips responsive decorations for active tables', () => {
-    const tableBlocks = parseLongCellTable();
-    const table = tableBlocks[0];
-    const activeTableOffsets = [{ startPos: table.startPos, endPos: table.endPos }];
-
-    const decorations = buildResponsiveTableDecorations(tableBlocks, activeTableOffsets);
-    expect(decorations).toHaveLength(0);
+    expect(lines.some((line) => line.includes('Section Header: Row 1'))).toBe(true);
+    expect(lines.some((line) => line.includes('Detailed Placeholder Content:'))).toBe(true);
+    expect(lines.some((line) => line.includes('Lorem ipsum'))).toBe(true);
   });
 
   it('getResponsiveTableOffsetRanges returns table spans for long-cell tables', () => {
@@ -66,6 +47,13 @@ describe('table-responsive decorations', () => {
       startPos: tableBlocks[0].startPos,
       endPos: tableBlocks[0].endPos,
     });
+  });
+
+  it('getResponsiveTableOffsetRanges returns empty for compact tables', () => {
+    const tableBlocks = parseCompactTable();
+    const ranges = getResponsiveTableOffsetRanges(tableBlocks, []);
+
+    expect(ranges).toHaveLength(0);
   });
 
   it('getResponsiveTableOffsetRanges returns empty for active tables', () => {
