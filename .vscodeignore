@@ -37,6 +37,8 @@ assets/icon.png~
 # Build artifacts
 branding/**
 node_modules/**
+!node_modules/mermaid/dist/mermaid.esm.min.mjs
+!node_modules/mermaid/dist/chunks/mermaid.esm.min/*.mjs
 coverage/**
 test-report/**
 *.log

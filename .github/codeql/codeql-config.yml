@@ -4,7 +4,8 @@
 name: Markdown Inline Editor CodeQL config
 
 paths-ignore:
-  - assets/mermaid/**
+  - node_modules/mermaid/dist/chunks/mermaid.esm.min/**
+  - node_modules/mermaid/dist/mermaid.esm.min.mjs
   - "**/__tests__/**"
   - src/test/**
   - "**/*.test.ts"

@@ -107,9 +107,9 @@ export class MermaidWebviewManager {
    * Get the webview HTML content
    */
   getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-    // Use local Mermaid bundle (no internet required)
+    // Mermaid ESM bundle from npm (offline, no CDN)
     const mermaidScriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(extensionUri, 'assets', 'mermaid', 'mermaid.esm.min.mjs')
+      vscode.Uri.joinPath(extensionUri, 'node_modules', 'mermaid', 'dist', 'mermaid.esm.min.mjs')
     );
     
     return `<!DOCTYPE html>
@@ -448,7 +448,8 @@ class MermaidWebviewViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(extensionContext.extensionUri, 'assets')
+        vscode.Uri.joinPath(extensionContext.extensionUri, 'assets'),
+        vscode.Uri.joinPath(extensionContext.extensionUri, 'node_modules', 'mermaid', 'dist'),
       ]
     };
     
