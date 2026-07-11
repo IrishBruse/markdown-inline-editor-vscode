@@ -84,6 +84,13 @@ export function filterDecorationsForEditor(
   const tableScopes = scopes.filter(s => s.kind === 'table');
   const rawTableRanges: Range[] = [];
   for (const tableScope of tableScopes) {
+    const isResponsive = responsiveTableOffsetRanges.some(
+      (range) => range.startPos === tableScope.startPos && range.endPos === tableScope.endPos,
+    );
+    if (isResponsive) {
+      continue;
+    }
+
     let tableIsActive = false;
     for (let line = tableScope.range.start.line; line <= tableScope.range.end.line; line++) {
       if (activeLines.has(line)) {

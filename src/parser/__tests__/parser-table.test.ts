@@ -1,6 +1,6 @@
 import { MarkdownParser, DecorationRange } from '../../parser';
 import { getResponsiveTableOffsetRanges } from '../../decorator/table-responsive';
-import { layoutResponsiveTable } from '../../tables/responsive-svg';
+import { layoutResponsiveTableRow } from '../../tables/responsive-svg';
 
 vi.mock('../../config', () => ({
   config: {
@@ -290,12 +290,12 @@ describe('MarkdownParser - Tables', () => {
         `| Row 1          | ${longText} |`,
       ].join('\n');
       const { tableBlocks } = parser.extractDecorationsWithScopes(wideMd);
-      const ranges = getResponsiveTableOffsetRanges(tableBlocks, []);
-      const lines = layoutResponsiveTable(tableBlocks[0]);
+      const ranges = getResponsiveTableOffsetRanges(tableBlocks);
+      const dataLine = layoutResponsiveTableRow(tableBlocks[0], 2);
 
       expect(ranges).toHaveLength(1);
-      expect(lines.some((line) => line.includes('Detailed Placeholder Content:'))).toBe(true);
-      expect(lines.some((line) => line.includes('Lorem ipsum'))).toBe(true);
+      expect(dataLine).toContain('Detailed Placeholder Content:');
+      expect(dataLine).toContain('...');
     });
   });
 });

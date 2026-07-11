@@ -3,7 +3,10 @@ import { ColorThemeKind, type Range, type TextEditor, window, workspace } from '
 import type { TableBlock } from '../parser/types';
 import { estimateEditorContentWidthPx } from '../mermaid/editor-width';
 import { svgToDataUri } from '../mermaid/svg-processor';
-import { renderResponsiveTableSvg } from '../tables/responsive-svg';
+import {
+  layoutResponsiveTableRow,
+  renderResponsiveRowSvg,
+} from '../tables/responsive-svg';
 import { shouldUseResponsiveLayout } from '../tables/responsive-layout';
 import {
   getResponsiveTableTheme,
@@ -24,12 +27,19 @@ function getEditorLineHeight(fontSize: number): number {
   return Math.round(fontSize * lineHeightSetting);
 }
 
-function tableCacheKey(table: TableBlock, contentWidthPx: number, isDarkTheme: boolean, fontFamily: string): string {
+function rowCacheKey(
+  table: TableBlock,
+  rowIdx: number,
+  line: string,
+  contentWidthPx: number,
+  isDarkTheme: boolean,
+  fontFamily: string,
+): string {
   const source = [
     table.startPos,
     table.endPos,
-    table.headers.join('\u0001'),
-    table.rows.map((row) => row.cells.map((cell) => cell.displayText).join('\u0002')).join('\u0003'),
+    rowIdx,
+    line,
     contentWidthPx,
     isDarkTheme,
     fontFamily,
@@ -39,7 +49,6 @@ function tableCacheKey(table: TableBlock, contentWidthPx: number, isDarkTheme: b
 
 export function getResponsiveTableOffsetRanges(
   tableBlocks: TableBlock[],
-  activeTableOffsets: { startPos: number; endPos: number }[],
 ): { startPos: number; endPos: number }[] {
   const ranges: { startPos: number; endPos: number }[] = [];
 
@@ -47,14 +56,6 @@ export function getResponsiveTableOffsetRanges(
     if (!shouldUseResponsiveLayout(table.colWidths)) {
       continue;
     }
-
-    const tableIsActive = activeTableOffsets.some((active) =>
-      active.startPos <= table.endPos && active.endPos >= table.startPos,
-    );
-    if (tableIsActive) {
-      continue;
-    }
-
     ranges.push({ startPos: table.startPos, endPos: table.endPos });
   }
 
@@ -65,7 +66,7 @@ export function applyResponsiveTableDecorations(
   editor: TextEditor,
   tableBlocks: TableBlock[],
   normalizedText: string,
-  activeTableOffsets: { startPos: number; endPos: number }[],
+  activeLines: Set<number>,
   decorations: ResponsiveTableDecorations,
 ): void {
   const isDarkTheme = window.activeColorTheme.kind === ColorThemeKind.Dark ||
@@ -76,6 +77,13 @@ export function applyResponsiveTableDecorations(
   const lineHeight = getEditorLineHeight(fontSize);
   const contentWidthPx = estimateEditorContentWidthPx(editor);
   const theme = getResponsiveTableTheme(isDarkTheme);
+  const svgOptions = {
+    fontFamily,
+    fontSize,
+    lineHeight,
+    contentWidthPx,
+    theme,
+  };
 
   const rangesByKey = new Map<string, Range[]>();
   const dataUrisByKey = new Map<string, string>();
@@ -85,30 +93,29 @@ export function applyResponsiveTableDecorations(
       continue;
     }
 
-    const tableIsActive = activeTableOffsets.some((active) =>
-      active.startPos <= table.endPos && active.endPos >= table.startPos,
-    );
-    if (tableIsActive) {
-      continue;
-    }
+    for (let rowIdx = 0; rowIdx < table.rowRanges.length; rowIdx++) {
+      const rowRange = table.rowRanges[rowIdx];
+      const range = createRange(editor, rowRange.startPos, rowRange.endPos, normalizedText);
+      if (!range) {
+        continue;
+      }
 
-    const range = createRange(editor, table.startPos, table.endPos, normalizedText);
-    if (!range) {
-      continue;
-    }
+      if (activeLines.has(range.start.line)) {
+        continue;
+      }
 
-    const svg = renderResponsiveTableSvg(table, {
-      fontFamily,
-      fontSize,
-      lineHeight,
-      contentWidthPx,
-      theme,
-    });
-    const key = tableCacheKey(table, contentWidthPx, isDarkTheme, fontFamily);
-    dataUrisByKey.set(key, svgToDataUri(svg));
-    const ranges = rangesByKey.get(key) ?? [];
-    ranges.push(range);
-    rangesByKey.set(key, ranges);
+      const line = layoutResponsiveTableRow(table, rowIdx);
+      if (!line) {
+        continue;
+      }
+
+      const svg = renderResponsiveRowSvg(line, svgOptions);
+      const key = rowCacheKey(table, rowIdx, line, contentWidthPx, isDarkTheme, fontFamily);
+      dataUrisByKey.set(key, svgToDataUri(svg));
+      const ranges = rangesByKey.get(key) ?? [];
+      ranges.push(range);
+      rangesByKey.set(key, ranges);
+    }
   }
 
   decorations.apply(editor, rangesByKey, dataUrisByKey);

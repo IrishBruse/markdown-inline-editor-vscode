@@ -322,7 +322,7 @@ export class Decorator {
       return;
     }
 
-    const activeTableOffsets = this.getActiveTableOffsetRanges(scopes);
+    const activeLines = this.getActiveLines();
     if (config.tables.forceRaw()) {
       this.responsiveTableDecorations.clear(this.activeEditor);
     } else {
@@ -330,7 +330,7 @@ export class Decorator {
         this.activeEditor,
         tableBlocks,
         text,
-        activeTableOffsets,
+        activeLines,
         this.responsiveTableDecorations,
       );
     }
@@ -385,7 +385,7 @@ export class Decorator {
       return;
     }
 
-    const activeTableOffsets = this.getActiveTableOffsetRanges(scopes);
+    const activeLines = this.getActiveLines();
     if (config.tables.forceRaw()) {
       this.responsiveTableDecorations.clear(this.activeEditor);
     } else {
@@ -393,7 +393,7 @@ export class Decorator {
         this.activeEditor,
         tableBlocks,
         text,
-        activeTableOffsets,
+        activeLines,
         this.responsiveTableDecorations,
       );
     }
@@ -662,10 +662,9 @@ export class Decorator {
     }
 
     const editor = this.activeEditor;
-    const activeTableOffsets = this.getActiveTableOffsetRanges(scopes);
     const responsiveTableOffsetRanges = config.tables.forceRaw()
       ? []
-      : getResponsiveTableOffsetRanges(tableBlocks, activeTableOffsets);
+      : getResponsiveTableOffsetRanges(tableBlocks);
     const allDecorations = decorations;
 
     return filterDecorationsForEditor(
@@ -681,12 +680,12 @@ export class Decorator {
     );
   }
 
-  private getActiveTableOffsetRanges(scopes: ScopeEntry[]): { startPos: number; endPos: number }[] {
+  private getActiveLines(): Set<number> {
+    const activeLines = new Set<number>();
     if (!this.activeEditor) {
-      return [];
+      return activeLines;
     }
 
-    const activeLines = new Set<number>();
     for (const selection of this.activeEditor.selections) {
       if (!selection.isEmpty) {
         for (let line = selection.start.line; line <= selection.end.line; line++) {
@@ -697,24 +696,7 @@ export class Decorator {
       }
     }
 
-    const activeTables: { startPos: number; endPos: number }[] = [];
-    for (const scope of scopes) {
-      if (scope.kind !== 'table') {
-        continue;
-      }
-      let tableIsActive = false;
-      for (let line = scope.range.start.line; line <= scope.range.end.line; line++) {
-        if (activeLines.has(line)) {
-          tableIsActive = true;
-          break;
-        }
-      }
-      if (tableIsActive) {
-        activeTables.push({ startPos: scope.startPos, endPos: scope.endPos });
-      }
-    }
-
-    return activeTables;
+    return activeLines;
   }
 
   /**

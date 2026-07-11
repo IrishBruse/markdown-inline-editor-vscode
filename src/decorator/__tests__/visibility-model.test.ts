@@ -127,6 +127,32 @@ describe('table decoration rendering', () => {
     expect(result.has('tablePipe')).toBe(false);
   });
 
+  it('suppresses grid decorations for responsive tables without whole-block raw reveal', () => {
+    const text = '| A |\n| - |\n| 1 |';
+    const decs: DecorationRange[] = [
+      { startPos: 0, endPos: 1, type: 'tablePipe', replacement: '│' } as any,
+    ];
+    const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
+    const tableScope: ScopeEntry = {
+      startPos: 0,
+      endPos: text.length,
+      range: new Range(doc.positionAt(0), doc.positionAt(text.length)) as any,
+      kind: 'table',
+    };
+    const editor = makeEditor(text, 0, 2);
+    const result = filterDecorationsForEditor(
+      editor as any,
+      decs,
+      [tableScope],
+      text,
+      (s, e, t) => simpleRangeFactory(s, e, t),
+      {
+        responsiveTableOffsetRanges: [{ startPos: 0, endPos: text.length }],
+      },
+    );
+    expect(result.has('tablePipe')).toBe(false);
+  });
+
   it('renders tableCell with cellStyle properties', () => {
     const text = '| **bold** |\nother';
     const decs: DecorationRange[] = [
