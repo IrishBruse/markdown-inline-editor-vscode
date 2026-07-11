@@ -28,7 +28,7 @@ export function registerEventHandlers(
       if (configAffectsConfiguration(event, 'defaultBehaviors.diffView.applyDecorations')) {
         const diffViewApplyDecorations = config.diffView.applyDecorations();
         decorator.updateDiffViewDecorationSetting(!diffViewApplyDecorations);
-        decorator.updateDecorationsForSelection();
+        decorator.refreshDecorations();
       }
 
       if (configAffectsConfiguration(event, 'decorations.ghostFaintOpacity')) {
