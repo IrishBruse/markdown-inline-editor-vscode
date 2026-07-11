@@ -11,7 +11,6 @@ import { estimateEditorContentWidthPx, bucketWidthForCache } from './mermaid/edi
 import { scanMathRegions } from './math/math-scanner';
 import { isDiffLikeUri } from './diff-context';
 import { filterDecorationsForEditor } from './decorator/visibility-model';
-import { checkRecommendedExtensions } from './recommendations';
 import { registerEventHandlers } from './registration/register-event-handlers';
 import { registerProviders } from './registration/register-providers';
 import { disposeLogger } from './logging';
@@ -49,8 +48,6 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   const decorator = new Decorator(parseCache, context.workspaceState);
   decorator.updateDiffViewDecorationSetting(!config.diffView.applyDecorations());
   decorator.setActiveEditor(vscode.window.activeTextEditor);
-
-  checkRecommendedExtensions(context);
 
   const { disposables: providerDisposables, linkClickHandler } = registerProviders(parseCache);
   linkClickHandler.setEnabled(config.links.singleClickOpen());
