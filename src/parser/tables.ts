@@ -8,7 +8,7 @@ import type {
   TableCell,
   Text,
 } from 'mdast';
-import type { ScopeRange } from './types';
+import type { ScopeRange, TableBlock, TableBlockCell, TableBlockRow } from './types';
 import { addScope } from './common';
 
 export function extractCellPlainText(cell: TableCell): string {
@@ -203,4 +203,112 @@ export function computeColumnWidths(tableNode: Table, source: string): number[] 
 
 export function addTableScope(scopes: ScopeRange[], tableStart: number, tableEnd: number): void {
   addScope(scopes, tableStart, tableEnd, 'table');
+}
+
+export function buildTableBlockFromNode(node: Table, source: string): TableBlock | null {
+  if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) {
+    return null;
+  }
+  if (node.children.length === 0) {
+    return null;
+  }
+
+  const tableStart = node.position.start.offset;
+  const tableEnd = node.position.end.offset;
+  const colWidths = computeColumnWidths(node, source);
+  const colAligns = node.align ?? [];
+  const rowRanges: { startPos: number; endPos: number }[] = [];
+
+  const buildCellsForRow = (rowIdx: number): TableBlockCell[] => {
+    const row = node.children[rowIdx];
+    if (!row.position || row.position.start.offset === undefined) {
+      return [];
+    }
+
+    const rowStartOffset = row.position.start.offset;
+    const [lineStart, lineEnd] = getLineRange(source, rowStartOffset);
+    const trimmedLineEnd = trimLineEnd(source, lineStart, lineEnd);
+    const rawPipes = findPipePositions(source, lineStart, trimmedLineEnd);
+    const { positions: pipes } = normalizePipePositions(source, lineStart, trimmedLineEnd, rawPipes);
+
+    const cells: TableBlockCell[] = [];
+    for (let i = 0; i < pipes.length - 1; i++) {
+      const cellRangeStart = pipes[i] + 1;
+      const cellRangeEnd = pipes[i + 1];
+      if (cellRangeStart >= cellRangeEnd) {
+        continue;
+      }
+
+      const rawContent = source.substring(cellRangeStart, cellRangeEnd);
+      const trimmedContent = rawContent.trim();
+      const cellStyle = detectCellStyle(trimmedContent);
+      const astCell = i < row.children.length ? row.children[i] as TableCell : undefined;
+      const showRaw = !cellStyle && astCell !== undefined && cellHasMixedFormatting(astCell);
+      const displayText = (astCell && !showRaw)
+        ? extractCellPlainText(astCell)
+        : trimmedContent;
+
+      cells.push({
+        displayText,
+        cellStyle,
+        showRaw,
+      });
+    }
+
+    return cells;
+  };
+
+  const headerRow = node.children[0];
+  if (!headerRow.position || headerRow.position.start.offset === undefined || headerRow.position.end.offset === undefined) {
+    return null;
+  }
+
+  const headers = buildCellsForRow(0).map((cell) => cell.displayText);
+  rowRanges.push({
+    startPos: headerRow.position.start.offset,
+    endPos: headerRow.position.end.offset,
+  });
+
+  const headerEndOffset = headerRow.position.end.offset;
+  let sepLineStart = source.indexOf('\n', headerEndOffset);
+  if (sepLineStart !== -1) {
+    sepLineStart += 1;
+    let sepLineEnd: number;
+    if (node.children.length > 1 && node.children[1].position) {
+      const nextRowStart = node.children[1].position.start.offset!;
+      sepLineEnd = source.lastIndexOf('\n', nextRowStart - 1);
+      if (sepLineEnd === -1 || sepLineEnd < sepLineStart) {
+        sepLineEnd = nextRowStart;
+      }
+    } else {
+      sepLineEnd = source.indexOf('\n', sepLineStart);
+      if (sepLineEnd === -1) {
+        sepLineEnd = tableEnd;
+      }
+    }
+    rowRanges.push({ startPos: sepLineStart, endPos: sepLineEnd });
+  }
+
+  const rows: TableBlockRow[] = [];
+  for (let rowIdx = 1; rowIdx < node.children.length; rowIdx++) {
+    const row = node.children[rowIdx];
+    if (!row.position || row.position.start.offset === undefined || row.position.end.offset === undefined) {
+      continue;
+    }
+    rows.push({ cells: buildCellsForRow(rowIdx) });
+    rowRanges.push({
+      startPos: row.position.start.offset,
+      endPos: row.position.end.offset,
+    });
+  }
+
+  return {
+    startPos: tableStart,
+    endPos: tableEnd,
+    headers,
+    rows,
+    colWidths,
+    colAligns,
+    rowRanges,
+  };
 }

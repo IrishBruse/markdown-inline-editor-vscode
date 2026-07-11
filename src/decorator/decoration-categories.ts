@@ -21,6 +21,7 @@ const markerDecorationTypes: ReadonlySet<DecorationType> = new Set<DecorationTyp
   'tableSeparatorPipe',
   'tableSeparatorDash',
   'tableCell',
+  'tableResponsiveRow',
 ]);
 
 export function isMarkerDecorationType(type: DecorationType): boolean {

@@ -330,6 +330,14 @@ GFM treats every unescaped `|` on a table line as a column boundary. The header 
 | Row 9          | Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.                                                                                            |
 | Row 10         | Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur. At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.                |
 
+## Three-column wide grid
+
+| ColA    | ColB    | ColC    |
+| ------- | ------- | ------- |
+| alpha   | beta    | gamma   |
+| delta   | epsilon | zeta    |
+| eta     | theta   | iota    |
+
 ## Tables near other blocks
 
 Paragraph immediately above a table (blank line separates them).
@@ -361,4 +369,5 @@ Paragraph immediately above a table (blank line separates them).
 - Mixed inline formatting in one cell (bold + plain, link + surrounding text, multiple code spans) uses padded plain text; column width follows the raw source span so pipes stay aligned.
 - Inline code beside plain text in one cell uses padded plain text without backticks; whole-cell `` `code` `` still uses inline-code styling.
 - CJK, emoji, and ZWJ sequences use grapheme-aware overlay padding (one cell per grapheme in `before.contentText`) with unified column widths so pipes align across rows.
-- `custom` SVG wrapping mode: not yet implemented (see section above).
+- Responsive wrapping: when any column exceeds 80 characters of display width, the table switches to a stacked layout (header line, full-width separator, then `Header: value` blocks per row). Long values wrap at 80 columns inside each block. Cursor inside the table still reveals raw GFM.
+- Three-column wide grid section: compact pipe alignment at wide viewports (`npm run visual:tables` checks viewport 200).

@@ -1,4 +1,15 @@
 import { MarkdownParser, DecorationRange } from '../../parser';
+import { buildResponsiveTableDecorations } from '../../decorator/table-responsive';
+
+vi.mock('../../config', () => ({
+  config: {
+    tables: {
+      forceRaw: vi.fn(() => false),
+    },
+  },
+}));
+
+import { config } from '../../config';
 
 describe('MarkdownParser - Tables', () => {
   let parser: MarkdownParser;
@@ -236,6 +247,52 @@ describe('MarkdownParser - Tables', () => {
       expect(mixedCell!.replacement).toContain('**');
       // Should NOT have cellStyle since it's mixed
       expect(mixedCell!.cellStyle).toBeUndefined();
+    });
+  });
+
+  describe('tableBlocks', () => {
+    const md = '| Name | Age |\n|------|-----|\n| Alice | 30 |\n| Bob | 25 |';
+
+    it('should populate tableBlocks from parse result', () => {
+      const result = parser.extractDecorationsWithScopes(md);
+      expect(result.tableBlocks).toHaveLength(1);
+      expect(result.tableBlocks[0].startPos).toBeGreaterThanOrEqual(0);
+      expect(result.tableBlocks[0].endPos).toBeGreaterThan(result.tableBlocks[0].startPos);
+    });
+
+    it('should include headers and row cells in tableBlocks', () => {
+      const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+      const block = tableBlocks[0];
+
+      expect(block.headers).toEqual(['Name', 'Age']);
+      expect(block.rows).toHaveLength(2);
+      expect(block.rows[0].cells.map((c) => c.displayText)).toEqual(['Alice', '30']);
+      expect(block.rows[1].cells.map((c) => c.displayText)).toEqual(['Bob', '25']);
+      expect(block.rowRanges.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('should skip table decorations when tables.forceRaw is enabled', () => {
+      vi.mocked(config.tables.forceRaw).mockReturnValueOnce(true);
+
+      const result = parser.extractDecorationsWithScopes(md);
+      expect(byType(result.decorations, 'tablePipe')).toHaveLength(0);
+      expect(byType(result.decorations, 'tableCell')).toHaveLength(0);
+      expect(byType(result.decorations, 'tableSeparatorDash')).toHaveLength(0);
+      expect(result.tableBlocks).toHaveLength(0);
+    });
+
+    it('should support responsive row decorations when any column exceeds 80 characters', () => {
+      const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
+      const wideMd = [
+        '| Section Header | Detailed Placeholder Content |',
+        '| -------------- | ---------------------------- |',
+        `| Row 1          | ${longText} |`,
+      ].join('\n');
+      const { tableBlocks } = parser.extractDecorationsWithScopes(wideMd);
+      const responsive = buildResponsiveTableDecorations(tableBlocks, []);
+
+      expect(responsive.length).toBeGreaterThan(0);
+      expect(responsive.every((d) => d.type === 'tableResponsiveRow')).toBe(true);
     });
   });
 });

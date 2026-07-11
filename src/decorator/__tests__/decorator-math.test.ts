@@ -30,6 +30,7 @@ function createDecoratorWithMathCache(customText?: string, customMathRegions?: t
     scopes: [],
     mermaidBlocks: [],
     mathRegions: customMathRegions ?? mathRegions,
+    tableBlocks: [],
   };
   const parseCache = {
     get: () => entry,

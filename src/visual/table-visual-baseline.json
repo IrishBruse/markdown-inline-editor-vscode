@@ -1,0 +1,82 @@
+{
+  "knownIssues": [
+    {
+      "tableIndex": 19,
+      "line": 106,
+      "pipeIndex": 2,
+      "description": "CJK column width: Name | CJK table data row"
+    },
+    {
+      "tableIndex": 20,
+      "line": 110,
+      "pipeIndex": 2,
+      "description": "CJK column width: Hiragana table data row"
+    },
+    {
+      "tableIndex": 22,
+      "line": 118,
+      "pipeIndex": 2,
+      "description": "Emoji column width: Emoji table data row"
+    },
+    {
+      "tableIndex": 23,
+      "line": 122,
+      "pipeIndex": 2,
+      "description": "ZWJ emoji family sequence column width"
+    },
+    {
+      "tableIndex": 24,
+      "line": 126,
+      "pipeIndex": 2,
+      "description": "Flag emoji column width"
+    },
+    {
+      "tableIndex": 25,
+      "line": 130,
+      "pipeIndex": 2,
+      "description": "Mixed CJK and emoji header row"
+    },
+    {
+      "tableIndex": 25,
+      "line": 130,
+      "pipeIndex": 3,
+      "description": "Mixed CJK and emoji header row"
+    },
+    {
+      "tableIndex": 25,
+      "line": 131,
+      "pipeIndex": 2,
+      "description": "Mixed CJK and emoji data row"
+    },
+    {
+      "tableIndex": 25,
+      "line": 131,
+      "pipeIndex": 3,
+      "description": "Mixed CJK and emoji data row"
+    },
+    {
+      "tableIndex": 54,
+      "line": 265,
+      "pipeIndex": 1,
+      "description": "Three raw pipe cells (not inline code)"
+    },
+    {
+      "tableIndex": 54,
+      "line": 265,
+      "pipeIndex": 2,
+      "description": "Three raw pipe cells (not inline code)"
+    },
+    {
+      "tableIndex": 56,
+      "line": 279,
+      "pipeIndex": 1,
+      "description": "Escaped pipes inside inline code cell"
+    },
+    {
+      "tableIndex": 56,
+      "line": 279,
+      "pipeIndex": 2,
+      "description": "Escaped pipes inside inline code cell"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ type FilteredDecoration = Range | DecorationOptions;
 
 export type VisibilityFilterOptions = {
   ghostLinksCollapse?: boolean;
+  responsiveTableOffsetRanges?: { startPos: number; endPos: number }[];
 };
 
 export function filterDecorationsForEditor(
@@ -71,8 +72,12 @@ export function filterDecorationsForEditor(
 
   // Table decoration types that use per-range replacement rendering
   const tableTypes = new Set<DecorationType>([
+    'tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell', 'tableResponsiveRow',
+  ]);
+  const gridTableTypes = new Set<DecorationType>([
     'tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell',
   ]);
+  const responsiveTableOffsetRanges = options.responsiveTableOffsetRanges ?? [];
 
   // For table blocks, if cursor/selection is on ANY line in the table,
   // reveal the entire table (show raw markdown, not decorations).
@@ -218,6 +223,11 @@ export function filterDecorationsForEditor(
     if (tableTypes.has(decoration.type)) {
       if (rangeIntersectsAny(range, rawTableRanges)) {
         // Whole-block raw reveal: skip decoration so raw markdown shows
+        continue;
+      }
+      if (gridTableTypes.has(decoration.type) && responsiveTableOffsetRanges.some((table) =>
+        decoration.startPos < table.endPos && decoration.endPos > table.startPos,
+      )) {
         continue;
       }
       if (decoration.replacement !== undefined) {

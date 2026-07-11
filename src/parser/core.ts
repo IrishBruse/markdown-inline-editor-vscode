@@ -42,6 +42,7 @@ import {
   measureTextWidth as measureTextWidthHelper,
   normalizePipePositions as normalizePipePositionsHelper,
   trimLineEnd as trimLineEndHelper,
+  buildTableBlockFromNode as buildTableBlockFromNodeHelper,
 } from "./tables";
 import {
   processEmphasis as processEmphasisHelper,
@@ -73,6 +74,7 @@ import {
   MermaidBlock,
   ParseResult,
   ScopeRange,
+  TableBlock,
 } from "./types";
 
 /**
@@ -161,6 +163,7 @@ export class MarkdownParser {
         scopes: [],
         mermaidBlocks: [],
         mathRegions: [],
+        tableBlocks: [],
       };
     }
 
@@ -171,6 +174,7 @@ export class MarkdownParser {
     const decorations: DecorationRange[] = [];
     const scopes: ScopeRange[] = [];
     const mermaidBlocks: MermaidBlock[] = [];
+    const tableBlocks: TableBlock[] = [];
 
     // Process frontmatter before remark parsing to avoid conflicts with thematic break detection
     this.processFrontmatter(normalizedText, decorations, scopes);
@@ -180,7 +184,7 @@ export class MarkdownParser {
       const ast = this.processor.parse(normalizedText) as Root;
 
       // Process AST nodes and extract decorations + scopes
-      this.processAST(ast, normalizedText, decorations, scopes, mermaidBlocks);
+      this.processAST(ast, normalizedText, decorations, scopes, mermaidBlocks, tableBlocks);
 
       // Handle edge cases: empty image alt text that remark doesn't parse as Image node
       this.handleEmptyImageAlt(normalizedText, decorations);
@@ -206,6 +210,7 @@ export class MarkdownParser {
       scopes: this.dedupeScopes(scopes),
       mermaidBlocks,
       mathRegions: scanMathRegions(normalizedText),
+      tableBlocks,
     };
   }
 
@@ -225,6 +230,7 @@ export class MarkdownParser {
     decorations: DecorationRange[],
     scopes: ScopeRange[],
     mermaidBlocks: MermaidBlock[],
+    tableBlocks: TableBlock[],
   ): void {
     // Track processed blockquote positions to avoid duplicates from nested blockquotes
     const processedBlockquotePositions = new Set<number>();
@@ -381,6 +387,7 @@ export class MarkdownParser {
                 decorations,
                 scopes,
                 currentAncestors,
+                tableBlocks,
               );
               break;
           }
@@ -1385,6 +1392,7 @@ export class MarkdownParser {
     decorations: DecorationRange[],
     scopes: ScopeRange[],
     ancestors: Node[],
+    tableBlocks: TableBlock[],
   ): void {
     if (!this.hasValidPosition(node)) return;
 
@@ -1395,10 +1403,15 @@ export class MarkdownParser {
 
     const tableStart = node.position!.start.offset!;
     const tableEnd = node.position!.end.offset!;
-    const colWidths = this.computeColumnWidths(node, text);
-    const colAligns = node.align ?? [];
 
     this.addScope(scopes, tableStart, tableEnd, "table");
+
+    if (config.tables.forceRaw()) {
+      return;
+    }
+
+    const colWidths = this.computeColumnWidths(node, text);
+    const colAligns = node.align ?? [];
 
     for (let rowIdx = 0; rowIdx < node.children.length; rowIdx++) {
       const row = node.children[rowIdx];
@@ -1529,6 +1542,11 @@ export class MarkdownParser {
           });
         }
       }
+    }
+
+    const tableBlock = buildTableBlockFromNodeHelper(node, text);
+    if (tableBlock) {
+      tableBlocks.push(tableBlock);
     }
   }
 }

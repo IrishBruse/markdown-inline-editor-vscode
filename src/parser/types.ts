@@ -38,11 +38,38 @@ export interface MathRegion {
   numLines?: number;
 }
 
+export type TableCellStyle = {
+  fontWeight?: string;
+  fontStyle?: string;
+  textDecoration?: string;
+};
+
+export interface TableBlockCell {
+  displayText: string;
+  cellStyle?: TableCellStyle;
+  showRaw?: boolean;
+}
+
+export interface TableBlockRow {
+  cells: TableBlockCell[];
+}
+
+export interface TableBlock {
+  startPos: number;
+  endPos: number;
+  headers: string[];
+  rows: TableBlockRow[];
+  colWidths: number[];
+  colAligns: (null | 'left' | 'center' | 'right')[];
+  rowRanges: { startPos: number; endPos: number }[];
+}
+
 export interface ParseResult {
   decorations: DecorationRange[];
   scopes: ScopeRange[];
   mermaidBlocks: MermaidBlock[];
   mathRegions: MathRegion[];
+  tableBlocks: TableBlock[];
 }
 
 export type DecorationType =
@@ -79,5 +106,6 @@ export type DecorationType =
   | "tableSeparatorPipe"
   | "tableSeparatorDash"
   | "tableCell"
+  | "tableResponsiveRow"
   | "mention"
   | "issueReference";

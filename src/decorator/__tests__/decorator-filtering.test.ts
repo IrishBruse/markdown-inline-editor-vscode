@@ -32,7 +32,7 @@ function filterDecorationsForSelection(
     range: new Range(document.positionAt(startPos), document.positionAt(endPos)),
   }));
   const parseCache = {
-    get: () => ({ version: 1, text, decorations: [], scopes: [] }),
+    get: () => ({ version: 1, text, decorations: [], scopes: [], mermaidBlocks: [], mathRegions: [], tableBlocks: [] }),
     invalidate: () => {},
     clear: () => {},
   };

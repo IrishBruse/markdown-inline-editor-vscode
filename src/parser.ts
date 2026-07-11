@@ -6,4 +6,8 @@ export type {
   MermaidBlock,
   ParseResult,
   ScopeRange,
+  TableBlock,
+  TableBlockCell,
+  TableBlockRow,
+  TableCellStyle,
 } from "./parser/types";

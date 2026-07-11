@@ -1,5 +1,5 @@
 import { DecorationOptions, Range, TextEditor, TextDocument, TextDocumentChangeEvent, TextEditorSelectionChangeKind, Memento } from 'vscode';
-import { DecorationRange, DecorationType, MermaidBlock, MathRegion, ScopeRange } from './parser';
+import { DecorationRange, DecorationType, MermaidBlock, MathRegion, ScopeRange, TableBlock } from './parser';
 import { config } from './config';
 import { isDiffLikeUri } from './diff-context';
 import { MarkdownParseCache } from './markdown-parse-cache';
@@ -14,6 +14,7 @@ import { FileDecorationStateStore } from './decorator/file-decoration-state';
 import { MermaidUpdateCoordinator } from './decorator/mermaid-update-coordinator';
 import { DecorationTypeRegistry } from './decorator/decoration-type-registry';
 import { filterDecorationsForEditor, ScopeEntry } from './decorator/visibility-model';
+import { buildResponsiveTableDecorations, getResponsiveTableOffsetRanges } from './decorator/table-responsive';
 import { handleCheckboxClick } from './decorator/checkbox-toggle';
 import { MermaidDiagramDecorations } from './decorator/mermaid-diagram-decorations';
 import { DecoratorUpdateScheduler } from './decorator/update-scheduler';
@@ -307,9 +308,9 @@ export class Decorator {
       return;
     }
 
-    const { document, version, decorations, scopes, text, mermaidBlocks, mathRegions } = context;
+    const { document, version, decorations, scopes, text, mermaidBlocks, mathRegions, tableBlocks } = context;
     const cycleStart = Date.now();
-    const filtered = this.filterDecorations(decorations, scopes, text);
+    const filtered = this.filterDecorations(decorations, scopes, text, tableBlocks);
     const filterDurationMs = Date.now() - cycleStart;
 
     this.applyDecorations(filtered);
@@ -352,10 +353,10 @@ export class Decorator {
       return;
     }
 
-    const { document, version, decorations, scopes, text, mermaidBlocks, mathRegions, parseDurationMs } =
+    const { document, version, decorations, scopes, text, mermaidBlocks, mathRegions, tableBlocks, parseDurationMs } =
       context;
     const cycleStart = Date.now();
-    const filtered = this.filterDecorations(decorations, scopes, text);
+    const filtered = this.filterDecorations(decorations, scopes, text, tableBlocks);
     const filterDurationMs = Date.now() - cycleStart;
 
     this.applyDecorations(filtered, true);
@@ -396,6 +397,7 @@ export class Decorator {
         text: string;
         mermaidBlocks: MermaidBlock[];
         mathRegions: MathRegion[];
+        tableBlocks: TableBlock[];
         parseDurationMs: number;
       }
     | undefined {
@@ -535,6 +537,7 @@ export class Decorator {
     text: string;
     mermaidBlocks: MermaidBlock[];
     mathRegions: MathRegion[];
+    tableBlocks: TableBlock[];
   } {
     const entry = this.parseCache.get(document);
     const uri = document.uri.toString();
@@ -561,6 +564,7 @@ export class Decorator {
       text: entry.text,
       mermaidBlocks: entry.mermaidBlocks,
       mathRegions: entry.mathRegions,
+      tableBlocks: entry.tableBlocks,
     };
   }
 
@@ -612,20 +616,70 @@ export class Decorator {
   private filterDecorations(
     decorations: DecorationRange[],
     scopes: ScopeEntry[],
-    originalText: string
+    originalText: string,
+    tableBlocks: TableBlock[] = [],
   ): Map<DecorationType, Array<Range | DecorationOptions>> {
     if (!this.activeEditor) {
       return new Map();
     }
 
+    const editor = this.activeEditor;
+    const activeTableOffsets = this.getActiveTableOffsetRanges(scopes);
+    const responsiveDecorations = config.tables.forceRaw()
+      ? []
+      : buildResponsiveTableDecorations(tableBlocks, activeTableOffsets);
+    const responsiveTableOffsetRanges = config.tables.forceRaw()
+      ? []
+      : getResponsiveTableOffsetRanges(tableBlocks, activeTableOffsets);
+    const allDecorations = [...decorations, ...responsiveDecorations];
+
     return filterDecorationsForEditor(
-      this.activeEditor,
-      decorations,
+      editor,
+      allDecorations,
       scopes,
       originalText,
       (startPos, endPos, text) => this.createRange(startPos, endPos, text),
-      { ghostLinksCollapse: config.decorations.ghostLinksCollapse() }
+      {
+        ghostLinksCollapse: config.decorations.ghostLinksCollapse(),
+        responsiveTableOffsetRanges,
+      },
     );
+  }
+
+  private getActiveTableOffsetRanges(scopes: ScopeEntry[]): { startPos: number; endPos: number }[] {
+    if (!this.activeEditor) {
+      return [];
+    }
+
+    const activeLines = new Set<number>();
+    for (const selection of this.activeEditor.selections) {
+      if (!selection.isEmpty) {
+        for (let line = selection.start.line; line <= selection.end.line; line++) {
+          activeLines.add(line);
+        }
+      } else {
+        activeLines.add(selection.start.line);
+      }
+    }
+
+    const activeTables: { startPos: number; endPos: number }[] = [];
+    for (const scope of scopes) {
+      if (scope.kind !== 'table') {
+        continue;
+      }
+      let tableIsActive = false;
+      for (let line = scope.range.start.line; line <= scope.range.end.line; line++) {
+        if (activeLines.has(line)) {
+          tableIsActive = true;
+          break;
+        }
+      }
+      if (tableIsActive) {
+        activeTables.push({ startPos: scope.startPos, endPos: scope.endPos });
+      }
+    }
+
+    return activeTables;
   }
 
   /**

@@ -25,7 +25,7 @@ export function bucketWidthForCache(widthPx: number): number {
   return Math.round(widthPx / WIDTH_BUCKET_PX) * WIDTH_BUCKET_PX;
 }
 
-function estimateVisibleColumns(editor: vscode.TextEditor): number {
+export function estimateVisibleColumns(editor: vscode.TextEditor): number {
   const visibleRanges = editor.visibleRanges ?? [];
   if (visibleRanges.length === 0) {
     return DEFAULT_COLUMNS;

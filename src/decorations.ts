@@ -630,6 +630,21 @@ export function TableCellDecorationType() {
 }
 
 /**
+ * Creates a decoration type for responsive table row replacements.
+ *
+ * Hides the original table row source and renders stacked cell blocks via
+ * per-range `renderOptions.before.contentText`.
+ */
+export function TableResponsiveRowDecorationType() {
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: {
+      contentText: '',
+    },
+  });
+}
+
+/**
  * Creates a decoration type for mermaid hover indicator.
  *
  * Adds a small visual indicator (⧉) at the start of mermaid code blocks

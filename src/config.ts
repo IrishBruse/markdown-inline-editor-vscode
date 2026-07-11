@@ -76,6 +76,13 @@ export const config = {
         .get<boolean>('math.enabled', true);
     },
   },
+  tables: {
+    forceRaw(): boolean {
+      return vscode.workspace
+        .getConfiguration(SECTION)
+        .get<boolean>('tables.forceRaw', false);
+    },
+  },
   mermaid: {
     /** Override max diagram width in columns; 0 uses auto viewport estimate. */
     maxWidthColumns(): number {
