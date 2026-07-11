@@ -40,7 +40,6 @@ describe('render 05-tables visual preview', () => {
     expect(readFileSync(jsonPath, 'utf8')).toContain('"passed"');
     expect(result.newMisalignments, JSON.stringify(result.newMisalignments, null, 2)).toEqual([]);
 
-    // eslint-disable-next-line no-console -- intentional CLI-style output for agents
     console.log(
       `visual:tables wrote ${htmlPath} (${result.totalTables} tables, ${result.misaligned} misaligned, ${result.newMisalignments.length} new)`,
     );

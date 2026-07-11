@@ -8,7 +8,6 @@
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
-import process from 'process';
 
 /** Lines that start a suppressible noise block. */
 const TRIGGER_PATTERNS = [

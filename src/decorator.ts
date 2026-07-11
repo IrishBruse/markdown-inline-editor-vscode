@@ -20,7 +20,7 @@ import { DecoratorUpdateScheduler } from './decorator/update-scheduler';
 import { MathDecorations } from './math/math-decorations';
 import { MermaidHoverIndicatorDecorationType } from './decorations';
 import { isSupportedMarkdownLanguage } from './language-support';
-import { logDebug, logError, logPerformanceMetric } from './logging';
+import { logDebug, logPerformanceMetric } from './logging';
 import { applyMathDecorationsForEditor } from './decorator/math-region-application';
 import { clearMermaidDecorationCache as clearMermaidRenderCache } from './mermaid/mermaid-renderer';
 
