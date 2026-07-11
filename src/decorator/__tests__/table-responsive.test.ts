@@ -2,9 +2,9 @@ import { MarkdownParser } from '../../parser';
 import type { TableBlock } from '../../parser/types';
 import { getResponsiveTableOffsetRanges } from '../table-responsive';
 import {
-  buildCoveredLines,
-  getClipLineCount,
-  layoutWrappedGridRow,
+  borderlessTableToOverlayText,
+  layoutBorderlessTable,
+  renderBorderlessTableSvg,
 } from '../../tables/responsive-svg';
 
 describe('table-responsive decorations', () => {
@@ -33,26 +33,37 @@ describe('table-responsive decorations', () => {
     return parser.extractDecorationsWithScopes(md).tableBlocks;
   }
 
-  it('layoutWrappedGridRow renders both columns in a pipe grid', () => {
+  it('layoutBorderlessTable renders wrapped rows without pipes', () => {
     const tableBlocks = parseLongCellTable();
-    const lines = layoutWrappedGridRow(tableBlocks[0], 2, 80);
+    const layout = layoutBorderlessTable(tableBlocks[0], 80);
+    const overlay = borderlessTableToOverlayText(layout);
 
-    expect(lines[0]).toContain('Row 1');
-    expect(lines.some((line) => line.includes('Lorem'))).toBe(true);
-    expect(lines.every((line) => line.includes('\u2502'))).toBe(true);
+    expect(layout.rows).toHaveLength(2);
+    expect(layout.rows[1].lineCount).toBeGreaterThan(1);
+    expect(overlay).toContain('Row 1');
+    expect(overlay).toContain('Lorem');
+    expect(overlay).not.toContain('\u2502');
   });
 
-  it('buildCoveredLines marks continuation source lines as covered', () => {
-    const covered = buildCoveredLines([10, 12], [3, 1]);
-    expect(covered.has(11)).toBe(true);
-    expect(covered.has(12)).toBe(true);
-    expect(covered.has(13)).toBe(false);
-  });
+  it('renderBorderlessTableSvg stacks rows with horizontal dividers', () => {
+    const tableBlocks = parseLongCellTable();
+    const layout = layoutBorderlessTable(tableBlocks[0], 80);
+    const svg = renderBorderlessTableSvg(layout, {
+      fontFamily: 'monospace',
+      fontSize: 14,
+      lineHeight: 20,
+      contentWidthPx: 640,
+      theme: {
+        foreground: '#d4d4d4',
+        mutedForeground: '#858585',
+        separator: '#858585',
+      },
+    });
 
-  it('getClipLineCount shortens wrap span before an active line', () => {
-    const activeLines = new Set([12]);
-    expect(getClipLineCount(10, 4, activeLines)).toBe(2);
-    expect(getClipLineCount(10, 4, new Set())).toBe(4);
+    expect(svg).toContain('<line');
+    expect(svg).toContain('Section Header');
+    expect(svg).toContain('Row 1');
+    expect(svg).not.toContain('\u2502');
   });
 
   it('getResponsiveTableOffsetRanges returns table spans for long-cell tables', () => {
@@ -71,12 +82,5 @@ describe('table-responsive decorations', () => {
     const ranges = getResponsiveTableOffsetRanges(tableBlocks);
 
     expect(ranges).toHaveLength(0);
-  });
-
-  it('getResponsiveTableOffsetRanges still suppresses grid when table is active', () => {
-    const tableBlocks = parseLongCellTable();
-    const ranges = getResponsiveTableOffsetRanges(tableBlocks);
-
-    expect(ranges).toHaveLength(1);
   });
 });

@@ -19,6 +19,7 @@ const DEFAULT_MUTED = {
 export class ResponsiveTableDecorations {
   private cache = new Map<string, ResponsiveTableDecorationEntry>();
   private usageCounter = 0;
+  private hideDecorationType: TextEditorDecorationType | undefined;
 
   constructor(private maxEntries: number = 30) {}
 
@@ -40,7 +41,25 @@ export class ResponsiveTableDecorations {
     this.disposeUnused(editor, usedKeys);
   }
 
+  applyHidden(editor: TextEditor, ranges: Range[]): void {
+    if (!this.hideDecorationType) {
+      this.hideDecorationType = window.createTextEditorDecorationType({
+        color: 'transparent',
+        textDecoration: 'none; display: none;',
+        after: {
+          contentText: '',
+        },
+      });
+    }
+    editor.setDecorations(this.hideDecorationType, ranges);
+  }
+
   clear(editor: TextEditor): void {
+    if (this.hideDecorationType) {
+      editor.setDecorations(this.hideDecorationType, []);
+      this.hideDecorationType.dispose();
+      this.hideDecorationType = undefined;
+    }
     for (const entry of this.cache.values()) {
       editor.setDecorations(entry.decorationType, []);
       entry.decorationType.dispose();
@@ -66,7 +85,7 @@ export class ResponsiveTableDecorations {
 
     const decorationType = window.createTextEditorDecorationType({
       color: 'transparent',
-      textDecoration: 'none; display: inline-block; width: 0;',
+      textDecoration: 'none; display: none;',
       before: {
         contentIconPath: Uri.parse(dataUri),
         textDecoration: 'none;',

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { bucketWidthForCache, estimateEditorContentWidthPx } from '../editor-width';
+import { bucketWidthForCache, estimateEditorContentWidthPx, estimateVisibleViewportColumns } from '../editor-width';
 
 vi.mock('../../config', () => ({
   config: {
@@ -49,6 +49,21 @@ describe('estimateEditorContentWidthPx', () => {
   it('enforces a minimum width floor', () => {
     const editor = createEditor([new vscode.Range(0, 0, 0, 10)]);
     expect(estimateEditorContentWidthPx(editor)).toBeGreaterThanOrEqual(320);
+  });
+});
+
+describe('estimateVisibleViewportColumns', () => {
+  it('uses visible viewport width and ignores long source lines', () => {
+    const editor = createEditor(
+      [new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 95))],
+      ['| Row 1 | ' + 'x'.repeat(400)],
+    );
+    expect(estimateVisibleViewportColumns(editor)).toBe(95);
+  });
+
+  it('falls back to a sensible minimum when the viewport is very narrow', () => {
+    const editor = createEditor([new vscode.Range(0, 0, 0, 5)]);
+    expect(estimateVisibleViewportColumns(editor)).toBe(40);
   });
 });
 

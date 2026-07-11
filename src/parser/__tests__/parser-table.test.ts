@@ -294,6 +294,7 @@ describe('MarkdownParser - Tables', () => {
       const dataLines = layoutWrappedGridRow(tableBlocks[0], 2, 80);
 
       expect(ranges).toHaveLength(1);
+      expect(dataLines.length).toBeGreaterThan(1);
       expect(dataLines[0]).toContain('Row 1');
       expect(dataLines.some((line) => line.includes('Lorem'))).toBe(true);
     });

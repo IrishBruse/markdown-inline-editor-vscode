@@ -2,15 +2,13 @@ import { createHash } from 'crypto';
 import { ColorThemeKind, type Range, type TextEditor, window, workspace } from 'vscode';
 import type { TableBlock } from '../parser/types';
 import {
-  estimateEditorContentWidthPx,
-  layoutColumnsFromContentWidthPx,
+  estimateResponsiveTableLayout,
 } from '../mermaid/editor-width';
 import { svgToDataUri } from '../mermaid/svg-processor';
 import {
-  buildCoveredLines,
-  getClipLineCount,
-  layoutWrappedGridRow,
-  renderResponsiveRowSvg,
+  borderlessTableToOverlayText,
+  layoutBorderlessTable,
+  renderBorderlessTableSvg,
 } from '../tables/responsive-svg';
 import { shouldUseResponsiveLayout } from '../tables/responsive-layout';
 import {
@@ -32,10 +30,9 @@ function getEditorLineHeight(fontSize: number): number {
   return Math.round(fontSize * lineHeightSetting);
 }
 
-function rowCacheKey(
+function tableCacheKey(
   table: TableBlock,
-  rowIdx: number,
-  lines: string[],
+  layoutKey: string,
   contentWidthPx: number,
   isDarkTheme: boolean,
   fontFamily: string,
@@ -43,8 +40,7 @@ function rowCacheKey(
   const source = [
     table.startPos,
     table.endPos,
-    rowIdx,
-    lines.join('\n'),
+    layoutKey,
     contentWidthPx,
     isDarkTheme,
     fontFamily,
@@ -80,90 +76,69 @@ export function applyResponsiveTableDecorations(
   const fontFamily = editorConfig.get<string>('fontFamily', 'monospace');
   const fontSize = editorConfig.get<number>('fontSize', 14);
   const lineHeight = getEditorLineHeight(fontSize);
-  const contentWidthPx = estimateEditorContentWidthPx(editor);
   const theme = getResponsiveTableTheme(isDarkTheme);
 
   const rangesByKey = new Map<string, Range[]>();
   const dataUrisByKey = new Map<string, string>();
+  const hiddenRanges: Range[] = [];
 
   for (const table of tableBlocks) {
     if (!shouldUseResponsiveLayout(table.colWidths)) {
       continue;
     }
 
-    const layoutWidth = layoutColumnsFromContentWidthPx(contentWidthPx, fontSize, 0);
-    const rowLayouts: {
-      rowIdx: number;
-      range: Range;
-      lines: string[];
-      sourceLine: number;
-    }[] = [];
-
-    for (let rowIdx = 0; rowIdx < table.rowRanges.length; rowIdx++) {
-      const rowRange = table.rowRanges[rowIdx];
-      const range = createRange(editor, rowRange.startPos, rowRange.endPos, normalizedText);
-      if (!range) {
-        continue;
-      }
-
-      const lines = layoutWrappedGridRow(table, rowIdx, layoutWidth);
-      if (lines.length === 0) {
-        continue;
-      }
-
-      rowLayouts.push({
-        rowIdx,
-        range,
-        lines,
-        sourceLine: range.start.line,
-      });
+    const headerRange = createRange(
+      editor,
+      table.rowRanges[0].startPos,
+      table.rowRanges[0].endPos,
+      normalizedText,
+    );
+    if (!headerRange) {
+      continue;
     }
 
-    const coveredLines = buildCoveredLines(
-      rowLayouts.map((layout) => layout.sourceLine),
-      rowLayouts.map((layout) => layout.lines.length),
+    const tableIsActive = table.rowRanges.some((rowRange) => {
+      const range = createRange(editor, rowRange.startPos, rowRange.endPos, normalizedText);
+      return range !== undefined && activeLines.has(range.start.line);
+    });
+    if (tableIsActive) {
+      continue;
+    }
+
+    const { layoutWidth, widthPx: contentWidthPx } = estimateResponsiveTableLayout(
+      editor,
+      headerRange.start.character,
     );
+    const layout = layoutBorderlessTable(table, layoutWidth);
+    const svg = renderBorderlessTableSvg(layout, {
+      fontFamily,
+      fontSize,
+      lineHeight,
+      contentWidthPx,
+      layoutWidth,
+      theme,
+    });
+    const key = tableCacheKey(
+      table,
+      borderlessTableToOverlayText(layout),
+      contentWidthPx,
+      isDarkTheme,
+      fontFamily,
+    );
+    dataUrisByKey.set(key, svgToDataUri(svg));
+    const ranges = rangesByKey.get(key) ?? [];
+    ranges.push(headerRange);
+    rangesByKey.set(key, ranges);
 
-    for (const layout of rowLayouts) {
-      if (activeLines.has(layout.sourceLine)) {
-        continue;
+    for (let rowIdx = 1; rowIdx < table.rowRanges.length; rowIdx++) {
+      const rowRange = table.rowRanges[rowIdx];
+      const range = createRange(editor, rowRange.startPos, rowRange.endPos, normalizedText);
+      if (range) {
+        hiddenRanges.push(range);
       }
-      if (coveredLines.has(layout.sourceLine)) {
-        continue;
-      }
-
-      const clipCount = getClipLineCount(
-        layout.sourceLine,
-        layout.lines.length,
-        activeLines,
-      );
-      const lines = layout.lines.slice(0, clipCount);
-      if (lines.length === 0) {
-        continue;
-      }
-
-      const svg = renderResponsiveRowSvg(lines, {
-        fontFamily,
-        fontSize,
-        lineHeight,
-        contentWidthPx,
-        layoutWidth,
-        theme,
-      });
-      const key = rowCacheKey(
-        table,
-        layout.rowIdx,
-        lines,
-        contentWidthPx,
-        isDarkTheme,
-        fontFamily,
-      );
-      dataUrisByKey.set(key, svgToDataUri(svg));
-      const ranges = rangesByKey.get(key) ?? [];
-      ranges.push(layout.range);
-      rangesByKey.set(key, ranges);
     }
   }
 
   decorations.apply(editor, rangesByKey, dataUrisByKey);
+  decorations.applyHidden(editor, hiddenRanges);
 }

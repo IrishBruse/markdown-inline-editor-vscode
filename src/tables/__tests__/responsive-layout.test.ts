@@ -81,10 +81,11 @@ describe('responsive-layout', () => {
       expect(capped).toEqual([3, 3]);
     });
 
-    it('preserves natural widths when the grid already fits', () => {
-      const capped = computeViewportColumnWidths([5, 8], 80);
-      expect(capped).toEqual([5, 8]);
-    });
+  it('caps long columns to the viewport budget even when natural widths are smaller than the source', () => {
+    const capped = computeViewportColumnWidths([14, 120], 100);
+    expect(estimateGridWidth(capped)).toBeLessThanOrEqual(100);
+    expect(capped[1]).toBeLessThan(120);
+  });
   });
 
   describe('buildResponsiveHeaderLine', () => {

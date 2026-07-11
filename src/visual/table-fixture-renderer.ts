@@ -1,7 +1,7 @@
 import { MarkdownParser } from '../parser';
 import type { DecorationRange, TableBlock } from '../parser/types';
 import { getResponsiveTableOffsetRanges } from '../decorator/table-responsive';
-import { layoutWrappedGridRow } from '../tables/responsive-svg';
+import { borderlessTableToOverlayText, layoutBorderlessTable } from '../tables/responsive-svg';
 
 const GRID_TABLE_TYPES = new Set([
   'tablePipe',
@@ -105,15 +105,13 @@ function buildOverlayLines(
   const sourceLines = text.split('\n');
   const lines: string[] = [];
   const sourceLineForOverlayLine: number[] = [];
-  const responsiveRows = new Map<number, { table: TableBlock; rowIdx: number }>();
+  const responsiveTables = new Map<number, TableBlock>();
   for (const table of tableBlocks) {
     if (!responsiveRanges.some((range) => range.startPos === table.startPos && range.endPos === table.endPos)) {
       continue;
     }
-    for (let rowIdx = 0; rowIdx < table.rowRanges.length; rowIdx++) {
-      const rowLine = offsetToLine(table.rowRanges[rowIdx].startPos, lineStarts);
-      responsiveRows.set(rowLine, { table, rowIdx });
-    }
+    const headerLine = offsetToLine(table.rowRanges[0].startPos, lineStarts);
+    responsiveTables.set(headerLine, table);
   }
 
   for (let lineIdx = 0; lineIdx < sourceLines.length; lineIdx++) {
@@ -121,9 +119,22 @@ function buildOverlayLines(
     const lineEnd =
       lineIdx + 1 < lineStarts.length ? lineStarts[lineIdx + 1] - 1 : text.length;
 
-    const responsiveRow = responsiveRows.get(lineIdx);
-    if (responsiveRow) {
-      lines.push(layoutWrappedGridRow(responsiveRow.table, responsiveRow.rowIdx, viewportColumns).join('\n'));
+    const responsiveTable = responsiveTables.get(lineIdx);
+    if (responsiveTable) {
+      lines.push(borderlessTableToOverlayText(
+        layoutBorderlessTable(responsiveTable, viewportColumns),
+      ));
+      sourceLineForOverlayLine.push(lineIdx);
+      continue;
+    }
+
+    const isHiddenResponsiveLine = [...responsiveTables.values()].some((table) => {
+      const headerLine = offsetToLine(table.rowRanges[0].startPos, lineStarts);
+      const endLine = offsetToLine(Math.max(table.startPos, table.endPos - 1), lineStarts);
+      return lineIdx > headerLine && lineIdx <= endLine;
+    });
+    if (isHiddenResponsiveLine) {
+      lines.push('');
       sourceLineForOverlayLine.push(lineIdx);
       continue;
     }

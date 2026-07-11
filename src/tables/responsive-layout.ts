@@ -27,6 +27,88 @@ export function shouldUseResponsiveLayout(colWidths: number[]): boolean {
 
 const MIN_COLUMN_WIDTH = 3;
 
+/** Character gap between borderless columns (matches SVG column gap). */
+export const BORDERLESS_COLUMN_GAP = 3;
+
+function estimateBorderlessWidth(colWidths: number[]): number {
+  const numCols = colWidths.length;
+  if (numCols === 0) {
+    return 0;
+  }
+  const gapBudget = (numCols - 1) * BORDERLESS_COLUMN_GAP;
+  return colWidths.reduce((sum, width) => sum + width, 0) + gapBudget;
+}
+
+/** Distribute column widths for borderless layout; short columns keep natural width. */
+export function computeBorderlessColumnWidths(
+  colWidths: number[],
+  viewportColumns: number,
+): number[] {
+  if (colWidths.length === 0) {
+    return [];
+  }
+
+  const numCols = colWidths.length;
+  const contentBudget = viewportColumns - (numCols - 1) * BORDERLESS_COLUMN_GAP;
+  if (contentBudget <= numCols * MIN_COLUMN_WIDTH) {
+    return colWidths.map(() => MIN_COLUMN_WIDTH);
+  }
+
+  const result = colWidths.map((width) => Math.max(MIN_COLUMN_WIDTH, width));
+  if (estimateBorderlessWidth(result) <= viewportColumns) {
+    return result;
+  }
+
+  const shortCols: number[] = [];
+  const longCols: number[] = [];
+  for (let i = 0; i < numCols; i++) {
+    if (colWidths[i] <= RESPONSIVE_COLUMN_THRESHOLD) {
+      shortCols.push(i);
+    } else {
+      longCols.push(i);
+    }
+  }
+
+  let used = 0;
+  for (const i of shortCols) {
+    const width = Math.max(MIN_COLUMN_WIDTH, colWidths[i]);
+    result[i] = width;
+    used += width;
+  }
+
+  const remaining = contentBudget - used;
+  if (longCols.length === 0 || remaining < longCols.length * MIN_COLUMN_WIDTH) {
+    const naturalSum = result.reduce((sum, width) => sum + width, 0);
+    const scale = contentBudget / naturalSum;
+    for (let i = 0; i < numCols; i++) {
+      result[i] = Math.max(MIN_COLUMN_WIDTH, Math.floor(result[i] * scale));
+    }
+  } else {
+    const longNaturalSum = longCols.reduce(
+      (sum, i) => sum + Math.max(MIN_COLUMN_WIDTH, colWidths[i]),
+      0,
+    );
+    for (const i of longCols) {
+      const natural = Math.max(MIN_COLUMN_WIDTH, colWidths[i]);
+      result[i] = Math.max(
+        MIN_COLUMN_WIDTH,
+        Math.floor((natural / longNaturalSum) * remaining),
+      );
+    }
+  }
+
+  while (estimateBorderlessWidth(result) > viewportColumns) {
+    const maxWidth = Math.max(...result);
+    const maxIdx = result.indexOf(maxWidth);
+    if (result[maxIdx] <= MIN_COLUMN_WIDTH) {
+      break;
+    }
+    result[maxIdx]--;
+  }
+
+  return result;
+}
+
 /** Cap column widths so the pipe grid fits within the viewport; long cells wrap vertically. */
 export function computeViewportColumnWidths(
   colWidths: number[],

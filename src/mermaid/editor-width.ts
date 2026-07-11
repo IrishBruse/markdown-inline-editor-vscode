@@ -3,6 +3,7 @@ import { config } from '../config';
 
 export const CHAR_WIDTH_RATIO = 0.6;
 const DEFAULT_COLUMNS = 120;
+const MIN_VIEWPORT_COLUMNS = 40;
 const MIN_MAX_WIDTH_PX = 320;
 const MAX_MAX_WIDTH_PX = 4096;
 const WIDTH_BUCKET_PX = 50;
@@ -62,4 +63,37 @@ export function estimateVisibleColumns(editor: vscode.TextEditor): number {
   }
 
   return Math.max(maxViewportColumns, maxLineEnd, DEFAULT_COLUMNS);
+}
+
+/**
+ * Visible editor viewport width in columns, ignoring long source lines.
+ * Use for responsive table layout so wide table rows do not inflate the wrap budget.
+ */
+export function estimateVisibleViewportColumns(editor: vscode.TextEditor): number {
+  const visibleRanges = editor.visibleRanges ?? [];
+  if (visibleRanges.length === 0) {
+    return DEFAULT_COLUMNS;
+  }
+
+  let maxViewportColumns = 0;
+  for (const range of visibleRanges) {
+    const lineColumns = range.end.character - range.start.character;
+    if (lineColumns > maxViewportColumns) {
+      maxViewportColumns = lineColumns;
+    }
+  }
+
+  return Math.max(maxViewportColumns, MIN_VIEWPORT_COLUMNS);
+}
+
+export function estimateResponsiveTableLayout(
+  editor: vscode.TextEditor,
+  startColumn: number = 0,
+): { viewportColumns: number; layoutWidth: number; widthPx: number } {
+  const editorConfig = vscode.workspace.getConfiguration('editor');
+  const fontSize = editorConfig.get<number>('fontSize', 14);
+  const viewportColumns = estimateVisibleViewportColumns(editor);
+  const layoutWidth = Math.max(1, viewportColumns - startColumn);
+  const widthPx = Math.max(1, Math.round(fontSize * CHAR_WIDTH_RATIO * viewportColumns));
+  return { viewportColumns, layoutWidth, widthPx };
 }

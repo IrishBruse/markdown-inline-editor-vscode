@@ -14,4 +14,18 @@ Guidelines for AI agents and contributors working in this repository.
 
 ## Visual table testing
 
-Fully automatic via the [visual-test-tables](.agents/skills/visual-test-tables/SKILL.md) skill. Agents must run `npm run visual:tables` after table changes without asking. One-time hook setup: `npm run visual:tables:setup-hooks`.
+After table rendering or layout changes, agents must run both checks below without asking.
+
+### Extension host screenshot
+
+```bash
+npm run screenshot:tables
+```
+
+Launches VS Code Extension Development Host with `docs/` as the workspace, opens `tests/05-tables.md`, scrolls to the long-cell wrapping table (line 326),
+and writes `screenshot.png` at the repo root.
+
+Review `screenshot.png` and confirm wrapping, alignment, and decorations look correct.
+Fix regressions before finishing.
+
+Requires `code` on PATH (`CODE_BIN`, `CDP_PORT` to override).
