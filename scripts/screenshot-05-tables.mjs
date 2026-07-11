@@ -11,15 +11,12 @@ const fixturePath = path.join(workspacePath, "tests/05-tables.md");
 const outputPath = path.join(root, "screenshot.png");
 const userDataDir = path.join(root, ".vscode-screenshot-profile");
 const extensionBundle = path.join(root, "dist/extension.js");
-const scrollLine = 326;
-const cursorLine = 326;
+const targetLine = 326;
 const cdpPort = Number(process.env.CDP_PORT ?? "9223");
 const cdpUrl = `http://127.0.0.1:${cdpPort}`;
 const codeBin = process.env.CODE_BIN ?? "code";
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function ensureExtensionBuilt() {
   if (fs.existsSync(extensionBundle)) {
@@ -47,33 +44,37 @@ function ensureScreenshotProfile() {
     "workbench.welcome.enabled": false,
     "extensions.ignoreRecommendations": true,
     "task.allowAutomaticTasks": "on",
+    "editor.minimap.enabled": false,
     "workbench.secondarySideBar.defaultVisibility": "hidden",
     "git.openRepositoryInParentFolders": "never"
   };
 
-  if (fs.existsSync(settingsPath)) {
-    const existing = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-    fs.writeFileSync(
-      settingsPath,
-      JSON.stringify({ ...existing, ...settings }, null, 2) + "\n"
-    );
-  } else {
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
-  }
+  const existing = fs.existsSync(settingsPath)
+    ? JSON.parse(fs.readFileSync(settingsPath, "utf8"))
+    : {};
+  fs.writeFileSync(
+    settingsPath,
+    JSON.stringify({ ...existing, ...settings }, null, 2) + "\n"
+  );
 
-  const keybindings = [
-    { key: "ctrl+shift+f1", command: "workbench.action.closeSidebar" },
-    { key: "ctrl+shift+f2", command: "workbench.action.closeAuxiliaryBar" },
-    { key: "ctrl+shift+f4", command: "workbench.action.quit" }
-  ];
   fs.writeFileSync(
     keybindingsPath,
-    JSON.stringify(keybindings, null, 2) + "\n"
+    JSON.stringify(
+      [
+        { key: "ctrl+shift+f1", command: "workbench.action.closeSidebar" },
+        { key: "ctrl+shift+f2", command: "workbench.action.closeAuxiliaryBar" },
+        { key: "ctrl+shift+f4", command: "workbench.action.quit" }
+      ],
+      null,
+      2
+    ) + "\n"
   );
 }
 
 async function waitForCdp(timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs;
+  let delayMs = 50;
+
   while (Date.now() < deadline) {
     try {
       const response = await fetch(`${cdpUrl}/json/version`);
@@ -83,8 +84,10 @@ async function waitForCdp(timeoutMs = 30_000) {
     } catch {
       // VS Code may not be ready yet.
     }
-    await sleep(500);
+    await sleep(delayMs);
+    delayMs = Math.min(delayMs * 2, 250);
   }
+
   throw new Error(
     `CDP endpoint did not respond within ${timeoutMs}ms (${cdpUrl})`
   );
@@ -109,113 +112,113 @@ function findWorkbenchPage(browser) {
   return null;
 }
 
+async function clickIfVisible(locator, timeoutMs = 400) {
+  if (await locator.isVisible({ timeout: timeoutMs }).catch(() => false)) {
+    await locator.click();
+    return true;
+  }
+  return false;
+}
+
 async function dismissInitialDialogs(page) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const continueWithoutSignIn = page.getByText(
-      "Continue without Signing In",
-      { exact: false }
-    );
-    if (
-      await continueWithoutSignIn
-        .isVisible({ timeout: 1000 })
-        .catch(() => false)
-    ) {
-      await continueWithoutSignIn.click();
-      await sleep(500);
-      continue;
-    }
+    const dismissed =
+      (await clickIfVisible(
+        page.getByText("Continue without Signing In", { exact: false })
+      )) ||
+      (await clickIfVisible(
+        page.getByRole("button", { name: "Continue", exact: true })
+      )) ||
+      (await clickIfVisible(
+        page
+          .locator(".dialog-buttons-row .monaco-button")
+          .filter({ hasText: "Close" }),
+        250
+      ));
 
-    const continueButton = page.getByRole("button", {
-      name: "Continue",
-      exact: true
-    });
-    if (await continueButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await continueButton.click();
-      await sleep(500);
-      continue;
+    if (!dismissed) {
+      break;
     }
-
-    const closeButton = page
-      .locator(".dialog-buttons-row .monaco-button")
-      .filter({ hasText: "Close" });
-    if (await closeButton.isVisible({ timeout: 500 }).catch(() => false)) {
-      await closeButton.click();
-      await sleep(500);
-      continue;
-    }
-
-    break;
+    await sleep(150);
   }
 
   const notificationClose = page.locator(
     ".notifications-toasts .codicon-close"
   );
-  const toastCount = await notificationClose.count();
-  for (let i = 0; i < toastCount; i += 1) {
+  while ((await notificationClose.count()) > 0) {
     await notificationClose
       .first()
-      .click({ timeout: 500 })
+      .click({ timeout: 250 })
       .catch(() => {});
-    await sleep(100);
   }
 
-  const gitNever = page.getByRole("button", { name: "Never", exact: true });
-  if (await gitNever.isVisible({ timeout: 500 }).catch(() => false)) {
-    await gitNever.click();
-    await sleep(100);
-  }
-
+  await clickIfVisible(
+    page.getByRole("button", { name: "Never", exact: true }),
+    250
+  );
   await page.keyboard.press("Escape");
-  await sleep(100);
-}
-
-async function openFixtureAtLine(page) {
-  await page.keyboard.press("Control+P");
-  await sleep(300);
-  await page.keyboard.type("tests/05-tables.md");
-  await sleep(300);
-  await page.keyboard.press("Enter");
-  await sleep(1000);
-
-  await page.keyboard.press("Control+G");
-  await sleep(200);
-  await page.keyboard.type(String(cursorLine));
-  await page.keyboard.press("Enter");
-  await sleep(500);
 }
 
 async function prepareEditorLayout(page) {
   await page.keyboard.press("Control+Shift+F1");
   await page.keyboard.press("Control+Shift+F2");
-  await sleep(150);
 }
 
-async function closeVscodeApp(page) {
-  if (page) {
-    await page.keyboard.press("Control+Shift+F4").catch(() => {});
-    await sleep(400);
-  }
+async function waitForFixtureEditor(page, timeoutMs = 20_000) {
+  await page
+    .locator(".tab.active")
+    .filter({ hasText: "05-tables.md" })
+    .waitFor({ state: "visible", timeout: timeoutMs });
+  await page.locator(".monaco-editor").first().waitFor({
+    state: "visible",
+    timeout: timeoutMs
+  });
 
-  spawnSync("pkill", ["-f", `--user-data-dir=${userDataDir}`], {
+  const deadline = Date.now() + 1_500;
+  let lastLineCount = 0;
+  while (Date.now() < deadline) {
+    const lineCount = await page
+      .locator(".view-line")
+      .count()
+      .catch(() => 0);
+    if (lineCount > 0 && lineCount === lastLineCount) {
+      return;
+    }
+    lastLineCount = lineCount;
+    await sleep(100);
+  }
+}
+
+function killEditorProcesses() {
+  spawnSync("pkill", ["-f", `user-data-dir=${userDataDir}`], {
     stdio: "ignore"
   });
 
   const lsof = spawnSync("lsof", ["-ti", `:${cdpPort}`], { encoding: "utf8" });
+  const myPid = process.pid;
   for (const pid of lsof.stdout.trim().split("\n")) {
-    if (!pid) {
+    const numericPid = Number(pid);
+    if (!pid || numericPid === myPid) {
       continue;
     }
     try {
-      process.kill(Number(pid), "SIGTERM");
+      process.kill(numericPid, "SIGTERM");
     } catch {
       // Process may already be gone.
     }
   }
-
-  await sleep(300);
 }
 
-let workbenchPage;
+async function shutdown(page, browser) {
+  if (page) {
+    await page.keyboard.press("Control+Shift+F4").catch(() => {});
+    await sleep(200);
+  }
+  if (browser) {
+    await browser.close().catch(() => {});
+  }
+  killEditorProcesses();
+}
 
 async function main() {
   ensureExtensionBuilt();
@@ -226,7 +229,7 @@ async function main() {
     throw new Error(`Editor binary not found on PATH: ${codeBin}`);
   }
 
-  const gotoTarget = `${fixturePath}:${scrollLine}:1`;
+  const gotoTarget = `${fixturePath}:${targetLine}:1`;
   const args = [
     "--new-window",
     `--extensionDevelopmentPath=${root}`,
@@ -237,7 +240,7 @@ async function main() {
   ];
 
   console.log(
-    `Launching ${codeBin} with docs workspace at line ${scrollLine}...`
+    `Launching ${codeBin} with docs workspace at line ${targetLine}...`
   );
   spawn(codeBin, args, {
     cwd: root,
@@ -246,29 +249,25 @@ async function main() {
   }).unref();
 
   await waitForCdp();
-  console.log("CDP ready, waiting for decorations...");
-  await sleep(1000);
+  console.log("CDP ready, waiting for editor...");
 
   const browser = await chromium.connectOverCDP(cdpUrl);
+  let page;
+
   try {
-    workbenchPage = findWorkbenchPage(browser);
-    if (!workbenchPage) {
+    page = findWorkbenchPage(browser);
+    if (!page) {
       throw new Error("Could not find VS Code workbench page over CDP");
     }
 
-    await dismissInitialDialogs(workbenchPage);
-    await prepareEditorLayout(workbenchPage);
-    await openFixtureAtLine(workbenchPage);
-    await sleep(2000);
+    await dismissInitialDialogs(page);
+    await prepareEditorLayout(page);
+    await waitForFixtureEditor(page);
 
-    await workbenchPage.screenshot({ path: outputPath, fullPage: false });
+    await page.screenshot({ path: outputPath, fullPage: false });
     console.log(`Wrote ${path.relative(root, outputPath)}`);
-
-    await closeVscodeApp(workbenchPage);
-    workbenchPage = undefined;
   } finally {
-    await browser.close().catch(() => {});
-    await closeVscodeApp(workbenchPage);
+    await shutdown(page, browser);
   }
 }
 
