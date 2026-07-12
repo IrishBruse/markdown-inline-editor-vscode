@@ -5,6 +5,7 @@ import {
   borderlessRowToOverlayText,
   borderlessTableToOverlayText,
   buildCoveredLines,
+  buildGridRowPayload,
   capWrapLines,
   formatGridLine,
   formatSeparatorGridLine,
@@ -14,6 +15,7 @@ import {
   layoutWrappedGridRow,
   layoutWrappedGridTable,
   renderBorderlessTableSvg,
+  renderGridLinesSvg,
   renderResponsiveRowSvg,
 } from '../responsive-svg';
 import { computeBorderlessColumnWidths, computeViewportColumnWidths } from '../responsive-layout';
@@ -118,6 +120,68 @@ describe('responsive-svg', () => {
     const line = formatSeparatorGridLine([5, 10]);
     expect(line).toContain('\u2502');
     expect(line).toContain('-------');
+  });
+
+  it('renderGridLinesSvg renders pipes and multi-line wrap with muted content', async () => {
+    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
+    const md = [
+      '| Section Header | Detailed Placeholder Content |',
+      '| -------------- | ---------------------------- |',
+      `| Row 1          | ${longText} |`,
+    ].join('\n');
+    const parser = await MarkdownParser.create();
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const table = tableBlocks[0];
+    const colWidths = computeViewportColumnWidths(table.colWidths, 80);
+    const dataLines = layoutWrappedGridRow(table, 2, 80);
+    const svg = renderGridLinesSvg(dataLines, {
+      fontFamily: 'monospace',
+      fontSize: 14,
+      lineHeight: 20,
+      contentWidthPx: 640,
+      isHeader: false,
+      showBottomDivider: true,
+      colWidths,
+      theme: {
+        foreground: '#d4d4d4',
+        mutedForeground: '#858585',
+        separator: '#858585',
+      },
+    });
+
+    expect(dataLines.length).toBeGreaterThan(1);
+    expect(svg).toContain('\u2502');
+    expect(svg).toContain('Row 1');
+    expect(svg).toContain('Lorem');
+    expect(svg).toContain('fill="#858585"');
+    expect(svg).toContain('fill="#d4d4d4"');
+    expect(svg).toContain('<line');
+    const expectedHeight = Math.round(20 * 0.9) * 2 + dataLines.length * 20 + 1;
+    expect(svg).toContain(`height="${expectedHeight}"`);
+  });
+
+  it('buildGridRowPayload returns cacheable layout key with grid lines', async () => {
+    const md = '| A | B |\n|---|---|\n| x | y |';
+    const parser = await MarkdownParser.create();
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const { layoutKey, payload } = buildGridRowPayload(
+      tableBlocks[0],
+      2,
+      80,
+      640,
+      'monospace',
+      14,
+      20,
+      {
+        foreground: '#d4d4d4',
+        mutedForeground: '#858585',
+        separator: '#858585',
+      },
+    );
+
+    expect(layoutKey).toContain('\u2502');
+    expect(layoutKey).toContain('x');
+    expect(payload.dataUri).toMatch(/^data:image\/svg\+xml/);
   });
 
   it('renders multi-line svg at dynamic height', async () => {

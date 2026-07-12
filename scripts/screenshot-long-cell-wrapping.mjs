@@ -41,21 +41,15 @@ async function runTableScreenshotTest() {
   console.log(`\n=== Window size ${sizeLabel} ===`);
   const allWritten = await captureAtWindowSize(windowSize, sizeLabel);
 
-  if (allWritten.length > 0) {
-    fs.copyFileSync(
-      path.join(screenshotsDir, allWritten[0]),
-      path.join(root, "screenshot.png"),
-    );
-  }
   console.log(
-    `\nWrote ${allWritten.length} screenshots to ${path.relative(root, screenshotsDir)}/`,
+    `\nWrote ${allWritten.length} screenshots to ${path.relative(root, screenshotsDir)}/`
   );
 }
 
 function parseWindowSize() {
   if (process.env.WINDOW_SIZES?.trim()) {
     throw new Error(
-      "WINDOW_SIZES is not supported. Pass one size via CLI args or WINDOW_WIDTH and WINDOW_HEIGHT.",
+      "WINDOW_SIZES is not supported. Pass one size via CLI args or WINDOW_WIDTH and WINDOW_HEIGHT."
     );
   }
 
@@ -71,7 +65,7 @@ function parseWindowSize() {
     height = Number(cliArgs[1]);
   } else if (cliArgs.length === 1) {
     throw new Error(
-      "Pass width and height as two numbers, for example: npm run screenshot:long-cell-wrapping -- 1280 800",
+      "Pass width and height as two numbers, for example: npm run screenshot:long-cell-wrapping -- 1280 800"
     );
   } else if (envWidth !== undefined || envHeight !== undefined) {
     if (envWidth === undefined || envHeight === undefined) {
@@ -110,7 +104,7 @@ function parseCursorScenarios() {
 
   return [
     { name: "rendered", line: 3 },
-    { name: "active-row", line: 10 },
+    { name: "active-row", line: 10 }
   ];
 }
 
@@ -165,7 +159,7 @@ function ensureExtensionBuilt() {
   console.log("dist/extension.js missing, running npm run bundle...");
   const result = spawnSync("npm", ["run", "bundle"], {
     cwd: root,
-    stdio: "inherit",
+    stdio: "inherit"
   });
   if (result.status !== 0) {
     throw new Error("Failed to build extension bundle");
@@ -231,7 +225,7 @@ function killPid(pid, signal = "SIGTERM") {
   try {
     if (process.platform === "win32") {
       spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], {
-        stdio: "ignore",
+        stdio: "ignore"
       });
       return true;
     }
@@ -263,7 +257,7 @@ async function stopStaleEditorIfNeeded() {
   if (await isPortOpen(cdpPort)) {
     throw new Error(
       `CDP port ${cdpPort} is already in use by another process. ` +
-        "Set CDP_PORT to a free port or close the other debugger.",
+        "Set CDP_PORT to a free port or close the other debugger."
     );
   }
 }
@@ -287,7 +281,7 @@ function ensureScreenshotProfile() {
     "window.zoomLevel": 0,
     "workbench.editor.restoreViewState": false,
     "workbench.secondarySideBar.defaultVisibility": "hidden",
-    "git.openRepositoryInParentFolders": "never",
+    "git.openRepositoryInParentFolders": "never"
   };
 
   const existing = fs.existsSync(settingsPath)
@@ -295,7 +289,7 @@ function ensureScreenshotProfile() {
     : {};
   fs.writeFileSync(
     settingsPath,
-    JSON.stringify({ ...existing, ...settings }, null, 2) + "\n",
+    JSON.stringify({ ...existing, ...settings }, null, 2) + "\n"
   );
 
   fs.writeFileSync(
@@ -304,21 +298,17 @@ function ensureScreenshotProfile() {
       [
         { key: "ctrl+shift+f1", command: "workbench.action.closeSidebar" },
         { key: "ctrl+shift+f2", command: "workbench.action.closeAuxiliaryBar" },
-        { key: "ctrl+shift+f4", command: "workbench.action.quit" },
+        { key: "ctrl+shift+f4", command: "workbench.action.quit" }
       ],
       null,
-      2,
-    ) + "\n",
+      2
+    ) + "\n"
   );
 }
 
 function prepareScreenshotsDir() {
   fs.rmSync(screenshotsDir, { recursive: true, force: true });
   fs.mkdirSync(screenshotsDir, { recursive: true });
-  const legacyScreenshot = path.join(root, "screenshot.png");
-  if (fs.existsSync(legacyScreenshot)) {
-    fs.rmSync(legacyScreenshot, { force: true });
-  }
 }
 
 function launchExtensionHost({ width, height }) {
@@ -330,13 +320,13 @@ function launchExtensionHost({ width, height }) {
     `--window-size=${width},${height}`,
     "--goto",
     `${fixturePath}:${cursorLine}`,
-    workspacePath,
+    workspacePath
   ];
 
   editorProcess = spawn(codeBin, args, {
     cwd: root,
     detached: process.platform !== "win32",
-    stdio: "ignore",
+    stdio: "ignore"
   });
 
   if (!editorProcess.pid) {
@@ -388,7 +378,7 @@ async function connectBrowserWithRetry(attempts = 5) {
   throw new Error(
     `Failed to connect Playwright to CDP at ${cdpUrl}: ${
       lastError instanceof Error ? lastError.message : String(lastError)
-    }`,
+    }`
   );
 }
 
@@ -410,7 +400,7 @@ async function waitForCdp(timeoutMs = 45_000) {
   }
 
   throw new Error(
-    `CDP endpoint did not respond within ${timeoutMs}ms (${cdpUrl})`,
+    `CDP endpoint did not respond within ${timeoutMs}ms (${cdpUrl})`
   );
 }
 
@@ -421,10 +411,7 @@ async function findWorkbenchPage(browser, timeoutMs = 30_000) {
     for (const context of browser.contexts()) {
       for (const candidate of context.pages()) {
         const url = candidate.url();
-        if (
-          url.includes("vscode-app") ||
-          url.startsWith("vscode-file://")
-        ) {
+        if (url.includes("vscode-app") || url.startsWith("vscode-file://")) {
           return candidate;
         }
       }
@@ -452,7 +439,7 @@ async function waitForWorkbench(page, timeoutMs = 45_000) {
   await page.waitForFunction(
     () => document.title.includes("Extension Development Host"),
     undefined,
-    { timeout: timeoutMs },
+    { timeout: timeoutMs }
   );
 }
 
@@ -494,7 +481,7 @@ async function waitForFixtureEditor(page, timeoutMs = 45_000) {
   await activeTab.waitFor({ state: "visible", timeout: 10_000 });
   await page.locator(".monaco-editor").first().waitFor({
     state: "visible",
-    timeout: 10_000,
+    timeout: 10_000
   });
 
   const settleDeadline = Date.now() + 3_000;
@@ -525,7 +512,7 @@ async function focusEditor(page) {
 function editorCaptureLocator(page) {
   return page
     .locator(
-      ".editor-group-container.active .monaco-editor, .editor-group-container .monaco-editor",
+      ".editor-group-container.active .monaco-editor, .editor-group-container .monaco-editor"
     )
     .first();
 }
@@ -586,16 +573,16 @@ async function captureCursorScenarios(page, sizeLabel) {
 
     if (scenario.name === "rendered" && decorationSpans < 1) {
       console.warn(
-        `Expected whole-table decoration at line ${scenario.line}, decoration spans=${decorationSpans}`,
+        `Expected whole-table decoration at line ${scenario.line}, decoration spans=${decorationSpans}`
       );
     }
     if (scenario.name === "active-row" && decorationSpans < 8) {
       console.warn(
-        `Expected per-row decorations at line ${scenario.line}, decoration spans=${decorationSpans}`,
+        `Expected per-row decorations at line ${scenario.line}, decoration spans=${decorationSpans}`
       );
     }
     console.log(
-      `Scenario ${scenario.name}: decoration spans=${decorationSpans}, visible raw rows=${visibleRawRows}`,
+      `Scenario ${scenario.name}: decoration spans=${decorationSpans}, visible raw rows=${visibleRawRows}`
     );
 
     const filename = `${screenshotPrefix}-${sizeToken}-${scenario.name}.png`;
@@ -623,36 +610,36 @@ async function dismissInitialDialogs(page) {
       (await clickIfVisible(
         page
           .getByRole("dialog", { name: "Welcome to Visual Studio Code" })
-          .getByRole("button", { name: "Close" }),
+          .getByRole("button", { name: "Close" })
       )) ||
       (await clickIfVisible(
         page
           .locator(".onboarding-a-overlay button")
-          .filter({ hasText: /skip|close|later|continue without/i }),
+          .filter({ hasText: /skip|close|later|continue without/i })
       )) ||
       (await clickIfVisible(
-        page.getByText("Continue without Signing In", { exact: false }),
+        page.getByText("Continue without Signing In", { exact: false })
       )) ||
       (await clickIfVisible(
-        page.getByRole("button", { name: "Continue", exact: true }),
+        page.getByRole("button", { name: "Continue", exact: true })
       )) ||
       (await clickIfVisible(
         page.getByRole("button", {
           name: "Yes, I trust the authors",
-          exact: false,
-        }),
+          exact: false
+        })
       )) ||
       (await clickIfVisible(
-        page.getByRole("button", { name: "Trust", exact: true }),
+        page.getByRole("button", { name: "Trust", exact: true })
       )) ||
       (await clickIfVisible(
-        page.getByRole("button", { name: "No", exact: true }),
+        page.getByRole("button", { name: "No", exact: true })
       )) ||
       (await clickIfVisible(
         page
           .locator(".dialog-buttons-row .monaco-button")
           .filter({ hasText: "Close" }),
-        250,
+        250
       ));
 
     if (!dismissed) {
@@ -662,7 +649,7 @@ async function dismissInitialDialogs(page) {
   }
 
   const notificationClose = page.locator(
-    ".notifications-toasts .codicon-close",
+    ".notifications-toasts .codicon-close"
   );
   while ((await notificationClose.count()) > 0) {
     await notificationClose
@@ -673,7 +660,7 @@ async function dismissInitialDialogs(page) {
 
   await clickIfVisible(
     page.getByRole("button", { name: "Never", exact: true }),
-    250,
+    250
   );
   await page.keyboard.press("Escape");
 }
@@ -727,7 +714,7 @@ async function readVisibleLineRange(page) {
     }
     return {
       top: lineNumbers[0],
-      bottom: lineNumbers[lineNumbers.length - 1],
+      bottom: lineNumbers[lineNumbers.length - 1]
     };
   });
 }
@@ -754,11 +741,11 @@ function tableContentScore(signature) {
     "Row 8",
     "Row 9",
     "Row 10",
-    "Lorem",
+    "Lorem"
   ];
   return markers.reduce(
     (score, marker) => score + (signature.includes(marker) ? 1 : 0),
-    0,
+    0
   );
 }
 
@@ -788,7 +775,7 @@ async function scrollEditorViewport(page) {
 
 async function captureScrollingScreenshots(page, sizeLabel) {
   console.log(
-    `Capturing ${fixtureBasename} (${sizeLabel}, viewport scroll until end)`,
+    `Capturing ${fixtureBasename} (${sizeLabel}, viewport scroll until end)`
   );
 
   await focusEditor(page);

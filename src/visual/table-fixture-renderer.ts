@@ -1,7 +1,7 @@
 import { MarkdownParser } from '../parser';
 import type { DecorationRange, TableBlock } from '../parser/types';
 import { getResponsiveTableOffsetRanges } from '../decorator/table-responsive';
-import { borderlessTableToOverlayText, layoutBorderlessTable } from '../tables/responsive-svg';
+import { layoutWrappedGridRow } from '../tables/responsive-svg';
 
 const GRID_TABLE_TYPES = new Set([
   'tablePipe',
@@ -94,6 +94,15 @@ interface OverlayBuildResult {
   sourceLineForOverlayLine: number[];
 }
 
+function responsiveTableOverlayText(table: TableBlock, viewportColumns: number): string {
+  const lines: string[] = [];
+  const lastRowIdx = table.rowRanges.length - 1;
+  for (let rowIdx = 0; rowIdx <= lastRowIdx; rowIdx++) {
+    lines.push(...layoutWrappedGridRow(table, rowIdx, viewportColumns));
+  }
+  return lines.join('\n');
+}
+
 function buildOverlayLines(
   text: string,
   decorations: DecorationRange[],
@@ -121,9 +130,7 @@ function buildOverlayLines(
 
     const responsiveTable = responsiveTables.get(lineIdx);
     if (responsiveTable) {
-      lines.push(borderlessTableToOverlayText(
-        layoutBorderlessTable(responsiveTable, viewportColumns),
-      ));
+      lines.push(responsiveTableOverlayText(responsiveTable, viewportColumns));
       sourceLineForOverlayLine.push(lineIdx);
       continue;
     }

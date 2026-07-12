@@ -7,6 +7,7 @@ import {
   RESPONSIVE_LAYOUT_WIDTH,
   wrapCellLines,
 } from './responsive-layout';
+import { ensureSvgDimensions, svgToDataUri } from '../mermaid/svg-processor';
 
 export interface ResponsiveTableTheme {
   foreground: string;
@@ -418,6 +419,264 @@ function columnXPositions(colWidths: number[], charWidth: number): number[] {
     x += colWidths[i] * charWidth + gapPx;
   }
   return positions;
+}
+
+export interface GridLinesSvgOptions extends ResponsiveTableSvgOptions {
+  isHeader: boolean;
+  showBottomDivider: boolean;
+  colWidths: number[];
+  compact?: boolean;
+}
+
+function gridPipeCharPositions(colWidths: number[]): number[] {
+  const pipes = [0];
+  let charIdx = 1;
+  for (const width of colWidths) {
+    charIdx += width + 2;
+    pipes.push(charIdx);
+  }
+  return pipes;
+}
+
+function parseGridLineCells(line: string): string[] {
+  const cells: string[] = [];
+  let index = 0;
+  while (index < line.length) {
+    if (line[index] !== PIPE) {
+      index++;
+      continue;
+    }
+    index++;
+    const start = index;
+    while (index < line.length && line[index] !== PIPE) {
+      index++;
+    }
+    cells.push(line.slice(start, index));
+  }
+  return cells;
+}
+
+function getGridCellFill(
+  colIdx: number,
+  isHeader: boolean,
+  theme: ResponsiveTableTheme,
+): string {
+  if (isHeader || colIdx === 0) {
+    return theme.foreground;
+  }
+  return theme.mutedForeground;
+}
+
+function measureGridRowHeight(
+  gridLines: string[],
+  lineHeight: number,
+  showBottomDivider: boolean,
+  compact: boolean,
+): number {
+  const lineCount = Math.max(1, gridLines.length);
+  if (compact) {
+    return lineCount * lineHeight + (showBottomDivider ? 1 : 0);
+  }
+  const rowPadding = Math.round(lineHeight * ROW_PADDING_RATIO);
+  return rowPadding * 2 + lineCount * lineHeight + (showBottomDivider ? 1 : 0);
+}
+
+function appendGridLinesToSvg(
+  gridLines: string[],
+  options: GridLinesSvgOptions,
+  yOffset: number,
+  textElements: string[],
+  dividerElements: string[],
+): number {
+  const charWidth = options.fontSize * CHAR_WIDTH_RATIO;
+  const widthPx = options.contentWidthPx;
+  const rowPadding = options.compact
+    ? 0
+    : Math.round(options.lineHeight * ROW_PADDING_RATIO);
+  const lineCount = Math.max(1, gridLines.length);
+  const rowHeight = measureGridRowHeight(
+    gridLines,
+    options.lineHeight,
+    options.showBottomDivider,
+    options.compact ?? false,
+  );
+  const pipePositions = gridPipeCharPositions(options.colWidths);
+
+  for (let lineIdx = 0; lineIdx < gridLines.length; lineIdx++) {
+    const y = yOffset + rowPadding + Math.round((lineIdx + 1) * options.lineHeight * 0.8);
+    const gridLine = gridLines[lineIdx];
+    const cells = parseGridLineCells(gridLine);
+
+    for (const pipeCharIdx of pipePositions) {
+      if (pipeCharIdx >= gridLine.length || gridLine[pipeCharIdx] !== PIPE) {
+        continue;
+      }
+      textElements.push(
+        `<text x="${pipeCharIdx * charWidth}" y="${y}" fill="${options.theme.separator}" clip-path="url(#clip)" font-family="${escapeSvgText(options.fontFamily)}" font-size="${options.fontSize}px">${PIPE}</text>`,
+      );
+    }
+
+    for (let colIdx = 0; colIdx < cells.length; colIdx++) {
+      const cellText = cells[colIdx];
+      if (cellText.length === 0) {
+        continue;
+      }
+      const x = (pipePositions[colIdx] + 1) * charWidth;
+      const fill = getGridCellFill(colIdx, options.isHeader, options.theme);
+      textElements.push(
+        `<text x="${x}" y="${y}" fill="${fill}" clip-path="url(#clip)" font-family="${escapeSvgText(options.fontFamily)}" font-size="${options.fontSize}px">${escapeSvgText(cellText)}</text>`,
+      );
+    }
+  }
+
+  if (options.showBottomDivider) {
+    const dividerY = yOffset + rowHeight - 0.5;
+    dividerElements.push(
+      `<line x1="0" y1="${dividerY}" x2="${widthPx}" y2="${dividerY}" stroke="${options.theme.separator}" stroke-width="1"/>`,
+    );
+  }
+
+  return rowHeight;
+}
+
+export function renderGridLinesSvg(
+  gridLines: string[],
+  options: GridLinesSvgOptions,
+): string {
+  const textElements: string[] = [];
+  const dividerElements: string[] = [];
+  appendGridLinesToSvg(gridLines, options, 0, textElements, dividerElements);
+  const heightPx = measureGridRowHeight(
+    gridLines,
+    options.lineHeight,
+    options.showBottomDivider,
+    options.compact ?? false,
+  );
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${options.contentWidthPx}" height="${heightPx}" viewBox="0 0 ${options.contentWidthPx} ${heightPx}" style="overflow:hidden">`,
+    '<defs><clipPath id="clip"><rect width="100%" height="100%"/></clipPath></defs>',
+    '<rect width="100%" height="100%" fill="transparent"/>',
+    ...textElements,
+    ...dividerElements,
+    '</svg>',
+  ].join('');
+}
+
+export function buildGridRowPayload(
+  table: TableBlock,
+  rowIdx: number,
+  layoutWidth: number,
+  contentWidthPx: number,
+  fontFamily: string,
+  fontSize: number,
+  lineHeight: number,
+  theme: ResponsiveTableTheme,
+): { layoutKey: string; payload: { dataUri: string; widthPx: number; heightPx: number } } {
+  const colWidths = computeViewportColumnWidths(table.colWidths, layoutWidth);
+  const gridLines = layoutWrappedGridRow(table, rowIdx, layoutWidth);
+  const isHeader = rowIdx === 0;
+  const showBottomDivider = rowIdx !== 1;
+  let svg = renderGridLinesSvg(gridLines, {
+    fontFamily,
+    fontSize,
+    lineHeight,
+    contentWidthPx,
+    layoutWidth,
+    theme,
+    isHeader,
+    showBottomDivider,
+    colWidths,
+    compact: rowIdx === 1,
+  });
+  const heightPx = Math.ceil(
+    parseFloat(svg.match(/\bheight="(\d+(?:\.\d+)?)(?:px)?"/)?.[1] ?? '1'),
+  );
+  svg = ensureSvgDimensions(svg, contentWidthPx, heightPx);
+  return {
+    layoutKey: gridLines.join('\n'),
+    payload: {
+      dataUri: svgToDataUri(svg),
+      widthPx: contentWidthPx,
+      heightPx,
+    },
+  };
+}
+
+export function buildGridTableSegmentPayload(
+  table: TableBlock,
+  fromRowIdx: number,
+  toRowIdx: number,
+  layoutWidth: number,
+  contentWidthPx: number,
+  fontFamily: string,
+  fontSize: number,
+  lineHeight: number,
+  theme: ResponsiveTableTheme,
+  maxHeightPx?: number,
+): { layoutKey: string; payload: { dataUri: string; widthPx: number; heightPx: number } } {
+  const colWidths = computeViewportColumnWidths(table.colWidths, layoutWidth);
+  const textElements: string[] = [];
+  const dividerElements: string[] = [];
+  const layoutKeyParts: string[] = [];
+  let yOffset = 0;
+
+  for (let rowIdx = fromRowIdx; rowIdx <= toRowIdx; rowIdx++) {
+    const gridLines = layoutWrappedGridRow(table, rowIdx, layoutWidth);
+    const isHeader = rowIdx === 0;
+    const isSeparator = rowIdx === 1;
+    const showBottomDivider = rowIdx < toRowIdx;
+    const rowHeight = measureGridRowHeight(
+      gridLines,
+      lineHeight,
+      showBottomDivider,
+      isSeparator,
+    );
+    if (maxHeightPx !== undefined && yOffset + rowHeight > maxHeightPx) {
+      break;
+    }
+
+    appendGridLinesToSvg(
+      gridLines,
+      {
+        fontFamily,
+        fontSize,
+        lineHeight,
+        contentWidthPx,
+        layoutWidth,
+        theme,
+        isHeader,
+        showBottomDivider,
+        colWidths,
+        compact: isSeparator,
+      },
+      yOffset,
+      textElements,
+      dividerElements,
+    );
+    layoutKeyParts.push(...gridLines);
+    yOffset += rowHeight;
+  }
+
+  const heightPx = Math.max(1, yOffset);
+  let svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${contentWidthPx}" height="${heightPx}" viewBox="0 0 ${contentWidthPx} ${heightPx}" style="overflow:hidden">`,
+    '<defs><clipPath id="clip"><rect width="100%" height="100%"/></clipPath></defs>',
+    '<rect width="100%" height="100%" fill="transparent"/>',
+    ...textElements,
+    ...dividerElements,
+    '</svg>',
+  ].join('');
+  svg = ensureSvgDimensions(svg, contentWidthPx, heightPx);
+
+  return {
+    layoutKey: layoutKeyParts.join('\n'),
+    payload: {
+      dataUri: svgToDataUri(svg),
+      widthPx: contentWidthPx,
+      heightPx,
+    },
+  };
 }
 
 export function renderResponsiveRowSvg(

@@ -2,10 +2,11 @@ import { MarkdownParser } from '../../parser';
 import type { TableBlock } from '../../parser/types';
 import { getResponsiveTableOffsetRanges } from '../table-responsive';
 import {
-  borderlessTableToOverlayText,
-  layoutBorderlessTable,
-  renderBorderlessTableSvg,
+  buildGridRowPayload,
+  layoutWrappedGridRow,
+  renderGridLinesSvg,
 } from '../../tables/responsive-svg';
+import { computeViewportColumnWidths } from '../../tables/responsive-layout';
 
 describe('table-responsive decorations', () => {
   let parser: MarkdownParser;
@@ -33,26 +34,47 @@ describe('table-responsive decorations', () => {
     return parser.extractDecorationsWithScopes(md).tableBlocks;
   }
 
-  it('layoutBorderlessTable renders wrapped rows without pipes', () => {
+  it('layoutWrappedGridRow renders wrapped rows with pipes', () => {
     const tableBlocks = parseLongCellTable();
-    const layout = layoutBorderlessTable(tableBlocks[0], 80);
-    const overlay = borderlessTableToOverlayText(layout);
+    const headerLines = layoutWrappedGridRow(tableBlocks[0], 0, 80);
+    const dataLines = layoutWrappedGridRow(tableBlocks[0], 2, 80);
 
-    expect(layout.rows).toHaveLength(2);
-    expect(layout.rows[1].lineCount).toBeGreaterThan(1);
-    expect(overlay).toContain('Row 1');
-    expect(overlay).toContain('Lorem');
-    expect(overlay).not.toContain('\u2502');
+    expect(headerLines[0]).toContain('Section Header');
+    expect(headerLines[0]).toContain('\u2502');
+    expect(dataLines.length).toBeGreaterThan(1);
+    expect(dataLines[0]).toContain('Row 1');
+    expect(dataLines[0]).toContain('\u2502');
+    expect(dataLines.some((line) => line.includes('Lorem'))).toBe(true);
   });
 
-  it('renderBorderlessTableSvg stacks rows with horizontal dividers', () => {
+  it('renderGridLinesSvg renders wrapped rows with pipes and dividers', () => {
     const tableBlocks = parseLongCellTable();
-    const layout = layoutBorderlessTable(tableBlocks[0], 80);
-    const svg = renderBorderlessTableSvg(layout, {
+    const table = tableBlocks[0];
+    const colWidths = computeViewportColumnWidths(table.colWidths, 80);
+    const headerLines = layoutWrappedGridRow(table, 0, 80);
+    const dataLines = layoutWrappedGridRow(table, 2, 80);
+    const headerSvg = renderGridLinesSvg(headerLines, {
       fontFamily: 'monospace',
       fontSize: 14,
       lineHeight: 20,
       contentWidthPx: 640,
+      isHeader: true,
+      showBottomDivider: true,
+      colWidths,
+      theme: {
+        foreground: '#d4d4d4',
+        mutedForeground: '#858585',
+        separator: '#858585',
+      },
+    });
+    const dataSvg = renderGridLinesSvg(dataLines, {
+      fontFamily: 'monospace',
+      fontSize: 14,
+      lineHeight: 20,
+      contentWidthPx: 640,
+      isHeader: false,
+      showBottomDivider: true,
+      colWidths,
       theme: {
         foreground: '#d4d4d4',
         mutedForeground: '#858585',
@@ -60,10 +82,34 @@ describe('table-responsive decorations', () => {
       },
     });
 
-    expect(svg).toContain('<line');
-    expect(svg).toContain('Section Header');
-    expect(svg).toContain('Row 1');
-    expect(svg).not.toContain('\u2502');
+    expect(headerSvg).toContain('<line');
+    expect(headerSvg).toContain('Section Header');
+    expect(headerSvg).toContain('\u2502');
+    expect(dataSvg).toContain('Row 1');
+    expect(dataSvg).toContain('\u2502');
+    expect(dataSvg).toContain('<line');
+  });
+
+  it('buildGridRowPayload produces grid svg for each row', () => {
+    const tableBlocks = parseLongCellTable();
+    const { payload } = buildGridRowPayload(
+      tableBlocks[0],
+      2,
+      80,
+      640,
+      'monospace',
+      14,
+      20,
+      {
+        foreground: '#d4d4d4',
+        mutedForeground: '#858585',
+        separator: '#858585',
+      },
+    );
+
+    expect(payload.dataUri).toMatch(/^data:image\/svg\+xml/);
+    expect(payload.widthPx).toBe(640);
+    expect(payload.heightPx).toBeGreaterThan(20);
   });
 
   it('getResponsiveTableOffsetRanges returns table spans for long-cell tables', () => {
