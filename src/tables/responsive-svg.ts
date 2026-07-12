@@ -21,6 +21,7 @@ export interface ResponsiveTableSvgOptions {
   layoutWidth?: number;
   contentWidthPx: number;
   theme: ResponsiveTableTheme;
+  maxHeightPx?: number;
 }
 
 export interface BorderlessRowLayout {
@@ -136,32 +137,28 @@ export function layoutBorderlessTable(
   table: TableBlock,
   viewportColumns: number = RESPONSIVE_LAYOUT_WIDTH,
 ): BorderlessTableLayout {
+  const lastRowIdx = table.rowRanges.length - 1;
+  return layoutBorderlessTableSegment(table, 0, lastRowIdx, viewportColumns);
+}
+
+export function layoutBorderlessTableSegment(
+  table: TableBlock,
+  fromRowIdx: number,
+  toRowIdx: number,
+  viewportColumns: number = RESPONSIVE_LAYOUT_WIDTH,
+): BorderlessTableLayout {
   const colWidths = computeBorderlessColumnWidths(table.colWidths, viewportColumns);
   const rows: BorderlessRowLayout[] = [];
 
-  const headerColumns = buildBorderlessColumns(table.headers, colWidths);
-  rows.push({
-    columns: headerColumns,
-    colWidths,
-    isHeader: true,
-    isSeparatorOnly: false,
-    lineCount: rowLineCount(headerColumns),
-    showBottomDivider: true,
-  });
-
-  for (const dataRow of table.rows) {
-    const columns = buildBorderlessColumns(
-      dataRow.cells.map((cell) => cell.displayText),
-      colWidths,
-    );
-    rows.push({
-      columns,
-      colWidths,
-      isHeader: false,
-      isSeparatorOnly: false,
-      lineCount: rowLineCount(columns),
-      showBottomDivider: true,
-    });
+  for (let rowIdx = fromRowIdx; rowIdx <= toRowIdx; rowIdx++) {
+    if (rowIdx === 1) {
+      continue;
+    }
+    const rowLayout = layoutBorderlessRow(table, rowIdx, viewportColumns, undefined, colWidths);
+    if (rowLayout.isSeparatorOnly || rowLayout.lineCount === 0) {
+      continue;
+    }
+    rows.push(rowLayout);
   }
 
   return { rows, colWidths };
@@ -216,6 +213,9 @@ export function renderBorderlessTableSvg(
     }
 
     const rowHeight = measureBorderlessRowHeight(row, options.lineHeight);
+    if (options.maxHeightPx !== undefined && yOffset + rowHeight > options.maxHeightPx) {
+      break;
+    }
 
     for (let lineIdx = 0; lineIdx < row.lineCount; lineIdx++) {
       const y = yOffset + rowPadding + Math.round((lineIdx + 1) * options.lineHeight * 0.8);
@@ -262,16 +262,17 @@ export function layoutBorderlessRow(
   rowIdx: number,
   viewportColumns: number = RESPONSIVE_LAYOUT_WIDTH,
   maxWrapLines?: number,
+  colWidths?: number[],
 ): BorderlessRowLayout {
-  const colWidths = computeBorderlessColumnWidths(table.colWidths, viewportColumns);
+  const widths = colWidths ?? computeBorderlessColumnWidths(table.colWidths, viewportColumns);
 
   if (rowIdx === 1) {
     return {
-      columns: colWidths.map(() => ['']),
-      colWidths,
+      columns: widths.map(() => []),
+      colWidths: widths,
       isHeader: false,
       isSeparatorOnly: true,
-      lineCount: 1,
+      lineCount: 0,
       showBottomDivider: false,
     };
   }
@@ -281,14 +282,14 @@ export function layoutBorderlessRow(
   let showBottomDivider = true;
 
   if (rowIdx === 0) {
-    columns = buildBorderlessColumns(table.headers, colWidths);
+    columns = buildBorderlessColumns(table.headers, widths);
     isHeader = true;
   } else {
     const dataRow = table.rows[rowIdx - 2];
     if (!dataRow) {
       return {
         columns: [],
-        colWidths,
+        colWidths: widths,
         isHeader: false,
         isSeparatorOnly: false,
         lineCount: 0,
@@ -297,7 +298,7 @@ export function layoutBorderlessRow(
     }
     columns = buildBorderlessColumns(
       dataRow.cells.map((cell) => cell.displayText),
-      colWidths,
+      widths,
     );
   }
 
@@ -309,7 +310,7 @@ export function layoutBorderlessRow(
 
   return {
     columns,
-    colWidths,
+    colWidths: widths,
     isHeader,
     isSeparatorOnly: false,
     lineCount,

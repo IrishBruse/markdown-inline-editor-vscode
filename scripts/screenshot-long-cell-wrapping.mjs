@@ -18,11 +18,16 @@ const userDataDir = path.join(root, ".vscode-screenshot-profile");
 const editorPidFile = path.join(userDataDir, ".screenshot-editor.pid");
 const extensionBundle = path.join(root, "dist/extension.js");
 const cursorLine = Number(process.env.CURSOR_LINE ?? 3);
-const maxCaptureFrames = Number(process.env.MAX_CAPTURE_FRAMES ?? 8);
+const cursorScenarios = parseCursorScenarios();
+const maxCaptureFrames = Number(process.env.MAX_CAPTURE_FRAMES ?? 4);
 const decorationSettleMs = Number(process.env.DECORATION_SETTLE_MS ?? "1500");
 const decorationTimeoutMs = Number(process.env.DECORATION_TIMEOUT_MS ?? 30000);
 const defaultWindowSize = { width: 800, height: 600 };
-const windowSize = parseWindowSize();
+const defaultWindowSizes = [
+  { width: 800, height: 600 },
+  { width: 1280, height: 800 },
+];
+const windowSizes = parseWindowSizes();
 const cdpPort = Number(process.env.CDP_PORT ?? "9223");
 const cdpUrl = `http://127.0.0.1:${cdpPort}`;
 const codeBin = process.env.CODE_BIN ?? "code";
@@ -36,19 +41,49 @@ async function runTableScreenshotTest() {
   prepareScreenshotsDir();
   assertEditorBinaryOnPath();
 
-  const sizeLabel = `${windowSize.width}x${windowSize.height}`;
-  console.log(`\n=== Window size ${sizeLabel} ===`);
-  const written = await captureAtWindowSize(windowSize, sizeLabel);
+  const allWritten = [];
+  for (const size of windowSizes) {
+    const sizeLabel = `${size.width}x${size.height}`;
+    console.log(`\n=== Window size ${sizeLabel} ===`);
+    const written = await captureAtWindowSize(size, sizeLabel);
+    allWritten.push(...written);
+  }
 
-  if (written.length > 0) {
+  if (allWritten.length > 0) {
     fs.copyFileSync(
-      path.join(screenshotsDir, written[0]),
+      path.join(screenshotsDir, allWritten[0]),
       path.join(root, "screenshot.png"),
     );
   }
   console.log(
-    `\nWrote ${written.length} screenshots to ${path.relative(root, screenshotsDir)}/`,
+    `\nWrote ${allWritten.length} screenshots to ${path.relative(root, screenshotsDir)}/`,
   );
+}
+
+function parseWindowSizes() {
+  const raw = process.env.WINDOW_SIZES?.trim();
+  if (raw) {
+    return raw.split(",").map((entry) => {
+      const [widthText, heightText] = entry.split("x").map((part) => part.trim());
+      const width = Number(widthText);
+      const height = Number(heightText);
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+        throw new Error(`Invalid WINDOW_SIZES entry: ${entry}`);
+      }
+      return { width, height };
+    });
+  }
+
+  const single = parseWindowSize();
+  if (
+    process.env.WINDOW_WIDTH !== undefined ||
+    process.env.WINDOW_HEIGHT !== undefined ||
+    process.argv.slice(2).some((arg) => !arg.startsWith("-"))
+  ) {
+    return [single];
+  }
+
+  return defaultWindowSizes;
 }
 
 function parseWindowSize() {
@@ -88,6 +123,25 @@ function parseWindowSize() {
   return { width, height };
 }
 
+function parseCursorScenarios() {
+  const raw = process.env.CURSOR_SCENARIOS?.trim();
+  if (raw) {
+    return raw.split(",").map((entry) => {
+      const [name, lineText] = entry.split(":").map((part) => part.trim());
+      const line = Number(lineText);
+      if (!name || !Number.isFinite(line) || line <= 0) {
+        throw new Error(`Invalid CURSOR_SCENARIOS entry: ${entry}`);
+      }
+      return { name, line };
+    });
+  }
+
+  return [
+    { name: "rendered", line: 3 },
+    { name: "active-row", line: 10 },
+  ];
+}
+
 async function captureAtWindowSize(size, sizeLabel) {
   await stopStaleEditorIfNeeded();
 
@@ -116,7 +170,14 @@ async function captureAtWindowSize(size, sizeLabel) {
       await sleep(decorationSettleMs);
     }
 
-    return await captureScrollingScreenshots(page, sizeLabel);
+    const cursorWritten = await captureCursorScenarios(page, sizeLabel);
+    await moveCursorToLine(page, 3);
+    if (decorationSettleMs > 0) {
+      await sleep(decorationSettleMs);
+    }
+    await waitForDecorations(page);
+    const scrollWritten = await captureScrollingScreenshots(page, sizeLabel);
+    return [...cursorWritten, ...scrollWritten];
   } finally {
     await shutdown(page, browser);
   }
@@ -280,16 +341,8 @@ function ensureScreenshotProfile() {
 }
 
 function prepareScreenshotsDir() {
+  fs.rmSync(screenshotsDir, { recursive: true, force: true });
   fs.mkdirSync(screenshotsDir, { recursive: true });
-  for (const entry of fs.readdirSync(screenshotsDir)) {
-    if (
-      (entry.startsWith(`${screenshotPrefix}-`) ||
-        entry === "screenshot.png") &&
-      entry.endsWith(".png")
-    ) {
-      fs.rmSync(path.join(screenshotsDir, entry), { force: true });
-    }
-  }
   const legacyScreenshot = path.join(root, "screenshot.png");
   if (fs.existsSync(legacyScreenshot)) {
     fs.rmSync(legacyScreenshot, { force: true });
@@ -495,6 +548,79 @@ async function prepareEditorLayout(page) {
 async function focusEditor(page) {
   await page.locator(".monaco-editor").first().click();
   await sleep(100);
+}
+
+async function moveCursorToLine(page, line) {
+  await focusEditor(page);
+  await page.keyboard.press("Control+G");
+  await sleep(200);
+  await page.keyboard.type(String(line));
+  await page.keyboard.press("Enter");
+  await sleep(200);
+  await page.keyboard.press("Home");
+  await sleep(400);
+}
+
+async function countVisibleRawRows(page) {
+  return page.evaluate(() => {
+    let count = 0;
+    for (const line of document.querySelectorAll(".view-line")) {
+      let visibleText = "";
+      for (const span of line.querySelectorAll("span")) {
+        const style = window.getComputedStyle(span);
+        if (
+          style.display === "none" ||
+          style.visibility === "hidden" ||
+          Number(style.opacity) === 0
+        ) {
+          continue;
+        }
+        visibleText += span.textContent ?? "";
+      }
+      if (/^\s*\|.*\bRow\s+\d+/i.test(visibleText)) {
+        count += 1;
+      }
+    }
+    return count;
+  });
+}
+
+async function captureCursorScenarios(page, sizeLabel) {
+  const sizeToken = sizeLabel.replace("x", "-");
+  const written = [];
+
+  for (const scenario of cursorScenarios) {
+    console.log(`Cursor scenario ${scenario.name} (line ${scenario.line})...`);
+    await moveCursorToLine(page, scenario.line);
+    await sleep(decorationSettleMs);
+    await waitForDecorations(page);
+
+    const visibleRawRows = await countVisibleRawRows(page);
+    const decorationSpans = await decorationSpanCount(page);
+
+    if (scenario.name === "rendered" && decorationSpans < 1) {
+      console.warn(
+        `Expected whole-table decoration at line ${scenario.line}, decoration spans=${decorationSpans}`,
+      );
+    }
+    if (scenario.name === "active-row" && decorationSpans < 8) {
+      console.warn(
+        `Expected per-row decorations at line ${scenario.line}, decoration spans=${decorationSpans}`,
+      );
+    }
+    console.log(
+      `Scenario ${scenario.name}: decoration spans=${decorationSpans}, visible raw rows=${visibleRawRows}`,
+    );
+
+    const filename = `${screenshotPrefix}-${sizeToken}-${scenario.name}.png`;
+    const filepath = path.join(screenshotsDir, filename);
+    await page.screenshot({ path: filepath, fullPage: false });
+    const relativePath = path.relative(screenshotsDir, filepath);
+    written.push(relativePath);
+    console.log(`Wrote screenshots/${relativePath}`);
+  }
+
+  return written;
 }
 
 async function clickIfVisible(locator, timeoutMs = 400) {

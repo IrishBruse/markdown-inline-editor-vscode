@@ -1,19 +1,20 @@
 import { createHash } from 'crypto';
-import { ColorThemeKind, type Range, type TextEditor, window, workspace } from 'vscode';
+import { ColorThemeKind, type DecorationOptions, type Range, type TextEditor, window, workspace } from 'vscode';
 import type { TableBlock } from '../parser/types';
 import {
   estimateResponsiveTableLayout,
 } from '../mermaid/editor-width';
-import { svgToDataUri } from '../mermaid/svg-processor';
+import { ensureSvgDimensions, svgToDataUri } from '../mermaid/svg-processor';
 import {
   borderlessTableToOverlayText,
-  layoutBorderlessTable,
+  layoutBorderlessTableSegment,
   renderBorderlessTableSvg,
 } from '../tables/responsive-svg';
 import { shouldUseResponsiveLayout } from '../tables/responsive-layout';
 import {
   getResponsiveTableTheme,
   ResponsiveTableDecorations,
+  type ResponsiveTableDecorationPayload,
 } from './responsive-table-decorations';
 import { createRange } from './editor-decoration-applier';
 
@@ -30,22 +31,158 @@ function getEditorLineHeight(fontSize: number): number {
   return Math.round(fontSize * lineHeightSetting);
 }
 
-function tableCacheKey(
+function segmentCacheKey(
   table: TableBlock,
+  fromRowIdx: number,
+  toRowIdx: number,
   layoutKey: string,
   contentWidthPx: number,
   isDarkTheme: boolean,
   fontFamily: string,
+  maxHeightPx?: number,
 ): string {
   const source = [
     table.startPos,
     table.endPos,
+    fromRowIdx,
+    toRowIdx,
     layoutKey,
     contentWidthPx,
     isDarkTheme,
     fontFamily,
+    maxHeightPx ?? '',
   ].join('\n');
   return createHash('sha256').update(source).digest('hex');
+}
+
+function findActiveRowIdx(
+  editor: TextEditor,
+  table: TableBlock,
+  normalizedText: string,
+  activeLines: Set<number>,
+): number | undefined {
+  for (let rowIdx = 0; rowIdx < table.rowRanges.length; rowIdx++) {
+    const rowRange = table.rowRanges[rowIdx];
+    const range = createRange(editor, rowRange.startPos, rowRange.endPos, normalizedText);
+    if (range && activeLines.has(range.start.line)) {
+      return rowIdx;
+    }
+  }
+  return undefined;
+}
+
+function parseSvgHeight(svg: string): number {
+  const match = svg.match(/\bheight="(\d+(?:\.\d+)?)(?:px)?"/);
+  return match ? Math.ceil(parseFloat(match[1])) : 1;
+}
+
+function buildSegmentPayload(
+  table: TableBlock,
+  fromRowIdx: number,
+  toRowIdx: number,
+  layoutWidth: number,
+  contentWidthPx: number,
+  fontFamily: string,
+  fontSize: number,
+  lineHeight: number,
+  theme: ReturnType<typeof getResponsiveTableTheme>,
+  maxHeightPx?: number,
+): { layoutKey: string; payload: ResponsiveTableDecorationPayload } {
+  const layout = layoutBorderlessTableSegment(table, fromRowIdx, toRowIdx, layoutWidth);
+  let svg = renderBorderlessTableSvg(layout, {
+    fontFamily,
+    fontSize,
+    lineHeight,
+    contentWidthPx,
+    layoutWidth,
+    theme,
+    maxHeightPx,
+  });
+  const heightPx = parseSvgHeight(svg);
+  svg = ensureSvgDimensions(svg, contentWidthPx, heightPx);
+  return {
+    layoutKey: borderlessTableToOverlayText(layout),
+    payload: {
+      dataUri: svgToDataUri(svg),
+      widthPx: contentWidthPx,
+      heightPx,
+    },
+  };
+}
+
+function applyTableSegment(
+  editor: TextEditor,
+  table: TableBlock,
+  normalizedText: string,
+  fromRowIdx: number,
+  toRowIdx: number,
+  anchorRowIdx: number,
+  fontFamily: string,
+  fontSize: number,
+  lineHeight: number,
+  theme: ReturnType<typeof getResponsiveTableTheme>,
+  isDarkTheme: boolean,
+  optionsByKey: Map<string, DecorationOptions[]>,
+  payloadsByKey: Map<string, ResponsiveTableDecorationPayload>,
+  hiddenRanges: Range[],
+  maxHeightPx?: number,
+): void {
+  if (fromRowIdx > toRowIdx) {
+    return;
+  }
+
+  const anchorRange = createRange(
+    editor,
+    table.rowRanges[anchorRowIdx].startPos,
+    table.rowRanges[anchorRowIdx].endPos,
+    normalizedText,
+  );
+  if (!anchorRange) {
+    return;
+  }
+
+  const { layoutWidth, widthPx: contentWidthPx } = estimateResponsiveTableLayout(
+    editor,
+    anchorRange.start.character,
+  );
+  const { layoutKey, payload } = buildSegmentPayload(
+    table,
+    fromRowIdx,
+    toRowIdx,
+    layoutWidth,
+    contentWidthPx,
+    fontFamily,
+    fontSize,
+    lineHeight,
+    theme,
+    maxHeightPx,
+  );
+
+  const key = segmentCacheKey(
+    table,
+    fromRowIdx,
+    toRowIdx,
+    layoutKey,
+    contentWidthPx,
+    isDarkTheme,
+    fontFamily,
+    maxHeightPx,
+  );
+  payloadsByKey.set(key, payload);
+  const options = optionsByKey.get(key) ?? [];
+  options.push({ range: anchorRange });
+  optionsByKey.set(key, options);
+
+  for (let rowIdx = fromRowIdx; rowIdx <= toRowIdx; rowIdx++) {
+    if (rowIdx === anchorRowIdx) {
+      continue;
+    }
+    const rowRange = table.rowRanges[rowIdx];
+    const range = createRange(editor, rowRange.startPos, rowRange.endPos, normalizedText);
+    if (range) {
+      hiddenRanges.push(range);
+    }
+  }
 }
 
 export function getResponsiveTableOffsetRanges(
@@ -78,8 +215,8 @@ export function applyResponsiveTableDecorations(
   const lineHeight = getEditorLineHeight(fontSize);
   const theme = getResponsiveTableTheme(isDarkTheme);
 
-  const rangesByKey = new Map<string, Range[]>();
-  const dataUrisByKey = new Map<string, string>();
+  const optionsByKey = new Map<string, DecorationOptions[]>();
+  const payloadsByKey = new Map<string, ResponsiveTableDecorationPayload>();
   const hiddenRanges: Range[] = [];
 
   for (const table of tableBlocks) {
@@ -87,58 +224,86 @@ export function applyResponsiveTableDecorations(
       continue;
     }
 
-    const headerRange = createRange(
+    const lastRowIdx = table.rowRanges.length - 1;
+    const activeRowIdx = findActiveRowIdx(editor, table, normalizedText, activeLines);
+
+    if (activeRowIdx === undefined) {
+      applyTableSegment(
+        editor,
+        table,
+        normalizedText,
+        0,
+        lastRowIdx,
+        0,
+        fontFamily,
+        fontSize,
+        lineHeight,
+        theme,
+        isDarkTheme,
+        optionsByKey,
+        payloadsByKey,
+        hiddenRanges,
+      );
+      continue;
+    }
+
+    const activeRange = createRange(
       editor,
-      table.rowRanges[0].startPos,
-      table.rowRanges[0].endPos,
+      table.rowRanges[activeRowIdx].startPos,
+      table.rowRanges[activeRowIdx].endPos,
       normalizedText,
     );
-    if (!headerRange) {
-      continue;
+
+    if (activeRowIdx > 0) {
+      const anchorRange = createRange(
+        editor,
+        table.rowRanges[0].startPos,
+        table.rowRanges[0].endPos,
+        normalizedText,
+      );
+      const maxHeightPx = anchorRange && activeRange
+        ? Math.max(lineHeight, (activeRange.start.line - anchorRange.start.line) * lineHeight)
+        : undefined;
+      applyTableSegment(
+        editor,
+        table,
+        normalizedText,
+        0,
+        activeRowIdx - 1,
+        0,
+        fontFamily,
+        fontSize,
+        lineHeight,
+        theme,
+        isDarkTheme,
+        optionsByKey,
+        payloadsByKey,
+        hiddenRanges,
+        maxHeightPx,
+      );
     }
 
-    const tableIsActive = table.rowRanges.some((rowRange) => {
-      const range = createRange(editor, rowRange.startPos, rowRange.endPos, normalizedText);
-      return range !== undefined && activeLines.has(range.start.line);
-    });
-    if (tableIsActive) {
-      continue;
-    }
-
-    const { layoutWidth, widthPx: contentWidthPx } = estimateResponsiveTableLayout(
-      editor,
-      headerRange.start.character,
-    );
-    const layout = layoutBorderlessTable(table, layoutWidth);
-    const svg = renderBorderlessTableSvg(layout, {
-      fontFamily,
-      fontSize,
-      lineHeight,
-      contentWidthPx,
-      layoutWidth,
-      theme,
-    });
-    const key = tableCacheKey(
-      table,
-      borderlessTableToOverlayText(layout),
-      contentWidthPx,
-      isDarkTheme,
-      fontFamily,
-    );
-    dataUrisByKey.set(key, svgToDataUri(svg));
-    const ranges = rangesByKey.get(key) ?? [];
-    ranges.push(headerRange);
-    rangesByKey.set(key, ranges);
-
-    for (let rowIdx = 1; rowIdx < table.rowRanges.length; rowIdx++) {
-      const rowRange = table.rowRanges[rowIdx];
-      const range = createRange(editor, rowRange.startPos, rowRange.endPos, normalizedText);
-      if (range) {
-        hiddenRanges.push(range);
-      }
+    if (activeRowIdx < lastRowIdx) {
+      const belowFrom = activeRowIdx === 1 ? 2 : activeRowIdx + 1;
+      applyTableSegment(
+        editor,
+        table,
+        normalizedText,
+        belowFrom,
+        lastRowIdx,
+        belowFrom,
+        fontFamily,
+        fontSize,
+        lineHeight,
+        theme,
+        isDarkTheme,
+        optionsByKey,
+        payloadsByKey,
+        hiddenRanges,
+      );
     }
   }
 
-  decorations.apply(editor, rangesByKey, dataUrisByKey);
+  decorations.apply(editor, optionsByKey, payloadsByKey);
   decorations.applyHidden(editor, hiddenRanges);
 }

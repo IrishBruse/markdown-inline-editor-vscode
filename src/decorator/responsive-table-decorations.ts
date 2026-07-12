@@ -1,9 +1,15 @@
-import { type TextEditor, window, Uri, type TextEditorDecorationType, type Range, ColorThemeKind } from 'vscode';
+import { type TextEditor, window, Uri, type TextEditorDecorationType, type Range, ColorThemeKind, type DecorationOptions } from 'vscode';
 
 type ResponsiveTableDecorationEntry = {
   decorationType: TextEditorDecorationType;
   lastUsed: number;
   isDarkTheme: boolean;
+};
+
+export type ResponsiveTableDecorationPayload = {
+  dataUri: string;
+  widthPx: number;
+  heightPx: number;
 };
 
 const DEFAULT_FOREGROUND = {
@@ -28,19 +34,23 @@ export class ResponsiveTableDecorations {
 
   constructor(private maxEntries: number = 30) {}
 
-  apply(editor: TextEditor, rangesByKey: Map<string, Range[]>, dataUrisByKey: Map<string, string>): void {
+  apply(
+    editor: TextEditor,
+    optionsByKey: Map<string, DecorationOptions[]>,
+    payloadsByKey: Map<string, ResponsiveTableDecorationPayload>,
+  ): void {
     const usedKeys = new Set<string>();
     const isDarkTheme = window.activeColorTheme.kind === ColorThemeKind.Dark ||
       window.activeColorTheme.kind === ColorThemeKind.HighContrast;
 
-    for (const [key, ranges] of rangesByKey.entries()) {
-      const dataUri = dataUrisByKey.get(key);
-      if (!dataUri || ranges.length === 0) {
+    for (const [key, options] of optionsByKey.entries()) {
+      const payload = payloadsByKey.get(key);
+      if (!payload || options.length === 0) {
         continue;
       }
-      const entry = this.getOrCreateEntry(key, dataUri, isDarkTheme);
+      const entry = this.getOrCreateEntry(key, payload, isDarkTheme);
       usedKeys.add(key);
-      editor.setDecorations(entry.decorationType, ranges);
+      editor.setDecorations(entry.decorationType, options);
     }
 
     this.disposeUnused(editor, usedKeys);
@@ -74,7 +84,7 @@ export class ResponsiveTableDecorations {
 
   private getOrCreateEntry(
     key: string,
-    dataUri: string,
+    payload: ResponsiveTableDecorationPayload,
     isDarkTheme: boolean,
   ): ResponsiveTableDecorationEntry {
     const existing = this.cache.get(key);
@@ -90,10 +100,12 @@ export class ResponsiveTableDecorations {
 
     const decorationType = window.createTextEditorDecorationType({
       color: 'transparent',
-      textDecoration: 'none; display: none;',
+      textDecoration: 'none; display: inline-block; width: 0;',
       before: {
-        contentIconPath: Uri.parse(dataUri),
+        contentIconPath: Uri.parse(payload.dataUri),
         textDecoration: 'none;',
+        width: `${payload.widthPx}px`,
+        height: `${payload.heightPx}px`,
       },
     });
 

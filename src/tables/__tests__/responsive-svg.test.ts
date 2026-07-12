@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { MarkdownParser } from '../../parser';
 import {
   borderlessRowToOverlayText,
@@ -286,6 +288,21 @@ describe('responsive-svg', () => {
     expect(svg).toContain('Row 1');
     expect(svg).toContain('<line');
     expect(svg).not.toContain('\u2502');
+  });
+
+  it('layoutBorderlessTable wraps long-cell fixture content column at viewport 80', async () => {
+    const fixturePath = path.join(
+      process.cwd(),
+      'docs/tests/long-cell-wrapping.md',
+    );
+    const md = fs.readFileSync(fixturePath, 'utf8');
+    const parser = await MarkdownParser.create();
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const layout = layoutBorderlessTable(tableBlocks[0], 80);
+
+    expect(layout.rows[1].lineCount).toBeGreaterThan(1);
+    expect(layout.rows[1].columns[1].length).toBeGreaterThan(1);
+    expect(layout.rows[1].columns[1].some((line) => line.includes('Lorem'))).toBe(true);
   });
 
   it('renderResponsiveRowSvg draws horizontal divider below rows', async () => {
