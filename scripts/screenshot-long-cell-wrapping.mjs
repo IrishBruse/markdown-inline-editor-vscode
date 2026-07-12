@@ -17,8 +17,6 @@ const screenshotPrefix = "long-cell-wrapping";
 const userDataDir = path.join(root, ".vscode-screenshot-profile");
 const editorPidFile = path.join(userDataDir, ".screenshot-editor.pid");
 const extensionBundle = path.join(root, "dist/extension.js");
-const cursorLine = Number(process.env.CURSOR_LINE ?? 3);
-const cursorScenarios = parseCursorScenarios();
 const maxCaptureFrames = Number(process.env.MAX_CAPTURE_FRAMES ?? 4);
 const decorationSettleMs = Number(process.env.DECORATION_SETTLE_MS ?? "1500");
 const decorationTimeoutMs = Number(process.env.DECORATION_TIMEOUT_MS ?? 30000);
@@ -89,25 +87,6 @@ function parseWindowSize() {
   return { width, height };
 }
 
-function parseCursorScenarios() {
-  const raw = process.env.CURSOR_SCENARIOS?.trim();
-  if (raw) {
-    return raw.split(",").map((entry) => {
-      const [name, lineText] = entry.split(":").map((part) => part.trim());
-      const line = Number(lineText);
-      if (!name || !Number.isFinite(line) || line <= 0) {
-        throw new Error(`Invalid CURSOR_SCENARIOS entry: ${entry}`);
-      }
-      return { name, line };
-    });
-  }
-
-  return [
-    { name: "rendered", line: 3 },
-    { name: "active-row", line: 10 }
-  ];
-}
-
 async function captureAtWindowSize(size, sizeLabel) {
   await stopStaleEditorIfNeeded();
 
@@ -136,14 +115,7 @@ async function captureAtWindowSize(size, sizeLabel) {
       await sleep(decorationSettleMs);
     }
 
-    const cursorWritten = await captureCursorScenarios(page, sizeLabel);
-    await moveCursorToLine(page, 3);
-    if (decorationSettleMs > 0) {
-      await sleep(decorationSettleMs);
-    }
-    await waitForDecorations(page);
-    const scrollWritten = await captureScrollingScreenshots(page, sizeLabel);
-    return [...cursorWritten, ...scrollWritten];
+    return await captureScrollingScreenshots(page, sizeLabel);
   } finally {
     await shutdown(page, browser);
   }
@@ -318,8 +290,6 @@ function launchExtensionHost({ width, height }) {
     `--remote-debugging-port=${cdpPort}`,
     `--user-data-dir=${userDataDir}`,
     `--window-size=${width},${height}`,
-    "--goto",
-    `${fixturePath}:${cursorLine}`,
     workspacePath
   ];
 
@@ -518,82 +488,41 @@ function editorCaptureLocator(page) {
 }
 
 async function captureEditorScreenshot(page, filepath) {
+  await resetEditorHorizontalScroll(page);
   const editor = editorCaptureLocator(page);
   await editor.waitFor({ state: "visible", timeout: 10_000 });
   await editor.screenshot({ path: filepath });
 }
 
-async function moveCursorToLine(page, line) {
-  await focusEditor(page);
-  await page.keyboard.press("Control+G");
-  await sleep(200);
-  await page.keyboard.type(String(line));
-  await page.keyboard.press("Enter");
-  await sleep(200);
-  await page.keyboard.press("Home");
-  await sleep(400);
-}
-
-async function countVisibleRawRows(page) {
-  return page.evaluate(() => {
-    let count = 0;
-    for (const line of document.querySelectorAll(".view-line")) {
-      let visibleText = "";
-      for (const span of line.querySelectorAll("span")) {
-        const style = window.getComputedStyle(span);
-        if (
-          style.display === "none" ||
-          style.visibility === "hidden" ||
-          Number(style.opacity) === 0
-        ) {
-          continue;
-        }
-        visibleText += span.textContent ?? "";
-      }
-      if (/^\s*\|.*\bRow\s+\d+/i.test(visibleText)) {
-        count += 1;
+async function resetEditorHorizontalScroll(page) {
+  await page.evaluate(() => {
+    for (const linesContent of document.querySelectorAll(
+      ".monaco-editor .lines-content"
+    )) {
+      linesContent.style.left = "0px";
+      const transform = linesContent.style.transform ?? "";
+      const match = transform.match(
+        /translate3d\((-?\d+(?:\.\d+)?)px,\s*(-?\d+(?:\.\d+)?)px/
+      );
+      if (match) {
+        linesContent.style.transform = `translate3d(0px, ${match[2]}, 0px)`;
       }
     }
-    return count;
+
+    for (const scrollable of document.querySelectorAll(
+      ".monaco-editor .monaco-scrollable-element"
+    )) {
+      scrollable.scrollLeft = 0;
+    }
   });
+  await sleep(50);
 }
 
-async function captureCursorScenarios(page, sizeLabel) {
-  const sizeToken = sizeLabel.replace("x", "-");
-  const written = [];
-
-  for (const scenario of cursorScenarios) {
-    console.log(`Cursor scenario ${scenario.name} (line ${scenario.line})...`);
-    await moveCursorToLine(page, scenario.line);
-    await sleep(decorationSettleMs);
-    await waitForDecorations(page);
-
-    const visibleRawRows = await countVisibleRawRows(page);
-    const decorationSpans = await decorationSpanCount(page);
-
-    if (scenario.name === "rendered" && decorationSpans < 1) {
-      console.warn(
-        `Expected whole-table decoration at line ${scenario.line}, decoration spans=${decorationSpans}`
-      );
-    }
-    if (scenario.name === "active-row" && decorationSpans < 8) {
-      console.warn(
-        `Expected per-row decorations at line ${scenario.line}, decoration spans=${decorationSpans}`
-      );
-    }
-    console.log(
-      `Scenario ${scenario.name}: decoration spans=${decorationSpans}, visible raw rows=${visibleRawRows}`
-    );
-
-    const filename = `${screenshotPrefix}-${sizeToken}-${scenario.name}.png`;
-    const filepath = path.join(screenshotsDir, filename);
-    await captureEditorScreenshot(page, filepath);
-    const relativePath = path.relative(screenshotsDir, filepath);
-    written.push(relativePath);
-    console.log(`Wrote screenshots/${relativePath}`);
-  }
-
-  return written;
+async function scrollEditorToTop(page) {
+  await focusEditor(page);
+  await page.keyboard.press("Control+Home");
+  await sleep(300);
+  await resetEditorHorizontalScroll(page);
 }
 
 async function clickIfVisible(locator, timeoutMs = 400) {
@@ -778,10 +707,11 @@ async function captureScrollingScreenshots(page, sizeLabel) {
     `Capturing ${fixtureBasename} (${sizeLabel}, viewport scroll until end)`
   );
 
-  await focusEditor(page);
+  await scrollEditorToTop(page);
 
   const written = [];
   let previousSignature = "";
+  let scrollSteps = 0;
   const sizeToken = sizeLabel.replace("x", "-");
 
   for (let frame = 0; frame < maxCaptureFrames; frame += 1) {
@@ -793,7 +723,7 @@ async function captureScrollingScreenshots(page, sizeLabel) {
       break;
     }
 
-    const filename = `${screenshotPrefix}-${sizeToken}-${String(written.length + 1).padStart(2, "0")}.png`;
+    const filename = `${screenshotPrefix}-${sizeToken}-${scrollSteps}.png`;
     const filepath = path.join(screenshotsDir, filename);
     await captureEditorScreenshot(page, filepath);
     const relativePath = path.relative(screenshotsDir, filepath);
@@ -802,7 +732,9 @@ async function captureScrollingScreenshots(page, sizeLabel) {
     const rangeLabel = range
       ? `lines ${range.top}-${range.bottom}`
       : "lines unknown";
-    console.log(`Wrote screenshots/${relativePath} (${rangeLabel})`);
+    console.log(
+      `Wrote screenshots/${relativePath} (scroll ${scrollSteps}, ${rangeLabel})`
+    );
 
     previousSignature = signature;
 
@@ -814,6 +746,7 @@ async function captureScrollingScreenshots(page, sizeLabel) {
       break;
     }
 
+    scrollSteps += 1;
     await sleep(400);
   }
 
