@@ -518,8 +518,22 @@ async function prepareEditorLayout(page) {
 }
 
 async function focusEditor(page) {
-  await page.locator(".monaco-editor").first().click();
+  await editorCaptureLocator(page).click();
   await sleep(100);
+}
+
+function editorCaptureLocator(page) {
+  return page
+    .locator(
+      ".editor-group-container.active .monaco-editor, .editor-group-container .monaco-editor",
+    )
+    .first();
+}
+
+async function captureEditorScreenshot(page, filepath) {
+  const editor = editorCaptureLocator(page);
+  await editor.waitFor({ state: "visible", timeout: 10_000 });
+  await editor.screenshot({ path: filepath });
 }
 
 async function moveCursorToLine(page, line) {
@@ -586,7 +600,7 @@ async function captureCursorScenarios(page, sizeLabel) {
 
     const filename = `${screenshotPrefix}-${sizeToken}-${scenario.name}.png`;
     const filepath = path.join(screenshotsDir, filename);
-    await page.screenshot({ path: filepath, fullPage: false });
+    await captureEditorScreenshot(page, filepath);
     const relativePath = path.relative(screenshotsDir, filepath);
     written.push(relativePath);
     console.log(`Wrote screenshots/${relativePath}`);
@@ -758,7 +772,7 @@ async function shouldStopCapture(frame, signature, previousSignature) {
 
 async function scrollEditorViewport(page) {
   const beforeSignature = await captureViewportSignature(page);
-  const editor = page.locator(".monaco-editor").first();
+  const editor = editorCaptureLocator(page);
   const box = await editor.boundingBox();
   if (!box) {
     return false;
@@ -794,7 +808,7 @@ async function captureScrollingScreenshots(page, sizeLabel) {
 
     const filename = `${screenshotPrefix}-${sizeToken}-${String(written.length + 1).padStart(2, "0")}.png`;
     const filepath = path.join(screenshotsDir, filename);
-    await page.screenshot({ path: filepath, fullPage: false });
+    await captureEditorScreenshot(page, filepath);
     const relativePath = path.relative(screenshotsDir, filepath);
     written.push(relativePath);
 
