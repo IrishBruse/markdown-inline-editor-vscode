@@ -18,28 +18,11 @@ const userDataDir = path.join(root, ".vscode-screenshot-profile");
 const editorPidFile = path.join(userDataDir, ".screenshot-editor.pid");
 const extensionBundle = path.join(root, "dist/extension.js");
 const cursorLine = Number(process.env.CURSOR_LINE ?? 3);
-const maxCaptureFrames = Number(process.env.MAX_CAPTURE_FRAMES ?? 2);
+const maxCaptureFrames = Number(process.env.MAX_CAPTURE_FRAMES ?? 8);
 const decorationSettleMs = Number(process.env.DECORATION_SETTLE_MS ?? "1500");
 const decorationTimeoutMs = Number(process.env.DECORATION_TIMEOUT_MS ?? 30000);
-const defaultWindowSizes = [
-  { width: 800, height: 600 },
-  { width: 960, height: 720 },
-  { width: 1280, height: 800 },
-  { width: 1600, height: 900 },
-];
-const windowSizes = (process.env.WINDOW_SIZES ?? "")
-  .split(",")
-  .map((entry) => entry.trim())
-  .filter(Boolean)
-  .map((entry) => {
-    const [width, height] = entry.split("x").map((value) => Number(value));
-    if (!Number.isFinite(width) || !Number.isFinite(height)) {
-      throw new Error(`Invalid WINDOW_SIZES entry: ${entry}`);
-    }
-    return { width, height };
-  });
-const captureWindowSizes =
-  windowSizes.length > 0 ? windowSizes : defaultWindowSizes;
+const defaultWindowSize = { width: 800, height: 600 };
+const windowSize = parseWindowSize();
 const cdpPort = Number(process.env.CDP_PORT ?? "9223");
 const cdpUrl = `http://127.0.0.1:${cdpPort}`;
 const codeBin = process.env.CODE_BIN ?? "code";
@@ -53,13 +36,9 @@ async function runTableScreenshotTest() {
   prepareScreenshotsDir();
   assertEditorBinaryOnPath();
 
-  const written = [];
-  for (const size of captureWindowSizes) {
-    const sizeLabel = `${size.width}x${size.height}`;
-    console.log(`\n=== Window size ${sizeLabel} ===`);
-    const frames = await captureAtWindowSize(size, sizeLabel);
-    written.push(...frames);
-  }
+  const sizeLabel = `${windowSize.width}x${windowSize.height}`;
+  console.log(`\n=== Window size ${sizeLabel} ===`);
+  const written = await captureAtWindowSize(windowSize, sizeLabel);
 
   if (written.length > 0) {
     fs.copyFileSync(
@@ -70,6 +49,43 @@ async function runTableScreenshotTest() {
   console.log(
     `\nWrote ${written.length} screenshots to ${path.relative(root, screenshotsDir)}/`,
   );
+}
+
+function parseWindowSize() {
+  const cliArgs = process.argv.slice(2).filter((arg) => !arg.startsWith("-"));
+  const envWidth = process.env.WINDOW_WIDTH;
+  const envHeight = process.env.WINDOW_HEIGHT;
+
+  let width;
+  let height;
+
+  if (cliArgs.length >= 2) {
+    width = Number(cliArgs[0]);
+    height = Number(cliArgs[1]);
+  } else if (cliArgs.length === 1) {
+    throw new Error(
+      "Pass width and height as two numbers, for example: npm run screenshot:long-cell-wrapping -- 1280 800",
+    );
+  } else if (envWidth !== undefined || envHeight !== undefined) {
+    if (envWidth === undefined || envHeight === undefined) {
+      throw new Error("Both WINDOW_WIDTH and WINDOW_HEIGHT are required");
+    }
+    width = Number(envWidth);
+    height = Number(envHeight);
+  } else {
+    return defaultWindowSize;
+  }
+
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    throw new Error(`Invalid window size: ${width}x${height}`);
+  }
+
+  return { width, height };
 }
 
 async function captureAtWindowSize(size, sizeLabel) {
@@ -100,8 +116,6 @@ async function captureAtWindowSize(size, sizeLabel) {
       await sleep(decorationSettleMs);
     }
 
-    await resetViewportToTableTop(page);
-    await sleep(600);
     return await captureScrollingScreenshots(page, sizeLabel);
   } finally {
     await shutdown(page, browser);
@@ -478,32 +492,9 @@ async function prepareEditorLayout(page) {
   await page.keyboard.press("Control+Shift+F2");
 }
 
-async function goToLine(page, line) {
-  await page.keyboard.press("Control+G");
-  await sleep(200);
-  await page.keyboard.type(String(line), { delay: 20 });
-  await page.keyboard.press("Enter");
-  await sleep(300);
-}
-
-async function moveCursorToLine(page, line) {
-  const statusLine = page
-    .locator(".statusbar-item")
-    .filter({ hasText: `Ln ${line},` });
-  if (await statusLine.isVisible({ timeout: 500 }).catch(() => false)) {
-    return;
-  }
-
-  await dismissInitialDialogs(page);
+async function focusEditor(page) {
   await page.locator(".monaco-editor").first().click();
   await sleep(100);
-  await goToLine(page, line);
-
-  if (await statusLine.isVisible({ timeout: 1000 }).catch(() => false)) {
-    return;
-  }
-
-  throw new Error(`Failed to move cursor to line ${line}`);
 }
 
 async function clickIfVisible(locator, timeoutMs = 400) {
@@ -646,6 +637,11 @@ function tableContentScore(signature) {
     "Row 3",
     "Row 4",
     "Row 5",
+    "Row 6",
+    "Row 7",
+    "Row 8",
+    "Row 9",
+    "Row 10",
     "Lorem",
   ];
   return markers.reduce(
@@ -654,16 +650,12 @@ function tableContentScore(signature) {
   );
 }
 
-async function shouldStopCapture(page, frame, signature, previousSignature) {
+async function shouldStopCapture(frame, signature, previousSignature) {
   if (frame === 0) {
     return false;
   }
 
-  return (
-    tableContentScore(signature) === 0 ||
-    tableContentScore(signature) < tableContentScore(previousSignature) / 2 ||
-    signature === previousSignature
-  );
+  return tableContentScore(signature) === 0 || signature === previousSignature;
 }
 
 async function scrollEditorViewport(page) {
@@ -682,22 +674,12 @@ async function scrollEditorViewport(page) {
   return afterSignature !== beforeSignature;
 }
 
-async function resetViewportToTableTop(page) {
-  await page.locator(".monaco-editor").first().click();
-  await sleep(100);
-  await goToLine(page, 1);
-  await sleep(400);
-  await moveCursorToLine(page, cursorLine);
-  await sleep(300);
-}
-
 async function captureScrollingScreenshots(page, sizeLabel) {
   console.log(
     `Capturing ${fixtureBasename} (${sizeLabel}, viewport scroll until end)`,
   );
 
-  await resetViewportToTableTop(page);
-  await sleep(decorationSettleMs);
+  await focusEditor(page);
 
   const written = [];
   let previousSignature = "";
@@ -708,7 +690,7 @@ async function captureScrollingScreenshots(page, sizeLabel) {
     const range = await readVisibleLineRange(page);
     const signature = await captureViewportSignature(page);
 
-    if (await shouldStopCapture(page, frame, signature, previousSignature)) {
+    if (await shouldStopCapture(frame, signature, previousSignature)) {
       break;
     }
 
@@ -729,16 +711,11 @@ async function captureScrollingScreenshots(page, sizeLabel) {
       break;
     }
 
-    const beforeScore = tableContentScore(signature);
     if (!(await scrollEditorViewport(page))) {
       break;
     }
 
     await sleep(400);
-    const afterSignature = await captureViewportSignature(page);
-    if (tableContentScore(afterSignature) < beforeScore) {
-      break;
-    }
   }
 
   return written;

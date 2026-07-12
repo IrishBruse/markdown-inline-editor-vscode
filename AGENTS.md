@@ -23,11 +23,10 @@ npm run screenshot:long-cell-wrapping
 ```
 
 Launches VS Code Extension Development Host with `docs/` as the workspace and opens `tests/long-cell-wrapping.md`.
-Captures the long-cell wrapping table at multiple window sizes (default: 800x600, 960x720, 1280x800, 1600x900).
-The editor is relaunched per size via Playwright CDP.
+Captures the long-cell wrapping table at one window size (default: 800x600).
+Pass width and height as two numbers: `npm run screenshot:long-cell-wrapping -- 1280 800`.
+Or set `WINDOW_WIDTH` and `WINDOW_HEIGHT` together.
 Frames are written to `screenshots/` and the first frame is copied to `screenshot.png`.
-
-Override sizes with `WINDOW_SIZES=960x720,1400x900 npm run screenshot:long-cell-wrapping`.
 
 Review `screenshot.png` and confirm wrapping, alignment, and decorations look correct.
 Fix regressions before finishing.
