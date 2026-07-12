@@ -43,12 +43,6 @@ Regenerates reports, runs table regression tests, and fails on new pipe misalign
 
 Known edge-case misalignments are listed in `src/visual/table-visual-baseline.json`.
 
-Optional Cursor hook (auto-runs after table-related edits):
-
-```bash
-npm run visual:tables:setup-hooks
-```
-
 ## Tips
 
 - Toggle decorations per file to compare raw vs rendered.

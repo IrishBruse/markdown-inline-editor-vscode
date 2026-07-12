@@ -10,6 +10,10 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const fixturePath = path.join(repoRoot, 'docs/tests/05-tables.md');
+const longCellFixturePath = path.join(
+  repoRoot,
+  'docs/tests/long-cell-wrapping.md',
+);
 const outputDir = path.join(repoRoot, 'dist/visual');
 const VIEWPORTS = [80, 200] as const;
 
@@ -192,8 +196,9 @@ describe('table visual fixture', () => {
     }
   });
 
-  it('uses responsive layout for the long-cell table at viewport 80', () => {
-    const result = results.get(80)!;
+  it('uses responsive layout for the long-cell table at viewport 80', async () => {
+    const longCellSource = fs.readFileSync(longCellFixturePath, 'utf8');
+    const result = await renderTablesOverlay(longCellSource, 80);
     const longCellSection = result.sections.find((section) =>
       section.sourceLines.some((line) => line.includes('Section Header')),
     );
@@ -205,8 +210,9 @@ describe('table visual fixture', () => {
     expect(overlay).toContain('Detailed Placeholder Content');
   });
 
-  it('keeps the long-cell table responsive at viewport 200', () => {
-    const result = results.get(200)!;
+  it('keeps the long-cell table responsive at viewport 200', async () => {
+    const longCellSource = fs.readFileSync(longCellFixturePath, 'utf8');
+    const result = await renderTablesOverlay(longCellSource, 200);
     const longCellSection = result.sections.find((section) =>
       section.sourceLines.some((line) => line.includes('Section Header')),
     );

@@ -19,11 +19,10 @@ After table rendering or layout changes, agents must run both checks below witho
 ### Extension host screenshot
 
 ```bash
-npm run screenshot:tables
+npm run screenshot:long-cell-wrapping
 ```
 
-Launches VS Code Extension Development Host with `docs/` as the workspace, opens `tests/05-tables.md`, scrolls to the long-cell wrapping table (line 326),
-and writes `screenshot.png` at the repo root.
+Launches VS Code Extension Development Host with `docs/` as the workspace, opens `tests/long-cell-wrapping.md`, scrolls through the long-cell wrapping table, and writes frames to `screenshots/`.
 
 Review `screenshot.png` and confirm wrapping, alignment, and decorations look correct.
 Fix regressions before finishing.
