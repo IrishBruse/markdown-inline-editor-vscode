@@ -26,7 +26,7 @@ const DEFAULT_FOREGROUND = {
 } as const;
 
 const DEFAULT_MUTED = {
-  dark: '#abb2bf',
+  dark: '#858585',
   light: '#6a6a6a',
 } as const;
 
@@ -38,6 +38,7 @@ const DEFAULT_DIVIDER = {
 export class ResponsiveTableDecorations {
   private cache = new Map<string, ResponsiveTableDecorationEntry>();
   private usageCounter = 0;
+  private hideDecorationType: TextEditorDecorationType | undefined;
 
   constructor(private maxEntries: number = 30) {}
 
@@ -64,11 +65,32 @@ export class ResponsiveTableDecorations {
   }
 
   clear(editor: TextEditor): void {
+    if (this.hideDecorationType) {
+      editor.setDecorations(this.hideDecorationType, []);
+      this.hideDecorationType.dispose();
+      this.hideDecorationType = undefined;
+    }
     for (const entry of this.cache.values()) {
       editor.setDecorations(entry.decorationType, []);
       entry.decorationType.dispose();
     }
     this.cache.clear();
+  }
+
+  applyHidden(editor: TextEditor, ranges: Range[]): void {
+    if (ranges.length === 0) {
+      return;
+    }
+    if (!this.hideDecorationType) {
+      this.hideDecorationType = window.createTextEditorDecorationType({
+        color: '#00000000',
+        textDecoration: 'none; display: none;',
+        after: {
+          contentText: '',
+        },
+      });
+    }
+    editor.setDecorations(this.hideDecorationType, ranges);
   }
 
   private getOrCreateEntry(

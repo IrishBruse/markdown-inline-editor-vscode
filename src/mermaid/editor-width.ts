@@ -4,6 +4,8 @@ import { config } from '../config';
 export const CHAR_WIDTH_RATIO = 0.6;
 const DEFAULT_COLUMNS = 120;
 const MIN_VIEWPORT_COLUMNS = 40;
+const MAX_LINE_LENGTH_FOR_VIEWPORT = 200;
+const VIEWPORT_EDGE_MAX_COLUMNS = DEFAULT_COLUMNS + 20;
 const MIN_MAX_WIDTH_PX = 320;
 const MAX_MAX_WIDTH_PX = 4096;
 const WIDTH_BUCKET_PX = 50;
@@ -65,6 +67,10 @@ export function estimateVisibleColumns(editor: vscode.TextEditor): number {
   return Math.max(maxViewportColumns, maxLineEnd, DEFAULT_COLUMNS);
 }
 
+function isViewportEdgeColumn(column: number, lineLength: number): boolean {
+  return column < lineLength && column <= VIEWPORT_EDGE_MAX_COLUMNS;
+}
+
 /**
  * Visible editor viewport width in columns, ignoring long source lines.
  * Use for responsive table layout so wide table rows do not inflate the wrap budget.
@@ -76,11 +82,36 @@ export function estimateVisibleViewportColumns(editor: vscode.TextEditor): numbe
   }
 
   let maxViewportColumns = 0;
+
   for (const range of visibleRanges) {
-    const lineColumns = range.end.character - range.start.character;
-    if (lineColumns > maxViewportColumns) {
-      maxViewportColumns = lineColumns;
+    const lineText = editor.document.lineAt(range.start.line).text;
+
+    if (range.start.line === range.end.line) {
+      let span = range.end.character - range.start.character;
+      if (lineText.length > MAX_LINE_LENGTH_FOR_VIEWPORT) {
+        span = isViewportEdgeColumn(range.end.character, lineText.length)
+          ? span
+          : Math.min(span, DEFAULT_COLUMNS);
+      }
+      maxViewportColumns = Math.max(maxViewportColumns, span);
+      continue;
     }
+
+    const endLineText = editor.document.lineAt(range.end.line).text;
+    if (endLineText.length > MAX_LINE_LENGTH_FOR_VIEWPORT) {
+      if (isViewportEdgeColumn(range.end.character, endLineText.length)) {
+        maxViewportColumns = Math.max(maxViewportColumns, range.end.character);
+      } else {
+        maxViewportColumns = Math.max(maxViewportColumns, DEFAULT_COLUMNS);
+      }
+      continue;
+    }
+
+    maxViewportColumns = Math.max(maxViewportColumns, range.end.character);
+  }
+
+  if (maxViewportColumns === 0) {
+    return DEFAULT_COLUMNS;
   }
 
   return Math.max(maxViewportColumns, MIN_VIEWPORT_COLUMNS);

@@ -77,6 +77,7 @@ export class Decorator {
   private mermaidHoverIndicatorDecorationType = MermaidHoverIndicatorDecorationType();
   private readonly fileDecorationState: FileDecorationStateStore;
   private readonly updateScheduler: DecoratorUpdateScheduler;
+  private responsiveTableLayoutTimer: ReturnType<typeof setTimeout> | undefined;
   private scopeEntriesCache:
     | { uri: string; version: number; entries: ScopeEntry[] }
     | undefined;
@@ -125,6 +126,7 @@ export class Decorator {
    */
   setActiveEditor(textEditor: TextEditor | undefined) {
     this.updateScheduler.cancel();
+    this.cancelResponsiveTableLayoutSettle();
 
     if (!textEditor) {
       return;
@@ -135,6 +137,22 @@ export class Decorator {
 
     // Full refresh when switching editors (Mermaid/math must render for the new file)
     this.updateDecorationsInternal();
+    this.scheduleResponsiveTableLayoutSettle();
+  }
+
+  private cancelResponsiveTableLayoutSettle(): void {
+    if (this.responsiveTableLayoutTimer) {
+      clearTimeout(this.responsiveTableLayoutTimer);
+      this.responsiveTableLayoutTimer = undefined;
+    }
+  }
+
+  private scheduleResponsiveTableLayoutSettle(): void {
+    this.cancelResponsiveTableLayoutSettle();
+    this.responsiveTableLayoutTimer = setTimeout(() => {
+      this.responsiveTableLayoutTimer = undefined;
+      this.updateDecorationsForSelection();
+    }, 300);
   }
 
   /**
@@ -882,6 +900,7 @@ export class Decorator {
    * Dispose of resources and clear any pending updates.
    */
   dispose() {
+    this.cancelResponsiveTableLayoutSettle();
     this.updateScheduler.dispose();
     this.decorationTypes.dispose();
     this.mermaidHoverIndicatorDecorationType.dispose();

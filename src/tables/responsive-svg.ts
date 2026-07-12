@@ -4,6 +4,7 @@ import {
   BORDERLESS_COLUMN_GAP,
   computeBorderlessColumnWidths,
   computeViewportColumnWidths,
+  estimateGridWidth,
   RESPONSIVE_LAYOUT_WIDTH,
   wrapCellLines,
 } from './responsive-layout';
@@ -39,6 +40,11 @@ const PIPE = '\u2502';
 const MIN_FALLBACK_COL_WIDTH = 3;
 const CHAR_WIDTH_RATIO = 0.6;
 const ROW_PADDING_RATIO = 0.9;
+
+function gridLayoutWidthPx(colWidths: number[], fontSize: number): number {
+  const gridWidthChars = estimateGridWidth(colWidths);
+  return Math.max(1, Math.round(fontSize * CHAR_WIDTH_RATIO * gridWidthChars));
+}
 
 function padCell(
   content: string,
@@ -567,7 +573,7 @@ export function buildGridRowPayload(
   table: TableBlock,
   rowIdx: number,
   layoutWidth: number,
-  contentWidthPx: number,
+  _contentWidthPx: number,
   fontFamily: string,
   fontSize: number,
   lineHeight: number,
@@ -575,13 +581,14 @@ export function buildGridRowPayload(
 ): { layoutKey: string; payload: { dataUri: string; widthPx: number; heightPx: number } } {
   const colWidths = computeViewportColumnWidths(table.colWidths, layoutWidth);
   const gridLines = layoutWrappedGridRow(table, rowIdx, layoutWidth);
+  const renderWidthPx = gridLayoutWidthPx(colWidths, fontSize);
   const isHeader = rowIdx === 0;
   const showBottomDivider = rowIdx !== 1;
   let svg = renderGridLinesSvg(gridLines, {
     fontFamily,
     fontSize,
     lineHeight,
-    contentWidthPx,
+    contentWidthPx: renderWidthPx,
     layoutWidth,
     theme,
     isHeader,
@@ -592,12 +599,12 @@ export function buildGridRowPayload(
   const heightPx = Math.ceil(
     parseFloat(svg.match(/\bheight="(\d+(?:\.\d+)?)(?:px)?"/)?.[1] ?? '1'),
   );
-  svg = ensureSvgDimensions(svg, contentWidthPx, heightPx);
+  svg = ensureSvgDimensions(svg, renderWidthPx, heightPx);
   return {
     layoutKey: gridLines.join('\n'),
     payload: {
       dataUri: svgToDataUri(svg),
-      widthPx: contentWidthPx,
+      widthPx: renderWidthPx,
       heightPx,
     },
   };
@@ -608,7 +615,7 @@ export function buildGridTableSegmentPayload(
   fromRowIdx: number,
   toRowIdx: number,
   layoutWidth: number,
-  contentWidthPx: number,
+  _contentWidthPx: number,
   fontFamily: string,
   fontSize: number,
   lineHeight: number,
@@ -616,6 +623,7 @@ export function buildGridTableSegmentPayload(
   maxHeightPx?: number,
 ): { layoutKey: string; payload: { dataUri: string; widthPx: number; heightPx: number } } {
   const colWidths = computeViewportColumnWidths(table.colWidths, layoutWidth);
+  const renderWidthPx = gridLayoutWidthPx(colWidths, fontSize);
   const textElements: string[] = [];
   const dividerElements: string[] = [];
   const layoutKeyParts: string[] = [];
@@ -625,7 +633,7 @@ export function buildGridTableSegmentPayload(
     const gridLines = layoutWrappedGridRow(table, rowIdx, layoutWidth);
     const isHeader = rowIdx === 0;
     const isSeparator = rowIdx === 1;
-    const showBottomDivider = rowIdx < toRowIdx;
+    const showBottomDivider = !isSeparator;
     const rowHeight = measureGridRowHeight(
       gridLines,
       lineHeight,
@@ -642,7 +650,7 @@ export function buildGridTableSegmentPayload(
         fontFamily,
         fontSize,
         lineHeight,
-        contentWidthPx,
+        contentWidthPx: renderWidthPx,
         layoutWidth,
         theme,
         isHeader,
@@ -660,20 +668,20 @@ export function buildGridTableSegmentPayload(
 
   const heightPx = Math.max(1, yOffset);
   let svg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${contentWidthPx}" height="${heightPx}" viewBox="0 0 ${contentWidthPx} ${heightPx}" style="overflow:hidden">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${renderWidthPx}" height="${heightPx}" viewBox="0 0 ${renderWidthPx} ${heightPx}" style="overflow:hidden">`,
     '<defs><clipPath id="clip"><rect width="100%" height="100%"/></clipPath></defs>',
     '<rect width="100%" height="100%" fill="transparent"/>',
     ...textElements,
     ...dividerElements,
     '</svg>',
   ].join('');
-  svg = ensureSvgDimensions(svg, contentWidthPx, heightPx);
+  svg = ensureSvgDimensions(svg, renderWidthPx, heightPx);
 
   return {
     layoutKey: layoutKeyParts.join('\n'),
     payload: {
       dataUri: svgToDataUri(svg),
-      widthPx: contentWidthPx,
+      widthPx: renderWidthPx,
       heightPx,
     },
   };

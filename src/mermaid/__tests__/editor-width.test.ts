@@ -62,8 +62,58 @@ describe('estimateVisibleViewportColumns', () => {
   });
 
   it('falls back to a sensible minimum when the viewport is very narrow', () => {
-    const editor = createEditor([new vscode.Range(0, 0, 0, 5)]);
+    const editor = createEditor([
+      new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 5)),
+    ]);
     expect(estimateVisibleViewportColumns(editor)).toBe(40);
+  });
+
+  it('ignores long table rows in multi-line visible ranges', () => {
+    const longRow = '| ' + 'x'.repeat(400) + ' |';
+    const editor = createEditor(
+      [new vscode.Range(new vscode.Position(0, 0), new vscode.Position(2, 20))],
+      ['| Header |', longRow, '| Footer |'],
+    );
+    expect(estimateVisibleViewportColumns(editor)).toBeLessThan(400);
+  });
+
+  it('caps middle visible lines to the viewport edge', () => {
+    const intro = 'x'.repeat(130);
+    const editor = createEditor(
+      [new vscode.Range(new vscode.Position(0, 0), new vscode.Position(2, 95))],
+      ['# Title', intro, 'short line'],
+    );
+    expect(estimateVisibleViewportColumns(editor)).toBe(95);
+  });
+
+  it('does not treat a long table row as the viewport width', () => {
+    const longRow = '| Row 1 | ' + 'x'.repeat(400) + ' |';
+    const editor = createEditor(
+      [new vscode.Range(new vscode.Position(0, 0), new vscode.Position(4, 95))],
+      [
+        '# Long cell wrapping',
+        'short intro',
+        '## Custom mode',
+        '| Section Header | Content |',
+        longRow,
+      ],
+    );
+    expect(estimateVisibleViewportColumns(editor)).toBe(95);
+  });
+
+  it('falls back to default columns when a long line is fully visible horizontally', () => {
+    const longRow = '| Row 1 | ' + 'x'.repeat(400) + ' |';
+    const editor = createEditor(
+      [new vscode.Range(new vscode.Position(0, 0), new vscode.Position(4, 400))],
+      [
+        '# Long cell wrapping',
+        'short intro',
+        '## Custom mode',
+        '| Section Header | Content |',
+        longRow,
+      ],
+    );
+    expect(estimateVisibleViewportColumns(editor)).toBe(120);
   });
 });
 

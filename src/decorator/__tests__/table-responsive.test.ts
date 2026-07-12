@@ -108,7 +108,7 @@ describe('table-responsive decorations', () => {
     );
 
     expect(payload.dataUri).toMatch(/^data:image\/svg\+xml/);
-    expect(payload.widthPx).toBe(640);
+    expect(payload.widthPx).toBe(Math.round(14 * 0.6 * 80));
     expect(payload.heightPx).toBeGreaterThan(20);
   });
 

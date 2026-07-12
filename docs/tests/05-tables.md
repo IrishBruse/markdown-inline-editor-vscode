@@ -314,10 +314,6 @@ GFM treats every unescaped `|` on a table line as a column boundary. The header 
 | d   | e   | f   |
 | g   | h   | i   |
 
-## Custom mode: long cell wrapping
-
-See [long-cell-wrapping.md](long-cell-wrapping.md) for the full long-cell responsive wrapping fixture.
-
 ## Three-column wide grid
 
 | ColA    | ColB    | ColC    |

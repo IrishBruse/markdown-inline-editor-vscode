@@ -294,7 +294,6 @@
     "test:report": "vitest run --coverage && echo HTML coverage report: dist/coverage/index.html",
     "visual:tables": "node scripts/visual-test-tables.mjs",
     "screenshot:long-cell-wrapping": "node scripts/screenshot-long-cell-wrapping.mjs",
-    "screenshot:long-cell-wrapping:validate": "npm run bundle && npm test -- --run src/decorator/__tests__/table-responsive.test.ts src/tables/__tests__/responsive-svg.test.ts && node scripts/visual-test-tables.mjs && node scripts/screenshot-long-cell-wrapping.mjs",
     "test:crlf": "vitest run src/parser/__tests__/parser-crlf.test.ts src/link-provider/__tests__/link-provider-crlf.test.ts src/decorator/__tests__/decorator-crlf.test.ts src/decorator/__tests__/decorator-cache-crlf.test.ts src/position-mapping/__tests__/position-mapping.test.ts",
     "clean": "rimraf dist",
     "compile": "tsc --project tsconfig.build.json",

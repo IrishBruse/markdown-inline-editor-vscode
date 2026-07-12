@@ -13,6 +13,7 @@ function scheduleMermaidViewportRefresh(decorator: Decorator): void {
   mermaidViewportRefreshTimer = setTimeout(() => {
     mermaidViewportRefreshTimer = undefined;
     decorator.clearMermaidDecorationCache();
+    decorator.updateDecorationsForSelection();
   }, MERMAID_VIEWPORT_REFRESH_MS);
 }
 

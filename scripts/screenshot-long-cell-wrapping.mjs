@@ -38,10 +38,18 @@ async function runTableScreenshotTest() {
 
   const sizeLabel = formatWindowSize(windowSize);
   console.log(`\n=== Window size ${sizeLabel} ===`);
-  const allWritten = await captureAtWindowSize(windowSize);
+  const capture = await captureAtWindowSize(windowSize);
+
+  if (capture.bestFrame) {
+    fs.copyFileSync(
+      path.join(screenshotsDir, capture.bestFrame),
+      path.join(root, "screenshot.png"),
+    );
+    console.log(`Copied screenshots/${capture.bestFrame} to screenshot.png`);
+  }
 
   console.log(
-    `\nWrote ${allWritten.length} screenshots to ${path.relative(root, screenshotsDir)}/`
+    `\nWrote ${capture.frames.length} screenshots to ${path.relative(root, screenshotsDir)}/`
   );
 }
 
@@ -501,6 +509,17 @@ async function scrollEditorToTop(page) {
   await sleep(300);
 }
 
+async function moveCursorToLine(page, line) {
+  await editorCaptureLocator(page).click();
+  await page.keyboard.press("Control+G");
+  await sleep(200);
+  await page.keyboard.type(String(line));
+  await page.keyboard.press("Enter");
+  await sleep(200);
+  await page.keyboard.press("Escape");
+  await sleep(100);
+}
+
 async function clickIfVisible(locator, timeoutMs = 400) {
   if (await locator.isVisible({ timeout: timeoutMs }).catch(() => false)) {
     await locator.click();
@@ -603,6 +622,28 @@ async function waitForDecorations(page, timeoutMs = decorationTimeoutMs) {
   console.warn("Decorations did not fully settle, continuing with capture...");
 }
 
+async function hasRawTableSourceLines(page) {
+  return page.evaluate(() => {
+    return [...document.querySelectorAll(".view-line")].some((line) => {
+      const text = line.textContent ?? "";
+      return /Row \d+/.test(text) && text.includes("|") && text.length > 180;
+    });
+  });
+}
+
+async function waitForWrappedTable(page, timeoutMs = decorationTimeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!(await hasRawTableSourceLines(page))) {
+      return;
+    }
+    await scrollEditorViewport(page);
+    await sleep(400);
+  }
+
+  console.warn("Wrapped table did not fully settle, continuing with capture...");
+}
+
 async function readVisibleLineRange(page) {
   return page.evaluate(() => {
     const lineNumbers = Array.from(document.querySelectorAll(".line-numbers"))
@@ -627,7 +668,7 @@ async function captureViewportSignature(page) {
   });
 }
 
-function tableContentScore(signature) {
+function tableContentScore(signature, hasRaw = false) {
   const markers = [
     "Section Header",
     "Detailed Placeholder",
@@ -639,12 +680,18 @@ function tableContentScore(signature) {
     "Row 6",
     "Row 7",
     "Row 8",
+    "Row 9",
+    "Row 10",
     "Lorem"
   ];
-  return markers.reduce(
-    (score, marker) => score + (signature.includes(marker) ? 1 : 0),
-    0
+  let score = markers.reduce(
+    (total, marker) => total + (signature.includes(marker) ? 1 : 0),
+    0,
   );
+  if (hasRaw) {
+    score -= 20;
+  }
+  return score;
 }
 
 async function scrollEditorViewport(page) {
@@ -669,8 +716,24 @@ async function captureScrollingScreenshots(page, sizeLabel) {
   );
 
   await scrollEditorToTop(page);
+  await moveCursorToLine(page, 3);
+  if (decorationSettleMs > 0) {
+    await sleep(decorationSettleMs);
+  }
+  await waitForDecorations(page);
+  await waitForWrappedTable(page);
+
+  // Warmup scroll triggers viewport-based table relayout before the first capture.
+  await scrollEditorViewport(page);
+  await scrollEditorToTop(page);
+  await moveCursorToLine(page, 3);
+  await sleep(500);
+  await waitForDecorations(page);
+  await waitForWrappedTable(page);
 
   const written = [];
+  let bestFrame = "";
+  let bestScore = -Infinity;
   let previousSignature = "";
   const sizeToken = sizeLabel.replace("x", "-");
 
@@ -681,10 +744,12 @@ async function captureScrollingScreenshots(page, sizeLabel) {
 
     const range = await readVisibleLineRange(page);
     const signature = await captureViewportSignature(page);
+    const hasRaw = await hasRawTableSourceLines(page);
+    const score = tableContentScore(signature, hasRaw);
 
     if (
       frame > 0 &&
-      (tableContentScore(signature) === 0 || signature === previousSignature)
+      (score <= 0 || signature === previousSignature)
     ) {
       break;
     }
@@ -694,12 +759,16 @@ async function captureScrollingScreenshots(page, sizeLabel) {
     await captureEditorScreenshot(page, filepath);
     const relativePath = path.relative(screenshotsDir, filepath);
     written.push(relativePath);
+    if (score > bestScore) {
+      bestScore = score;
+      bestFrame = relativePath;
+    }
 
     const rangeLabel = range
       ? `lines ${range.top}-${range.bottom}`
       : "lines unknown";
     console.log(
-      `Wrote screenshots/${relativePath} (scroll ${frame}, ${rangeLabel})`
+      `Wrote screenshots/${relativePath} (scroll ${frame}, ${rangeLabel}, score ${score}, raw ${hasRaw})`
     );
 
     previousSignature = signature;
@@ -711,7 +780,7 @@ async function captureScrollingScreenshots(page, sizeLabel) {
     await sleep(400);
   }
 
-  return written;
+  return { frames: written, bestFrame: bestFrame || written[0] || "" };
 }
 
 runTableScreenshotTest().catch((error) => {

@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { MarkdownParser } from '../../parser';
 import {
   borderlessRowToOverlayText,
@@ -10,6 +8,7 @@ import {
   formatGridLine,
   formatSeparatorGridLine,
   getClipLineCount,
+  buildGridTableSegmentPayload,
   layoutBorderlessRow,
   layoutBorderlessTable,
   layoutWrappedGridRow,
@@ -22,6 +21,21 @@ import { computeBorderlessColumnWidths, computeViewportColumnWidths } from '../r
 import { measureTextWidth } from '../../parser/tables';
 
 describe('responsive-svg', () => {
+  const longCellText =
+    'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.';
+
+  function buildLongCellTableMarkdown(rowCount: number): string {
+    const rows = Array.from({ length: rowCount }, (_, index) => {
+      const rowNumber = index + 1;
+      return `| Row ${rowNumber}          | ${longCellText} |`;
+    });
+    return [
+      '| Section Header | Detailed Placeholder Content |',
+      '| -------------- | ---------------------------- |',
+      ...rows,
+    ].join('\n');
+  }
+
   it('formats pipe grid lines with box drawing pipes', () => {
     const line = formatGridLine(['A', 'B'], [3, 3], [null, null]);
     expect(line).toContain('\u2502');
@@ -354,19 +368,46 @@ describe('responsive-svg', () => {
     expect(svg).not.toContain('\u2502');
   });
 
-  it('layoutBorderlessTable wraps long-cell fixture content column at viewport 80', async () => {
-    const fixturePath = path.join(
-      process.cwd(),
-      'docs/tests/long-cell-wrapping.md',
+  it('buildGridTableSegmentPayload wraps all long-cell rows at viewport 80', async () => {
+    const md = buildLongCellTableMarkdown(10);
+    const parser = await MarkdownParser.create();
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const table = tableBlocks[0];
+    const lastRowIdx = table.rowRanges.length - 1;
+    const { layoutKey, payload } = buildGridTableSegmentPayload(
+      table,
+      0,
+      lastRowIdx,
+      80,
+      640,
+      'monospace',
+      14,
+      20,
+      {
+        foreground: '#d4d4d4',
+        mutedForeground: '#858585',
+        separator: '#858585',
+      },
     );
-    const md = fs.readFileSync(fixturePath, 'utf8');
+
+    expect(layoutKey).toContain('Row 1');
+    expect(layoutKey).toContain('Row 10');
+    expect(layoutKey).toContain('\u2502');
+    expect(layoutKey.split('\n').length).toBeGreaterThan(20);
+    expect(payload.heightPx).toBeGreaterThan(200);
+    expect(payload.dataUri).toMatch(/^data:image\/svg\+xml/);
+  });
+
+  it('layoutBorderlessTable wraps long-cell content column at viewport 80', async () => {
+    const md = buildLongCellTableMarkdown(1);
     const parser = await MarkdownParser.create();
     const { tableBlocks } = parser.extractDecorationsWithScopes(md);
     const layout = layoutBorderlessTable(tableBlocks[0], 80);
-
-    expect(layout.rows[1].lineCount).toBeGreaterThan(1);
-    expect(layout.rows[1].columns[1].length).toBeGreaterThan(1);
-    expect(layout.rows[1].columns[1].some((line) => line.includes('Lorem'))).toBe(true);
+    const dataRow = layout.rows.find((row) => row.columns[0][0]?.includes('Row 1'));
+    expect(dataRow).toBeDefined();
+    expect(dataRow!.lineCount).toBeGreaterThan(1);
+    expect(dataRow!.columns[1].length).toBeGreaterThan(1);
+    expect(dataRow!.columns[1].some((line) => line.includes('Lorem'))).toBe(true);
   });
 
   it('renderResponsiveRowSvg draws horizontal divider below rows', async () => {
