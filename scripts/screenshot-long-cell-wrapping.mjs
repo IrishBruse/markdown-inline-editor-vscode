@@ -23,11 +23,7 @@ const maxCaptureFrames = Number(process.env.MAX_CAPTURE_FRAMES ?? 4);
 const decorationSettleMs = Number(process.env.DECORATION_SETTLE_MS ?? "1500");
 const decorationTimeoutMs = Number(process.env.DECORATION_TIMEOUT_MS ?? 30000);
 const defaultWindowSize = { width: 800, height: 600 };
-const defaultWindowSizes = [
-  { width: 800, height: 600 },
-  { width: 1280, height: 800 },
-];
-const windowSizes = parseWindowSizes();
+const windowSize = parseWindowSize();
 const cdpPort = Number(process.env.CDP_PORT ?? "9223");
 const cdpUrl = `http://127.0.0.1:${cdpPort}`;
 const codeBin = process.env.CODE_BIN ?? "code";
@@ -41,13 +37,9 @@ async function runTableScreenshotTest() {
   prepareScreenshotsDir();
   assertEditorBinaryOnPath();
 
-  const allWritten = [];
-  for (const size of windowSizes) {
-    const sizeLabel = `${size.width}x${size.height}`;
-    console.log(`\n=== Window size ${sizeLabel} ===`);
-    const written = await captureAtWindowSize(size, sizeLabel);
-    allWritten.push(...written);
-  }
+  const sizeLabel = `${windowSize.width}x${windowSize.height}`;
+  console.log(`\n=== Window size ${sizeLabel} ===`);
+  const allWritten = await captureAtWindowSize(windowSize, sizeLabel);
 
   if (allWritten.length > 0) {
     fs.copyFileSync(
@@ -60,33 +52,13 @@ async function runTableScreenshotTest() {
   );
 }
 
-function parseWindowSizes() {
-  const raw = process.env.WINDOW_SIZES?.trim();
-  if (raw) {
-    return raw.split(",").map((entry) => {
-      const [widthText, heightText] = entry.split("x").map((part) => part.trim());
-      const width = Number(widthText);
-      const height = Number(heightText);
-      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-        throw new Error(`Invalid WINDOW_SIZES entry: ${entry}`);
-      }
-      return { width, height };
-    });
-  }
-
-  const single = parseWindowSize();
-  if (
-    process.env.WINDOW_WIDTH !== undefined ||
-    process.env.WINDOW_HEIGHT !== undefined ||
-    process.argv.slice(2).some((arg) => !arg.startsWith("-"))
-  ) {
-    return [single];
-  }
-
-  return defaultWindowSizes;
-}
-
 function parseWindowSize() {
+  if (process.env.WINDOW_SIZES?.trim()) {
+    throw new Error(
+      "WINDOW_SIZES is not supported. Pass one size via CLI args or WINDOW_WIDTH and WINDOW_HEIGHT.",
+    );
+  }
+
   const cliArgs = process.argv.slice(2).filter((arg) => !arg.startsWith("-"));
   const envWidth = process.env.WINDOW_WIDTH;
   const envHeight = process.env.WINDOW_HEIGHT;
