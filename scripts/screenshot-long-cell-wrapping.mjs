@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -14,30 +15,71 @@ const fixtureBasename = path.basename(fixturePath);
 const screenshotsDir = path.join(root, "screenshots");
 const screenshotPrefix = "long-cell-wrapping";
 const userDataDir = path.join(root, ".vscode-screenshot-profile");
+const editorPidFile = path.join(userDataDir, ".screenshot-editor.pid");
 const extensionBundle = path.join(root, "dist/extension.js");
 const cursorLine = Number(process.env.CURSOR_LINE ?? 3);
-const maxCaptureFrames = Number(process.env.MAX_CAPTURE_FRAMES ?? 4);
+const maxCaptureFrames = Number(process.env.MAX_CAPTURE_FRAMES ?? 2);
 const decorationSettleMs = Number(process.env.DECORATION_SETTLE_MS ?? "1500");
 const decorationTimeoutMs = Number(process.env.DECORATION_TIMEOUT_MS ?? 30000);
+const defaultWindowSizes = [
+  { width: 800, height: 600 },
+  { width: 960, height: 720 },
+  { width: 1280, height: 800 },
+  { width: 1600, height: 900 },
+];
+const windowSizes = (process.env.WINDOW_SIZES ?? "")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean)
+  .map((entry) => {
+    const [width, height] = entry.split("x").map((value) => Number(value));
+    if (!Number.isFinite(width) || !Number.isFinite(height)) {
+      throw new Error(`Invalid WINDOW_SIZES entry: ${entry}`);
+    }
+    return { width, height };
+  });
+const captureWindowSizes =
+  windowSizes.length > 0 ? windowSizes : defaultWindowSizes;
 const cdpPort = Number(process.env.CDP_PORT ?? "9223");
 const cdpUrl = `http://127.0.0.1:${cdpPort}`;
 const codeBin = process.env.CODE_BIN ?? "code";
 
+/** @type {import("node:child_process").ChildProcess | null} */
+let editorProcess = null;
+
 async function runTableScreenshotTest() {
-  // 1. Prepare local build, profile, and screenshot output directory.
   ensureExtensionBuilt();
-  stopStaleEditorIfNeeded();
   ensureScreenshotProfile();
   prepareScreenshotsDir();
   assertEditorBinaryOnPath();
 
-  // 2. Launch VS Code Extension Development Host and connect over CDP.
-  console.log(`Launching ${codeBin} with docs workspace...`);
-  launchExtensionHost();
-  await waitForCdp();
-  console.log("CDP ready, waiting for editor...");
+  const written = [];
+  for (const size of captureWindowSizes) {
+    const sizeLabel = `${size.width}x${size.height}`;
+    console.log(`\n=== Window size ${sizeLabel} ===`);
+    const frames = await captureAtWindowSize(size, sizeLabel);
+    written.push(...frames);
+  }
 
-  const browser = await chromium.connectOverCDP(cdpUrl);
+  if (written.length > 0) {
+    fs.copyFileSync(
+      path.join(screenshotsDir, written[0]),
+      path.join(root, "screenshot.png"),
+    );
+  }
+  console.log(
+    `\nWrote ${written.length} screenshots to ${path.relative(root, screenshotsDir)}/`,
+  );
+}
+
+async function captureAtWindowSize(size, sizeLabel) {
+  await stopStaleEditorIfNeeded();
+
+  console.log(`Launching ${codeBin} at ${sizeLabel}...`);
+  launchExtensionHost(size);
+  await waitForCdp();
+
+  const browser = await connectBrowserWithRetry();
   let page;
 
   try {
@@ -46,13 +88,11 @@ async function runTableScreenshotTest() {
       throw new Error("Could not find VS Code workbench page over CDP");
     }
 
-    // 3. Open the fixture and wait for the editor to be ready.
     await waitForWorkbench(page);
     await dismissInitialDialogs(page);
     await waitForFixtureEditor(page);
     await prepareEditorLayout(page);
 
-    // 4. Wait for inline table decorations to render.
     console.log("Waiting for inline decorations...");
     await waitForDecorations(page);
     if (decorationSettleMs > 0) {
@@ -60,17 +100,13 @@ async function runTableScreenshotTest() {
       await sleep(decorationSettleMs);
     }
 
-    // 5. Capture scrolling screenshots through the long-cell table.
-    const written = await captureScrollingScreenshots(page);
-    console.log(
-      `Wrote ${written.length} screenshots to ${path.relative(root, screenshotsDir)}/`
-    );
+    await resetViewportToTableTop(page);
+    await sleep(600);
+    return await captureScrollingScreenshots(page, sizeLabel);
   } finally {
     await shutdown(page, browser);
   }
 }
-
-// --- Setup -------------------------------------------------------------------
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -82,7 +118,7 @@ function ensureExtensionBuilt() {
   console.log("dist/extension.js missing, running npm run bundle...");
   const result = spawnSync("npm", ["run", "bundle"], {
     cwd: root,
-    stdio: "inherit"
+    stdio: "inherit",
   });
   if (result.status !== 0) {
     throw new Error("Failed to build extension bundle");
@@ -90,24 +126,99 @@ function ensureExtensionBuilt() {
 }
 
 function assertEditorBinaryOnPath() {
-  const which = spawnSync("which", [codeBin], { encoding: "utf8" });
+  const lookup = process.platform === "win32" ? "where" : "which";
+  const which = spawnSync(lookup, [codeBin], { encoding: "utf8" });
   if (which.status !== 0 || !which.stdout.trim()) {
     throw new Error(`Editor binary not found on PATH: ${codeBin}`);
   }
 }
 
-function isCdpPortInUse() {
-  const lsof = spawnSync("lsof", ["-ti", `:${cdpPort}`], { encoding: "utf8" });
-  return Boolean(lsof.stdout.trim());
+function isPortOpen(port, host = "127.0.0.1") {
+  return new Promise((resolve) => {
+    const socket = net.connect({ port, host });
+    const finish = (open) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(open);
+    };
+    socket.setTimeout(500);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+  });
 }
 
-function stopStaleEditorIfNeeded() {
-  if (!isCdpPortInUse()) {
-    return;
+async function waitForPortClosed(port, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!(await isPortOpen(port))) {
+      return;
+    }
+    await sleep(100);
+  }
+  throw new Error(`Port ${port} still in use after ${timeoutMs}ms`);
+}
+
+function readStoredEditorPid() {
+  if (!fs.existsSync(editorPidFile)) {
+    return null;
+  }
+  const pid = Number(fs.readFileSync(editorPidFile, "utf8").trim());
+  return Number.isFinite(pid) && pid > 0 ? pid : null;
+}
+
+function writeStoredEditorPid(pid) {
+  fs.mkdirSync(userDataDir, { recursive: true });
+  fs.writeFileSync(editorPidFile, `${pid}\n`);
+}
+
+function clearStoredEditorPid() {
+  fs.rmSync(editorPidFile, { force: true });
+}
+
+function killPid(pid, signal = "SIGTERM") {
+  if (!Number.isFinite(pid) || pid <= 0) {
+    return false;
   }
 
-  killEditorProcesses();
-  spawnSync("sleep", ["0.5"]);
+  try {
+    if (process.platform === "win32") {
+      spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], {
+        stdio: "ignore",
+      });
+      return true;
+    }
+
+    process.kill(pid, signal);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function stopStaleEditorIfNeeded() {
+  const stalePid = readStoredEditorPid();
+  if (stalePid) {
+    killPid(stalePid);
+    await waitForPortClosed(cdpPort).catch(() => {});
+    if (await isPortOpen(cdpPort)) {
+      killPid(stalePid, "SIGKILL");
+      await waitForPortClosed(cdpPort).catch(() => {});
+    }
+    clearStoredEditorPid();
+    await sleep(500);
+  }
+
+  if (await isPortOpen(cdpPort)) {
+    await waitForPortClosed(cdpPort, 5000).catch(() => {});
+  }
+
+  if (await isPortOpen(cdpPort)) {
+    throw new Error(
+      `CDP port ${cdpPort} is already in use by another process. ` +
+        "Set CDP_PORT to a free port or close the other debugger.",
+    );
+  }
 }
 
 function ensureScreenshotProfile() {
@@ -129,7 +240,7 @@ function ensureScreenshotProfile() {
     "window.zoomLevel": 0,
     "workbench.editor.restoreViewState": false,
     "workbench.secondarySideBar.defaultVisibility": "hidden",
-    "git.openRepositoryInParentFolders": "never"
+    "git.openRepositoryInParentFolders": "never",
   };
 
   const existing = fs.existsSync(settingsPath)
@@ -137,7 +248,7 @@ function ensureScreenshotProfile() {
     : {};
   fs.writeFileSync(
     settingsPath,
-    JSON.stringify({ ...existing, ...settings }, null, 2) + "\n"
+    JSON.stringify({ ...existing, ...settings }, null, 2) + "\n",
   );
 
   fs.writeFileSync(
@@ -146,56 +257,56 @@ function ensureScreenshotProfile() {
       [
         { key: "ctrl+shift+f1", command: "workbench.action.closeSidebar" },
         { key: "ctrl+shift+f2", command: "workbench.action.closeAuxiliaryBar" },
-        { key: "ctrl+shift+f4", command: "workbench.action.quit" }
+        { key: "ctrl+shift+f4", command: "workbench.action.quit" },
       ],
       null,
-      2
-    ) + "\n"
+      2,
+    ) + "\n",
   );
 }
 
 function prepareScreenshotsDir() {
   fs.mkdirSync(screenshotsDir, { recursive: true });
   for (const entry of fs.readdirSync(screenshotsDir)) {
-    if (entry.startsWith(`${screenshotPrefix}-`) && entry.endsWith(".png")) {
+    if (
+      (entry.startsWith(`${screenshotPrefix}-`) ||
+        entry === "screenshot.png") &&
+      entry.endsWith(".png")
+    ) {
       fs.rmSync(path.join(screenshotsDir, entry), { force: true });
     }
   }
+  const legacyScreenshot = path.join(root, "screenshot.png");
+  if (fs.existsSync(legacyScreenshot)) {
+    fs.rmSync(legacyScreenshot, { force: true });
+  }
 }
 
-function launchExtensionHost() {
-  spawn(
-    codeBin,
-    [
-      "--new-window",
-      `--extensionDevelopmentPath=${root}`,
-      `--remote-debugging-port=${cdpPort}`,
-      `--user-data-dir=${userDataDir}`,
-      `--goto`,
-      `${fixturePath}:${cursorLine}`,
-      workspacePath
-    ],
-    { cwd: root, detached: true, stdio: "ignore" }
-  ).unref();
-}
+function launchExtensionHost({ width, height }) {
+  const args = [
+    "--new-window",
+    `--extensionDevelopmentPath=${root}`,
+    `--remote-debugging-port=${cdpPort}`,
+    `--user-data-dir=${userDataDir}`,
+    `--window-size=${width},${height}`,
+    "--goto",
+    `${fixturePath}:${cursorLine}`,
+    workspacePath,
+  ];
 
-function killEditorProcesses() {
-  spawnSync("pkill", ["-f", `user-data-dir=${userDataDir}`], {
-    stdio: "ignore"
+  editorProcess = spawn(codeBin, args, {
+    cwd: root,
+    detached: process.platform !== "win32",
+    stdio: "ignore",
   });
 
-  const lsof = spawnSync("lsof", ["-ti", `:${cdpPort}`], { encoding: "utf8" });
-  const myPid = process.pid;
-  for (const pid of lsof.stdout.trim().split("\n")) {
-    const numericPid = Number(pid);
-    if (!pid || numericPid === myPid) {
-      continue;
-    }
-    try {
-      process.kill(numericPid, "SIGTERM");
-    } catch {
-      // Process may already be gone.
-    }
+  if (!editorProcess.pid) {
+    throw new Error(`Failed to launch ${codeBin}`);
+  }
+
+  writeStoredEditorPid(editorProcess.pid);
+  if (process.platform !== "win32") {
+    editorProcess.unref();
   }
 }
 
@@ -204,18 +315,47 @@ async function shutdown(page, browser) {
     await page.keyboard.press("Control+Shift+F4").catch(() => {});
     await sleep(800);
   }
+
   if (browser) {
     await browser.close().catch(() => {});
   }
-  await sleep(500);
-  killEditorProcesses();
+
+  const pid = editorProcess?.pid ?? readStoredEditorPid();
+  if (pid) {
+    killPid(pid);
+    await waitForPortClosed(cdpPort).catch(() => {});
+    if (await isPortOpen(cdpPort)) {
+      killPid(pid, "SIGKILL");
+      await waitForPortClosed(cdpPort).catch(() => {});
+    }
+  }
+  clearStoredEditorPid();
+  editorProcess = null;
+  await sleep(400);
 }
 
-// --- CDP / browser -----------------------------------------------------------
+async function connectBrowserWithRetry(attempts = 5) {
+  let lastError;
 
-async function waitForCdp(timeoutMs = 30_000) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await chromium.connectOverCDP(cdpUrl);
+    } catch (error) {
+      lastError = error;
+      await sleep(Math.min(250 * attempt, 1000));
+    }
+  }
+
+  throw new Error(
+    `Failed to connect Playwright to CDP at ${cdpUrl}: ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`,
+  );
+}
+
+async function waitForCdp(timeoutMs = 45_000) {
   const deadline = Date.now() + timeoutMs;
-  let delayMs = 50;
+  let delayMs = 100;
 
   while (Date.now() < deadline) {
     try {
@@ -227,22 +367,26 @@ async function waitForCdp(timeoutMs = 30_000) {
       // VS Code may not be ready yet.
     }
     await sleep(delayMs);
-    delayMs = Math.min(delayMs * 2, 250);
+    delayMs = Math.min(delayMs * 1.5, 500);
   }
 
   throw new Error(
-    `CDP endpoint did not respond within ${timeoutMs}ms (${cdpUrl})`
+    `CDP endpoint did not respond within ${timeoutMs}ms (${cdpUrl})`,
   );
 }
 
-async function findWorkbenchPage(browser, timeoutMs = 20_000) {
+async function findWorkbenchPage(browser, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() < deadline) {
     for (const context of browser.contexts()) {
-      for (const page of context.pages()) {
-        const url = page.url();
-        if (url.includes("vscode-app") || url.startsWith("vscode-file://")) {
-          return page;
+      for (const candidate of context.pages()) {
+        const url = candidate.url();
+        if (
+          url.includes("vscode-app") ||
+          url.startsWith("vscode-file://")
+        ) {
+          return candidate;
         }
       }
     }
@@ -253,7 +397,7 @@ async function findWorkbenchPage(browser, timeoutMs = 20_000) {
       }
     }
 
-    await sleep(100);
+    await sleep(150);
   }
 
   return null;
@@ -265,13 +409,11 @@ async function ensurePageReady(page) {
   }
 }
 
-// --- Editor navigation -------------------------------------------------------
-
-async function waitForWorkbench(page, timeoutMs = 30_000) {
+async function waitForWorkbench(page, timeoutMs = 45_000) {
   await page.waitForFunction(
     () => document.title.includes("Extension Development Host"),
     undefined,
-    { timeout: timeoutMs }
+    { timeout: timeoutMs },
   );
 }
 
@@ -296,7 +438,7 @@ async function openFixtureFile(page) {
   await sleep(800);
 }
 
-async function waitForFixtureEditor(page, timeoutMs = 30_000) {
+async function waitForFixtureEditor(page, timeoutMs = 45_000) {
   const activeTab = page
     .locator(".tab.active")
     .filter({ hasText: fixtureBasename });
@@ -310,13 +452,13 @@ async function waitForFixtureEditor(page, timeoutMs = 30_000) {
     await sleep(500);
   }
 
-  await activeTab.waitFor({ state: "visible", timeout: 5_000 });
+  await activeTab.waitFor({ state: "visible", timeout: 10_000 });
   await page.locator(".monaco-editor").first().waitFor({
     state: "visible",
-    timeout: 5_000
+    timeout: 10_000,
   });
 
-  const settleDeadline = Date.now() + 2_000;
+  const settleDeadline = Date.now() + 3_000;
   let lastLineCount = 0;
   while (Date.now() < settleDeadline) {
     const lineCount = await page
@@ -336,11 +478,10 @@ async function prepareEditorLayout(page) {
   await page.keyboard.press("Control+Shift+F2");
 }
 
-async function runCommandPalette(page, command) {
-  await page.keyboard.press("Control+Shift+P");
-  await sleep(300);
-  await page.keyboard.type(command, { delay: 15 });
+async function goToLine(page, line) {
+  await page.keyboard.press("Control+G");
   await sleep(200);
+  await page.keyboard.type(String(line), { delay: 20 });
   await page.keyboard.press("Enter");
   await sleep(300);
 }
@@ -356,10 +497,7 @@ async function moveCursorToLine(page, line) {
   await dismissInitialDialogs(page);
   await page.locator(".monaco-editor").first().click();
   await sleep(100);
-  await runCommandPalette(page, "Go to Line/Column");
-  await page.keyboard.type(String(line), { delay: 20 });
-  await page.keyboard.press("Enter");
-  await sleep(300);
+  await goToLine(page, line);
 
   if (await statusLine.isVisible({ timeout: 1000 }).catch(() => false)) {
     return;
@@ -367,8 +505,6 @@ async function moveCursorToLine(page, line) {
 
   throw new Error(`Failed to move cursor to line ${line}`);
 }
-
-// --- Dialogs / accessibility -------------------------------------------------
 
 async function clickIfVisible(locator, timeoutMs = 400) {
   if (await locator.isVisible({ timeout: timeoutMs }).catch(() => false)) {
@@ -382,34 +518,38 @@ async function dismissInitialDialogs(page) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const dismissed =
       (await clickIfVisible(
-        page.getByRole("dialog", { name: "Welcome to Visual Studio Code" }).getByRole("button", { name: "Close" })
+        page
+          .getByRole("dialog", { name: "Welcome to Visual Studio Code" })
+          .getByRole("button", { name: "Close" }),
       )) ||
       (await clickIfVisible(
-        page.locator(".onboarding-a-overlay button").filter({ hasText: /skip|close|later|continue without/i })
+        page
+          .locator(".onboarding-a-overlay button")
+          .filter({ hasText: /skip|close|later|continue without/i }),
       )) ||
       (await clickIfVisible(
-        page.getByText("Continue without Signing In", { exact: false })
+        page.getByText("Continue without Signing In", { exact: false }),
       )) ||
       (await clickIfVisible(
-        page.getByRole("button", { name: "Continue", exact: true })
+        page.getByRole("button", { name: "Continue", exact: true }),
       )) ||
       (await clickIfVisible(
         page.getByRole("button", {
           name: "Yes, I trust the authors",
-          exact: false
-        })
+          exact: false,
+        }),
       )) ||
       (await clickIfVisible(
-        page.getByRole("button", { name: "Trust", exact: true })
+        page.getByRole("button", { name: "Trust", exact: true }),
       )) ||
       (await clickIfVisible(
-        page.getByRole("button", { name: "No", exact: true })
+        page.getByRole("button", { name: "No", exact: true }),
       )) ||
       (await clickIfVisible(
         page
           .locator(".dialog-buttons-row .monaco-button")
           .filter({ hasText: "Close" }),
-        250
+        250,
       ));
 
     if (!dismissed) {
@@ -419,7 +559,7 @@ async function dismissInitialDialogs(page) {
   }
 
   const notificationClose = page.locator(
-    ".notifications-toasts .codicon-close"
+    ".notifications-toasts .codicon-close",
   );
   while ((await notificationClose.count()) > 0) {
     await notificationClose
@@ -430,7 +570,7 @@ async function dismissInitialDialogs(page) {
 
   await clickIfVisible(
     page.getByRole("button", { name: "Never", exact: true }),
-    250
+    250,
   );
   await page.keyboard.press("Escape");
 }
@@ -450,8 +590,6 @@ async function disableScreenReaderMode(page) {
   await page.keyboard.press("Escape");
   await sleep(150);
 }
-
-// --- Decorations / capture ---------------------------------------------------
 
 async function waitForDecorations(page, timeoutMs = decorationTimeoutMs) {
   await disableScreenReaderMode(page);
@@ -486,7 +624,7 @@ async function readVisibleLineRange(page) {
     }
     return {
       top: lineNumbers[0],
-      bottom: lineNumbers[lineNumbers.length - 1]
+      bottom: lineNumbers[lineNumbers.length - 1],
     };
   });
 }
@@ -499,13 +637,20 @@ async function captureViewportSignature(page) {
   });
 }
 
-function isBlankViewport(signature) {
-  const text = signature.replaceAll("|", "").trim();
-  return (
-    text.length < 40 ||
-    (!text.includes("Row") &&
-      !text.includes("Section Header") &&
-      !text.includes("Lorem"))
+function tableContentScore(signature) {
+  const markers = [
+    "Section Header",
+    "Detailed Placeholder",
+    "Row 1",
+    "Row 2",
+    "Row 3",
+    "Row 4",
+    "Row 5",
+    "Lorem",
+  ];
+  return markers.reduce(
+    (score, marker) => score + (signature.includes(marker) ? 1 : 0),
+    0,
   );
 }
 
@@ -515,8 +660,8 @@ async function shouldStopCapture(page, frame, signature, previousSignature) {
   }
 
   return (
-    (await decorationSpanCount(page)) < 15 ||
-    isBlankViewport(signature) ||
+    tableContentScore(signature) === 0 ||
+    tableContentScore(signature) < tableContentScore(previousSignature) / 2 ||
     signature === previousSignature
   );
 }
@@ -537,14 +682,26 @@ async function scrollEditorViewport(page) {
   return afterSignature !== beforeSignature;
 }
 
-async function captureScrollingScreenshots(page) {
-  console.log(`Capturing ${fixtureBasename} (viewport scroll until end)`);
-
+async function resetViewportToTableTop(page) {
+  await page.locator(".monaco-editor").first().click();
+  await sleep(100);
+  await goToLine(page, 1);
+  await sleep(400);
   await moveCursorToLine(page, cursorLine);
+  await sleep(300);
+}
+
+async function captureScrollingScreenshots(page, sizeLabel) {
+  console.log(
+    `Capturing ${fixtureBasename} (${sizeLabel}, viewport scroll until end)`,
+  );
+
+  await resetViewportToTableTop(page);
   await sleep(decorationSettleMs);
 
   const written = [];
   let previousSignature = "";
+  const sizeToken = sizeLabel.replace("x", "-");
 
   for (let frame = 0; frame < maxCaptureFrames; frame += 1) {
     await ensurePageReady(page);
@@ -555,16 +712,16 @@ async function captureScrollingScreenshots(page) {
       break;
     }
 
-    const filename = `${screenshotPrefix}-${String(written.length + 1).padStart(2, "0")}.png`;
+    const filename = `${screenshotPrefix}-${sizeToken}-${String(written.length + 1).padStart(2, "0")}.png`;
     const filepath = path.join(screenshotsDir, filename);
     await page.screenshot({ path: filepath, fullPage: false });
-    const relativePath = path.relative(root, filepath);
+    const relativePath = path.relative(screenshotsDir, filepath);
     written.push(relativePath);
 
     const rangeLabel = range
       ? `lines ${range.top}-${range.bottom}`
       : "lines unknown";
-    console.log(`Wrote ${relativePath} (${rangeLabel})`);
+    console.log(`Wrote screenshots/${relativePath} (${rangeLabel})`);
 
     previousSignature = signature;
 
@@ -572,11 +729,16 @@ async function captureScrollingScreenshots(page) {
       break;
     }
 
+    const beforeScore = tableContentScore(signature);
     if (!(await scrollEditorViewport(page))) {
       break;
     }
 
     await sleep(400);
+    const afterSignature = await captureViewportSignature(page);
+    if (tableContentScore(afterSignature) < beforeScore) {
+      break;
+    }
   }
 
   return written;

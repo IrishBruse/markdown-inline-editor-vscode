@@ -135,7 +135,7 @@ describe('responsive-svg', () => {
       },
     });
 
-    const expectedHeight = Math.round(20 * 0.75) * 2 + layout.lineCount * 20 + 1;
+    const expectedHeight = Math.round(20 * 0.9) * 2 + layout.lineCount * 20 + 1;
     expect(svg).toContain(`height="${expectedHeight}"`);
     expect(svg).toContain('x');
     expect(svg).not.toContain('\u2502');

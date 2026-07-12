@@ -28,7 +28,7 @@ export function shouldUseResponsiveLayout(colWidths: number[]): boolean {
 const MIN_COLUMN_WIDTH = 3;
 
 /** Character gap between borderless columns (matches SVG column gap). */
-export const BORDERLESS_COLUMN_GAP = 3;
+export const BORDERLESS_COLUMN_GAP = 5;
 
 function estimateBorderlessWidth(colWidths: number[]): number {
   const numCols = colWidths.length;

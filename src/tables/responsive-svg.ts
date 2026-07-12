@@ -36,7 +36,7 @@ const NBSP = '\u00A0';
 const PIPE = '\u2502';
 const MIN_FALLBACK_COL_WIDTH = 3;
 const CHAR_WIDTH_RATIO = 0.6;
-const ROW_PADDING_RATIO = 0.75;
+const ROW_PADDING_RATIO = 0.9;
 
 function padCell(
   content: string,
@@ -174,6 +174,17 @@ export function borderlessTableToOverlayText(layout: BorderlessTableLayout): str
     .join('\n');
 }
 
+function getColumnFill(
+  row: BorderlessRowLayout,
+  colIdx: number,
+  theme: ResponsiveTableTheme,
+): string {
+  if (row.isHeader || colIdx === 0) {
+    return theme.foreground;
+  }
+  return theme.mutedForeground;
+}
+
 function measureBorderlessRowHeight(
   layout: BorderlessRowLayout,
   lineHeight: number,
@@ -217,11 +228,9 @@ export function renderBorderlessTableSvg(
         if (text.length === 0) {
           continue;
         }
-        const fill = row.isHeader
-          ? options.theme.foreground
-          : options.theme.mutedForeground;
+        const fill = getColumnFill(row, colIdx, options.theme);
         textElements.push(
-          `<text x="${xPositions[colIdx]}" y="${y}" fill="${fill}" clip-path="url(#clip)" font-family="${escapeSvgText(options.fontFamily)}" font-size="${options.fontSize}px"${row.isHeader ? ' font-weight="600"' : ''}>${escapeSvgText(text)}</text>`,
+          `<text x="${xPositions[colIdx]}" y="${y}" fill="${fill}" clip-path="url(#clip)" font-family="${escapeSvgText(options.fontFamily)}" font-size="${options.fontSize}px">${escapeSvgText(text)}</text>`,
         );
       }
     }
@@ -451,9 +460,7 @@ export function renderResponsiveRowSvg(
       if (text.length === 0) {
         continue;
       }
-      const fill = layout.isHeader
-        ? options.theme.foreground
-        : options.theme.mutedForeground;
+      const fill = getColumnFill(layout, colIdx, options.theme);
       textElements.push(
         `<text x="${xPositions[colIdx]}" y="${y}" fill="${fill}" clip-path="url(#clip)" font-family="${escapeSvgText(options.fontFamily)}" font-size="${options.fontSize}px">${escapeSvgText(text)}</text>`,
       );

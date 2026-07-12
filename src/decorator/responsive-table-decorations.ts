@@ -12,8 +12,13 @@ const DEFAULT_FOREGROUND = {
 } as const;
 
 const DEFAULT_MUTED = {
-  dark: '#858585',
+  dark: '#abb2bf',
   light: '#6a6a6a',
+} as const;
+
+const DEFAULT_DIVIDER = {
+  dark: '#3e4451',
+  light: '#d0d0d0',
 } as const;
 
 export class ResponsiveTableDecorations {
@@ -143,6 +148,6 @@ export function getResponsiveTableTheme(isDarkTheme: boolean): {
   return {
     foreground: isDarkTheme ? DEFAULT_FOREGROUND.dark : DEFAULT_FOREGROUND.light,
     mutedForeground: isDarkTheme ? DEFAULT_MUTED.dark : DEFAULT_MUTED.light,
-    separator: isDarkTheme ? DEFAULT_MUTED.dark : DEFAULT_MUTED.light,
+    separator: isDarkTheme ? DEFAULT_DIVIDER.dark : DEFAULT_DIVIDER.light,
   };
 }
