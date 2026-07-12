@@ -20,6 +20,7 @@ const extensionBundle = path.join(root, "dist/extension.js");
 const maxCaptureFrames = Number(process.env.MAX_CAPTURE_FRAMES ?? 4);
 const decorationSettleMs = Number(process.env.DECORATION_SETTLE_MS ?? "1500");
 const decorationTimeoutMs = Number(process.env.DECORATION_TIMEOUT_MS ?? 30000);
+const minDecorationSpans = 10;
 const defaultWindowSize = { width: 800, height: 600 };
 const windowSize = parseWindowSize();
 const cdpPort = Number(process.env.CDP_PORT ?? "9223");
@@ -35,22 +36,20 @@ async function runTableScreenshotTest() {
   prepareScreenshotsDir();
   assertEditorBinaryOnPath();
 
-  const sizeLabel = `${windowSize.width}x${windowSize.height}`;
+  const sizeLabel = formatWindowSize(windowSize);
   console.log(`\n=== Window size ${sizeLabel} ===`);
-  const allWritten = await captureAtWindowSize(windowSize, sizeLabel);
+  const allWritten = await captureAtWindowSize(windowSize);
 
   console.log(
     `\nWrote ${allWritten.length} screenshots to ${path.relative(root, screenshotsDir)}/`
   );
 }
 
-function parseWindowSize() {
-  if (process.env.WINDOW_SIZES?.trim()) {
-    throw new Error(
-      "WINDOW_SIZES is not supported. Pass one size via CLI args or WINDOW_WIDTH and WINDOW_HEIGHT."
-    );
-  }
+function formatWindowSize({ width, height }) {
+  return `${width}x${height}`;
+}
 
+function parseWindowSize() {
   const cliArgs = process.argv.slice(2).filter((arg) => !arg.startsWith("-"));
   const envWidth = process.env.WINDOW_WIDTH;
   const envHeight = process.env.WINDOW_HEIGHT;
@@ -87,7 +86,8 @@ function parseWindowSize() {
   return { width, height };
 }
 
-async function captureAtWindowSize(size, sizeLabel) {
+async function captureAtWindowSize(size) {
+  const sizeLabel = formatWindowSize(size);
   await stopStaleEditorIfNeeded();
 
   console.log(`Launching ${codeBin} at ${sizeLabel}...`);
@@ -99,14 +99,12 @@ async function captureAtWindowSize(size, sizeLabel) {
 
   try {
     page = await findWorkbenchPage(browser);
-    if (!page) {
-      throw new Error("Could not find VS Code workbench page over CDP");
-    }
 
     await waitForWorkbench(page);
     await dismissInitialDialogs(page);
     await waitForFixtureEditor(page);
-    await prepareEditorLayout(page);
+    await page.keyboard.press("Control+Shift+F1");
+    await page.keyboard.press("Control+Shift+F2");
 
     console.log("Waiting for inline decorations...");
     await waitForDecorations(page);
@@ -209,15 +207,23 @@ function killPid(pid, signal = "SIGTERM") {
   }
 }
 
+async function releaseEditorAndPort(pid) {
+  if (!pid) {
+    return;
+  }
+
+  killPid(pid);
+  await waitForPortClosed(cdpPort).catch(() => {});
+  if (await isPortOpen(cdpPort)) {
+    killPid(pid, "SIGKILL");
+    await waitForPortClosed(cdpPort).catch(() => {});
+  }
+}
+
 async function stopStaleEditorIfNeeded() {
   const stalePid = readStoredEditorPid();
   if (stalePid) {
-    killPid(stalePid);
-    await waitForPortClosed(cdpPort).catch(() => {});
-    if (await isPortOpen(cdpPort)) {
-      killPid(stalePid, "SIGKILL");
-      await waitForPortClosed(cdpPort).catch(() => {});
-    }
+    await releaseEditorAndPort(stalePid);
     clearStoredEditorPid();
     await sleep(500);
   }
@@ -319,15 +325,7 @@ async function shutdown(page, browser) {
     await browser.close().catch(() => {});
   }
 
-  const pid = editorProcess?.pid ?? readStoredEditorPid();
-  if (pid) {
-    killPid(pid);
-    await waitForPortClosed(cdpPort).catch(() => {});
-    if (await isPortOpen(cdpPort)) {
-      killPid(pid, "SIGKILL");
-      await waitForPortClosed(cdpPort).catch(() => {});
-    }
-  }
+  await releaseEditorAndPort(editorProcess?.pid ?? readStoredEditorPid());
   clearStoredEditorPid();
   editorProcess = null;
   await sleep(400);
@@ -363,7 +361,7 @@ async function waitForCdp(timeoutMs = 45_000) {
         return;
       }
     } catch {
-      // VS Code may not be ready yet.
+      // Retry until CDP responds.
     }
     await sleep(delayMs);
     delayMs = Math.min(delayMs * 1.5, 500);
@@ -387,22 +385,10 @@ async function findWorkbenchPage(browser, timeoutMs = 30_000) {
       }
     }
 
-    for (const context of browser.contexts()) {
-      if (context.pages().length > 0) {
-        return context.pages()[0];
-      }
-    }
-
     await sleep(150);
   }
 
-  return null;
-}
-
-async function ensurePageReady(page) {
-  if (page.isClosed()) {
-    throw new Error("VS Code page closed unexpectedly");
-  }
+  throw new Error("Could not find VS Code workbench page over CDP");
 }
 
 async function waitForWorkbench(page, timeoutMs = 45_000) {
@@ -469,16 +455,6 @@ async function waitForFixtureEditor(page, timeoutMs = 45_000) {
   }
 }
 
-async function prepareEditorLayout(page) {
-  await page.keyboard.press("Control+Shift+F1");
-  await page.keyboard.press("Control+Shift+F2");
-}
-
-async function focusEditor(page) {
-  await editorCaptureLocator(page).click();
-  await sleep(100);
-}
-
 function editorCaptureLocator(page) {
   return page
     .locator(
@@ -519,10 +495,10 @@ async function resetEditorHorizontalScroll(page) {
 }
 
 async function scrollEditorToTop(page) {
-  await focusEditor(page);
+  await editorCaptureLocator(page).click();
+  await sleep(100);
   await page.keyboard.press("Control+Home");
   await sleep(300);
-  await resetEditorHorizontalScroll(page);
 }
 
 async function clickIfVisible(locator, timeoutMs = 400) {
@@ -613,23 +589,18 @@ async function disableScreenReaderMode(page) {
 async function waitForDecorations(page, timeoutMs = decorationTimeoutMs) {
   await disableScreenReaderMode(page);
 
+  const decorationLocator = page.locator(
+    '.view-line span[class*="TextEditorDecorationType"]'
+  );
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const decorationSpans = await decorationSpanCount(page);
-    if (decorationSpans > 10) {
+    if ((await decorationLocator.count()) > minDecorationSpans) {
       return;
     }
-    await disableScreenReaderMode(page);
     await sleep(200);
   }
 
   console.warn("Decorations did not fully settle, continuing with capture...");
-}
-
-async function decorationSpanCount(page) {
-  return page
-    .locator('.view-line span[class*="TextEditorDecorationType"]')
-    .count();
 }
 
 async function readVisibleLineRange(page) {
@@ -668,22 +639,12 @@ function tableContentScore(signature) {
     "Row 6",
     "Row 7",
     "Row 8",
-    "Row 9",
-    "Row 10",
     "Lorem"
   ];
   return markers.reduce(
     (score, marker) => score + (signature.includes(marker) ? 1 : 0),
     0
   );
-}
-
-async function shouldStopCapture(frame, signature, previousSignature) {
-  if (frame === 0) {
-    return false;
-  }
-
-  return tableContentScore(signature) === 0 || signature === previousSignature;
 }
 
 async function scrollEditorViewport(page) {
@@ -711,19 +672,24 @@ async function captureScrollingScreenshots(page, sizeLabel) {
 
   const written = [];
   let previousSignature = "";
-  let scrollSteps = 0;
   const sizeToken = sizeLabel.replace("x", "-");
 
   for (let frame = 0; frame < maxCaptureFrames; frame += 1) {
-    await ensurePageReady(page);
+    if (page.isClosed()) {
+      throw new Error("VS Code page closed unexpectedly");
+    }
+
     const range = await readVisibleLineRange(page);
     const signature = await captureViewportSignature(page);
 
-    if (await shouldStopCapture(frame, signature, previousSignature)) {
+    if (
+      frame > 0 &&
+      (tableContentScore(signature) === 0 || signature === previousSignature)
+    ) {
       break;
     }
 
-    const filename = `${screenshotPrefix}-${sizeToken}-${scrollSteps}.png`;
+    const filename = `${screenshotPrefix}-${sizeToken}-${frame}.png`;
     const filepath = path.join(screenshotsDir, filename);
     await captureEditorScreenshot(page, filepath);
     const relativePath = path.relative(screenshotsDir, filepath);
@@ -733,20 +699,15 @@ async function captureScrollingScreenshots(page, sizeLabel) {
       ? `lines ${range.top}-${range.bottom}`
       : "lines unknown";
     console.log(
-      `Wrote screenshots/${relativePath} (scroll ${scrollSteps}, ${rangeLabel})`
+      `Wrote screenshots/${relativePath} (scroll ${frame}, ${rangeLabel})`
     );
 
     previousSignature = signature;
-
-    if (frame >= maxCaptureFrames - 1) {
-      break;
-    }
 
     if (!(await scrollEditorViewport(page))) {
       break;
     }
 
-    scrollSteps += 1;
     await sleep(400);
   }
 
