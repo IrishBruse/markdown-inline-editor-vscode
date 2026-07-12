@@ -38,18 +38,10 @@ async function runTableScreenshotTest() {
 
   const sizeLabel = formatWindowSize(windowSize);
   console.log(`\n=== Window size ${sizeLabel} ===`);
-  const capture = await captureAtWindowSize(windowSize);
-
-  if (capture.bestFrame) {
-    fs.copyFileSync(
-      path.join(screenshotsDir, capture.bestFrame),
-      path.join(root, "screenshot.png"),
-    );
-    console.log(`Copied screenshots/${capture.bestFrame} to screenshot.png`);
-  }
+  const allWritten = await captureAtWindowSize(windowSize);
 
   console.log(
-    `\nWrote ${capture.frames.length} screenshots to ${path.relative(root, screenshotsDir)}/`
+    `\nWrote ${allWritten.length} screenshots to ${path.relative(root, screenshotsDir)}/`
   );
 }
 
@@ -732,8 +724,6 @@ async function captureScrollingScreenshots(page, sizeLabel) {
   await waitForWrappedTable(page);
 
   const written = [];
-  let bestFrame = "";
-  let bestScore = -Infinity;
   let previousSignature = "";
   const sizeToken = sizeLabel.replace("x", "-");
 
@@ -759,10 +749,6 @@ async function captureScrollingScreenshots(page, sizeLabel) {
     await captureEditorScreenshot(page, filepath);
     const relativePath = path.relative(screenshotsDir, filepath);
     written.push(relativePath);
-    if (score > bestScore) {
-      bestScore = score;
-      bestFrame = relativePath;
-    }
 
     const rangeLabel = range
       ? `lines ${range.top}-${range.bottom}`
@@ -780,7 +766,7 @@ async function captureScrollingScreenshots(page, sizeLabel) {
     await sleep(400);
   }
 
-  return { frames: written, bestFrame: bestFrame || written[0] || "" };
+  return written;
 }
 
 runTableScreenshotTest().catch((error) => {
