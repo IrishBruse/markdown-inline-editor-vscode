@@ -4,15 +4,8 @@ import type { TableBlock } from '../parser/types';
 import {
   estimateResponsiveTableLayout,
 } from '../mermaid/editor-width';
-import {
-  buildGridRowPayload,
-  getClipLineCount,
-  layoutWrappedGridRow,
-} from '../tables/responsive-svg';
-import {
-  computeViewportColumnWidths,
-  shouldUseResponsiveLayout,
-} from '../tables/responsive-layout';
+import { buildGridTableSegmentPayload } from '../tables/responsive-svg';
+import { shouldUseResponsiveLayout } from '../tables/responsive-layout';
 import {
   getResponsiveTableTheme,
   ResponsiveTableDecorations,
@@ -47,22 +40,26 @@ function getEditorLineHeight(fontSize: number): number {
   return Math.round(fontSize * lineHeightSetting);
 }
 
-function rowCacheKey(
+function segmentCacheKey(
   table: TableBlock,
-  rowIdx: number,
+  fromRowIdx: number,
+  toRowIdx: number,
   layoutKey: string,
   contentWidthPx: number,
   isDarkTheme: boolean,
   fontFamily: string,
+  maxHeightPx?: number,
 ): string {
   const source = [
     table.startPos,
     table.endPos,
-    rowIdx,
+    fromRowIdx,
+    toRowIdx,
     layoutKey,
     contentWidthPx,
     isDarkTheme,
     fontFamily,
+    maxHeightPx ?? '',
   ].join('\n');
   return createHash('sha256').update(source).digest('hex');
 }
@@ -88,37 +85,84 @@ function findActiveRowIdx(
   return undefined;
 }
 
-function maxWrapLinesForRow(
-  table: TableBlock,
-  rowIdx: number,
-  layoutWidth: number,
+function applyTableSegment(
   editor: TextEditor,
+  table: TableBlock,
   normalizedText: string,
-  activeRowIdx: number | undefined,
-  activeLines: Set<number>,
-): number | undefined {
-  if (activeRowIdx === undefined || rowIdx >= activeRowIdx) {
-    return undefined;
+  fromRowIdx: number,
+  toRowIdx: number,
+  anchorRowIdx: number,
+  fontFamily: string,
+  fontSize: number,
+  lineHeight: number,
+  theme: ReturnType<typeof getResponsiveTableTheme>,
+  isDarkTheme: boolean,
+  optionsByKey: Map<string, DecorationOptions[]>,
+  payloadsByKey: Map<string, ResponsiveTableDecorationPayload>,
+  hiddenRanges: Range[],
+  maxHeightPx?: number,
+): void {
+  if (fromRowIdx > toRowIdx) {
+    return;
   }
 
-  const rowRange = table.rowRanges[rowIdx];
-  const range = createFullLineRange(
+  const anchorRange = createFullLineRange(
     editor,
-    rowRange.startPos,
-    rowRange.endPos,
+    table.rowRanges[anchorRowIdx].startPos,
+    table.rowRanges[anchorRowIdx].endPos,
     normalizedText,
   );
-  if (!range) {
-    return undefined;
+  if (!anchorRange) {
+    return;
   }
 
-  const wrapCount = layoutWrappedGridRow(table, rowIdx, layoutWidth).length;
-  if (wrapCount <= 1) {
-    return undefined;
-  }
+  const { layoutWidth } = estimateResponsiveTableLayout(
+    editor,
+    anchorRange.start.character,
+  );
+  const { layoutKey, payload } = buildGridTableSegmentPayload(
+    table,
+    fromRowIdx,
+    toRowIdx,
+    layoutWidth,
+    0,
+    fontFamily,
+    fontSize,
+    lineHeight,
+    theme,
+    maxHeightPx,
+  );
 
-  const clipCount = getClipLineCount(range.start.line, wrapCount, activeLines);
-  return clipCount < wrapCount ? clipCount : undefined;
+  const key = segmentCacheKey(
+    table,
+    fromRowIdx,
+    toRowIdx,
+    layoutKey,
+    payload.widthPx,
+    isDarkTheme,
+    fontFamily,
+    maxHeightPx,
+  );
+  payloadsByKey.set(key, payload);
+  const options = optionsByKey.get(key) ?? [];
+  options.push({ range: anchorRange });
+  optionsByKey.set(key, options);
+
+  for (let rowIdx = fromRowIdx; rowIdx <= toRowIdx; rowIdx++) {
+    if (rowIdx === anchorRowIdx) {
+      continue;
+    }
+    const rowRange = table.rowRanges[rowIdx];
+    const range = createFullLineRange(
+      editor,
+      rowRange.startPos,
+      rowRange.endPos,
+      normalizedText,
+    );
+    if (range) {
+      hiddenRanges.push(range);
+    }
+  }
 }
 
 export function getResponsiveTableOffsetRanges(
@@ -153,83 +197,93 @@ export function applyResponsiveTableDecorations(
 
   const optionsByKey = new Map<string, DecorationOptions[]>();
   const payloadsByKey = new Map<string, ResponsiveTableDecorationPayload>();
+  const hiddenRanges: Range[] = [];
 
   for (const table of tableBlocks) {
     if (!shouldUseResponsiveLayout(table.colWidths)) {
       continue;
     }
 
-    const headerRange = createFullLineRange(
-      editor,
-      table.rowRanges[0].startPos,
-      table.rowRanges[0].endPos,
-      normalizedText,
-    );
-    if (!headerRange) {
-      continue;
-    }
-
-    const { layoutWidth, widthPx: contentWidthPx } = estimateResponsiveTableLayout(
-      editor,
-      headerRange.start.character,
-    );
-    const colWidths = computeViewportColumnWidths(table.colWidths, layoutWidth);
-
     const lastRowIdx = table.rowRanges.length - 1;
     const activeRowIdx = findActiveRowIdx(editor, table, normalizedText, activeLines);
 
-    for (let rowIdx = 0; rowIdx <= lastRowIdx; rowIdx++) {
-      if (rowIdx === activeRowIdx) {
-        continue;
-      }
-
-      const rowRange = table.rowRanges[rowIdx];
-      const range = createFullLineRange(
+    if (activeRowIdx === undefined) {
+      applyTableSegment(
         editor,
-        rowRange.startPos,
-        rowRange.endPos,
-        normalizedText,
-      );
-      if (!range) {
-        continue;
-      }
-
-      const maxWrapLines = maxWrapLinesForRow(
         table,
-        rowIdx,
-        layoutWidth,
-        editor,
         normalizedText,
-        activeRowIdx,
-        activeLines,
-      );
-      const { layoutKey, payload } = buildGridRowPayload(
-        table,
-        rowIdx,
-        layoutWidth,
-        contentWidthPx,
+        0,
+        lastRowIdx,
+        0,
         fontFamily,
         fontSize,
         lineHeight,
         theme,
-        { colWidths, maxWrapLines },
-      );
-
-      const key = rowCacheKey(
-        table,
-        rowIdx,
-        layoutKey,
-        contentWidthPx,
         isDarkTheme,
-        fontFamily,
+        optionsByKey,
+        payloadsByKey,
+        hiddenRanges,
       );
-      payloadsByKey.set(key, payload);
-      const options = optionsByKey.get(key) ?? [];
-      options.push({ range });
-      optionsByKey.set(key, options);
+      continue;
+    }
+
+    const activeRange = createFullLineRange(
+      editor,
+      table.rowRanges[activeRowIdx].startPos,
+      table.rowRanges[activeRowIdx].endPos,
+      normalizedText,
+    );
+
+    if (activeRowIdx > 0) {
+      const anchorRange = createFullLineRange(
+        editor,
+        table.rowRanges[0].startPos,
+        table.rowRanges[0].endPos,
+        normalizedText,
+      );
+      const maxHeightPx = anchorRange && activeRange
+        ? Math.max(lineHeight, (activeRange.start.line - anchorRange.start.line) * lineHeight)
+        : undefined;
+      applyTableSegment(
+        editor,
+        table,
+        normalizedText,
+        0,
+        activeRowIdx - 1,
+        0,
+        fontFamily,
+        fontSize,
+        lineHeight,
+        theme,
+        isDarkTheme,
+        optionsByKey,
+        payloadsByKey,
+        hiddenRanges,
+        maxHeightPx,
+      );
+    }
+
+    if (activeRowIdx < lastRowIdx) {
+      const belowFrom = activeRowIdx === 1 ? 2 : activeRowIdx + 1;
+      applyTableSegment(
+        editor,
+        table,
+        normalizedText,
+        belowFrom,
+        lastRowIdx,
+        belowFrom,
+        fontFamily,
+        fontSize,
+        lineHeight,
+        theme,
+        isDarkTheme,
+        optionsByKey,
+        payloadsByKey,
+        hiddenRanges,
+      );
     }
   }
 
-  decorations.applyHidden(editor, []);
+  decorations.applyHidden(editor, hiddenRanges);
   decorations.apply(editor, optionsByKey, payloadsByKey);
 }

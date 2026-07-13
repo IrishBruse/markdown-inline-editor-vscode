@@ -11,3 +11,4 @@ Guidelines for AI agents and contributors working in this repository.
 - Supports links, images, headings, lists, code blocks, tables, Mermaid, math, mentions, and more
 
 **Tech stack:** TypeScript (strict), VS Code Extension API, remark, Vitest, esbuild.
+
