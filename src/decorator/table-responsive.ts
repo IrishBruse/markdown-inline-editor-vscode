@@ -4,8 +4,15 @@ import type { TableBlock } from '../parser/types';
 import {
   estimateResponsiveTableLayout,
 } from '../mermaid/editor-width';
-import { buildGridRowPayload } from '../tables/responsive-svg';
-import { shouldUseResponsiveLayout } from '../tables/responsive-layout';
+import {
+  buildGridRowPayload,
+  getClipLineCount,
+  layoutWrappedGridRow,
+} from '../tables/responsive-svg';
+import {
+  computeViewportColumnWidths,
+  shouldUseResponsiveLayout,
+} from '../tables/responsive-layout';
 import {
   getResponsiveTableTheme,
   ResponsiveTableDecorations,
@@ -81,6 +88,39 @@ function findActiveRowIdx(
   return undefined;
 }
 
+function maxWrapLinesForRow(
+  table: TableBlock,
+  rowIdx: number,
+  layoutWidth: number,
+  editor: TextEditor,
+  normalizedText: string,
+  activeRowIdx: number | undefined,
+  activeLines: Set<number>,
+): number | undefined {
+  if (activeRowIdx === undefined || rowIdx >= activeRowIdx) {
+    return undefined;
+  }
+
+  const rowRange = table.rowRanges[rowIdx];
+  const range = createFullLineRange(
+    editor,
+    rowRange.startPos,
+    rowRange.endPos,
+    normalizedText,
+  );
+  if (!range) {
+    return undefined;
+  }
+
+  const wrapCount = layoutWrappedGridRow(table, rowIdx, layoutWidth).length;
+  if (wrapCount <= 1) {
+    return undefined;
+  }
+
+  const clipCount = getClipLineCount(range.start.line, wrapCount, activeLines);
+  return clipCount < wrapCount ? clipCount : undefined;
+}
+
 export function getResponsiveTableOffsetRanges(
   tableBlocks: TableBlock[],
 ): { startPos: number; endPos: number }[] {
@@ -119,6 +159,22 @@ export function applyResponsiveTableDecorations(
       continue;
     }
 
+    const headerRange = createFullLineRange(
+      editor,
+      table.rowRanges[0].startPos,
+      table.rowRanges[0].endPos,
+      normalizedText,
+    );
+    if (!headerRange) {
+      continue;
+    }
+
+    const { layoutWidth, widthPx: contentWidthPx } = estimateResponsiveTableLayout(
+      editor,
+      headerRange.start.character,
+    );
+    const colWidths = computeViewportColumnWidths(table.colWidths, layoutWidth);
+
     const lastRowIdx = table.rowRanges.length - 1;
     const activeRowIdx = findActiveRowIdx(editor, table, normalizedText, activeLines);
 
@@ -138,9 +194,14 @@ export function applyResponsiveTableDecorations(
         continue;
       }
 
-      const { layoutWidth, widthPx: contentWidthPx } = estimateResponsiveTableLayout(
+      const maxWrapLines = maxWrapLinesForRow(
+        table,
+        rowIdx,
+        layoutWidth,
         editor,
-        range.start.character,
+        normalizedText,
+        activeRowIdx,
+        activeLines,
       );
       const { layoutKey, payload } = buildGridRowPayload(
         table,
@@ -151,6 +212,7 @@ export function applyResponsiveTableDecorations(
         fontSize,
         lineHeight,
         theme,
+        { colWidths, maxWrapLines },
       );
 
       const key = rowCacheKey(
@@ -168,5 +230,6 @@ export function applyResponsiveTableDecorations(
     }
   }
 
+  decorations.applyHidden(editor, []);
   decorations.apply(editor, optionsByKey, payloadsByKey);
 }

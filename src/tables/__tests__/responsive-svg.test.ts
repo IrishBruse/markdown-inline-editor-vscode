@@ -170,7 +170,7 @@ describe('responsive-svg', () => {
     expect(svg).toContain('fill="#858585"');
     expect(svg).toContain('fill="#d4d4d4"');
     expect(svg).toContain('<line');
-    const expectedHeight = Math.round(20 * 0.9) * 2 + dataLines.length * 20 + 1;
+    const expectedHeight = Math.round(20 * 0.4) * 2 + dataLines.length * 20 + 1;
     expect(svg).toContain(`height="${expectedHeight}"`);
   });
 
@@ -198,6 +198,101 @@ describe('responsive-svg', () => {
     expect(payload.dataUri).toMatch(/^data:image\/svg\+xml/);
   });
 
+  it('buildGridRowPayload respects shared colWidths and maxWrapLines', async () => {
+    const longText = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen';
+    const md = [
+      '| A | B |',
+      '|---|---|',
+      `| x | ${longText} |`,
+    ].join('\n');
+    const parser = await MarkdownParser.create();
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const table = tableBlocks[0];
+    const colWidths = computeViewportColumnWidths(table.colWidths, 40);
+    const uncapped = buildGridRowPayload(
+      table,
+      2,
+      40,
+      640,
+      'monospace',
+      14,
+      20,
+      {
+        foreground: '#d4d4d4',
+        mutedForeground: '#858585',
+        separator: '#858585',
+      },
+      { colWidths },
+    );
+    const capped = buildGridRowPayload(
+      table,
+      2,
+      40,
+      640,
+      'monospace',
+      14,
+      20,
+      {
+        foreground: '#d4d4d4',
+        mutedForeground: '#858585',
+        separator: '#858585',
+      },
+      { colWidths, maxWrapLines: 1 },
+    );
+
+    expect(uncapped.layoutKey.split('\n').length).toBeGreaterThan(1);
+    expect(capped.layoutKey.split('\n')).toHaveLength(1);
+    expect(uncapped.payload.widthPx).toBe(capped.payload.widthPx);
+  });
+
+  it('long-cell fixture wraps 3-6 lines per row at viewport 90 with aligned pipes', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const fixture = fs.readFileSync(
+      path.join(process.cwd(), 'docs/tests/long-cell-wrapping.md'),
+      'utf8',
+    );
+    const tableMd = fixture.split('## Custom mode: long cell wrapping')[1].trim();
+    const parser = await MarkdownParser.create();
+    const { tableBlocks } = parser.extractDecorationsWithScopes(tableMd);
+    const table = tableBlocks[0];
+    const viewport = 90;
+
+    for (let rowIdx = 2; rowIdx <= table.rowRanges.length - 1; rowIdx++) {
+      const lines = layoutWrappedGridRow(table, rowIdx, viewport);
+      expect(lines.length).toBeGreaterThanOrEqual(3);
+      expect(lines.length).toBeLessThanOrEqual(6);
+      expect(lines.every((line) => line.startsWith('\u2502'))).toBe(true);
+      expect(lines[0]).toMatch(/Row \d+/);
+    }
+  });
+
+  it('renderGridLinesSvg paints pipes with foreground color', async () => {
+    const md = '| A | B |\n|---|---|\n| x | y |';
+    const parser = await MarkdownParser.create();
+    const { tableBlocks } = parser.extractDecorationsWithScopes(md);
+    const table = tableBlocks[0];
+    const colWidths = computeViewportColumnWidths(table.colWidths, 80);
+    const dataLines = layoutWrappedGridRow(table, 2, 80);
+    const svg = renderGridLinesSvg(dataLines, {
+      fontFamily: 'monospace',
+      fontSize: 14,
+      lineHeight: 20,
+      contentWidthPx: 640,
+      isHeader: false,
+      showBottomDivider: true,
+      colWidths,
+      theme: {
+        foreground: '#d4d4d4',
+        mutedForeground: '#858585',
+        separator: '#858585',
+      },
+    });
+
+    expect(svg).toContain('fill="#d4d4d4"');
+    expect(svg).toContain('\u2502');
+  });
+
   it('renders multi-line svg at dynamic height', async () => {
     const md = '| A | B |\n|---|---|\n| x | one two three four five six seven |';
     const parser = await MarkdownParser.create();
@@ -215,10 +310,37 @@ describe('responsive-svg', () => {
       },
     });
 
-    const expectedHeight = Math.round(20 * 0.9) * 2 + layout.lineCount * 20 + 1;
+    const expectedHeight = Math.round(20 * 0.4) * 2 + layout.lineCount * 20 + 1;
     expect(svg).toContain(`height="${expectedHeight}"`);
     expect(svg).toContain('x');
     expect(svg).not.toContain('\u2502');
+  });
+
+  it('generates Goal.md reference at viewport 90 when GOAL_WRITE=1', async () => {
+    if (process.env.GOAL_WRITE !== '1') {
+      return;
+    }
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const fixture = fs.readFileSync(
+      path.join(process.cwd(), 'docs/tests/long-cell-wrapping.md'),
+      'utf8',
+    );
+    const tableMd = fixture.split('## Custom mode: long cell wrapping')[1].trim();
+    const parser = await MarkdownParser.create();
+    const { tableBlocks } = parser.extractDecorationsWithScopes(tableMd);
+    const table = tableBlocks[0];
+    const viewport = 90;
+    const rows = layoutWrappedGridTable(table, viewport);
+    const body = rows.map((lines) => lines.join('\n')).join('\n');
+    const out = `# Goal
+
+Responsive pipe-grid reference at viewport ${viewport} columns (800x600).
+
+${body}
+`;
+    fs.writeFileSync(path.join(process.cwd(), 'Goal.md'), out, 'utf8');
+    expect(rows.length).toBeGreaterThan(10);
   });
 
   it('buildCoveredLines marks continuation source lines', () => {

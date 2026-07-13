@@ -39,7 +39,7 @@ const NBSP = '\u00A0';
 const PIPE = '\u2502';
 const MIN_FALLBACK_COL_WIDTH = 3;
 const CHAR_WIDTH_RATIO = 0.6;
-const ROW_PADDING_RATIO = 0.9;
+const ROW_PADDING_RATIO = 0.4;
 
 function gridLayoutWidthPx(colWidths: number[], fontSize: number): number {
   const gridWidthChars = estimateGridWidth(colWidths);
@@ -518,7 +518,7 @@ function appendGridLinesToSvg(
         continue;
       }
       textElements.push(
-        `<text x="${pipeCharIdx * charWidth}" y="${y}" fill="${options.theme.separator}" clip-path="url(#clip)" font-family="${escapeSvgText(options.fontFamily)}" font-size="${options.fontSize}px">${PIPE}</text>`,
+        `<text x="${pipeCharIdx * charWidth}" y="${y}" fill="${options.theme.foreground}" clip-path="url(#clip)" font-family="${escapeSvgText(options.fontFamily)}" font-size="${options.fontSize}px">${PIPE}</text>`,
       );
     }
 
@@ -569,6 +569,11 @@ export function renderGridLinesSvg(
   ].join('');
 }
 
+export interface BuildGridRowPayloadOptions {
+  colWidths?: number[];
+  maxWrapLines?: number;
+}
+
 export function buildGridRowPayload(
   table: TableBlock,
   rowIdx: number,
@@ -578,9 +583,16 @@ export function buildGridRowPayload(
   fontSize: number,
   lineHeight: number,
   theme: ResponsiveTableTheme,
+  payloadOptions?: BuildGridRowPayloadOptions,
 ): { layoutKey: string; payload: { dataUri: string; widthPx: number; heightPx: number } } {
-  const colWidths = computeViewportColumnWidths(table.colWidths, layoutWidth);
-  const gridLines = layoutWrappedGridRow(table, rowIdx, layoutWidth);
+  const colWidths = payloadOptions?.colWidths
+    ?? computeViewportColumnWidths(table.colWidths, layoutWidth);
+  const gridLines = layoutWrappedGridRow(
+    table,
+    rowIdx,
+    layoutWidth,
+    payloadOptions?.maxWrapLines,
+  );
   const renderWidthPx = gridLayoutWidthPx(colWidths, fontSize);
   const isHeader = rowIdx === 0;
   const showBottomDivider = rowIdx !== 1;

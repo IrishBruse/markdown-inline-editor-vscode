@@ -16,8 +16,8 @@ When a GFM table has any column wider than 80 display characters, the extension 
 - **Left column** (row labels) stays bright, **right column** content is muted.
 - **Horizontal dividers** separate every row.
 - Continuation lines keep an **empty left column** so pipes stay aligned.
-- With the cursor **outside** the table, the whole table is shown as one wrapped preview.
-- With the cursor **on a row**, that row shows raw GFM for editing, segments above/below may still preview.
+- With the cursor **outside** the table, each row shows a wrapped pipe-grid preview.
+- With the cursor **on a row**, that row shows raw GFM for editing. Rows above may clip wrap height so they do not overlap the active row.
 
 See `docs/tests/05-tables.md` (responsive wrapping bullet) for product behavior.
 
@@ -27,37 +27,38 @@ Compare against:
 
 | Asset | Purpose |
 |-------|---------|
-| `Goal.png` | Target screenshot (cropped table look) |
-| `Goal.md` | Target wrapped line breaks (~156 chars per grid line, 10 rows, Lorem ipsum) |
+| `Goal.png` | Target screenshot at 800x600 (regenerate from screenshot script) |
+| `Goal.md` | Target wrapped grid text at viewport 90 columns (800x600 reference) |
 | `docs/tests/long-cell-wrapping.md` | Extension test fixture (single-line source rows, wrapping is decoration-only) |
 
-Success looks like Goal: uniform 3-4 line wraps per row, aligned pipes, dividers between rows, muted right column,
+Success looks like Goal: aligned pipes, dividers between rows, muted right column, 3-6 wrap lines per row at 800px (fewer at wider viewports),
 no raw single-line markdown visible when not editing.
+
+Regenerate `Goal.md` with `GOAL_WRITE=1 npm test -- --run src/tables/__tests__/responsive-svg.test.ts -t "generates Goal.md"`.
 
 ## Architecture (current approach)
 
-**Do not use per-row SVG decorations** for the full table. Overlapping row SVGs paint on top of each other and corrupt the layout.
+**Per-row SVG decorations** - one wrapped pipe-grid SVG anchored on each source row:
 
-Instead:
-
-1. **Whole-table segment** - one SVG anchored on the header row (row 0).
-2. **Hide** all other table source lines (`display: none` decoration).
+1. **Per-row segment** - `buildGridRowPayload` on each table row's full source line.
+2. **Shared layout** - `estimateResponsiveTableLayout()` once per table from the header start column, shared `colWidths` for all rows.
 3. **Layout width** from `estimateResponsiveTableLayout()` in `src/mermaid/editor-width.ts` (viewport columns minus table start column).
-4. **SVG pixel width** should match the **actual grid width** (`estimateGridWidth(colWidths)`), not the full editor viewport.
-5. Grid text/layout lives in `src/tables/responsive-svg.ts` (`buildGridTableSegmentPayload`, `layoutWrappedGridRow`, `renderGridLinesSvg`).
+4. **SVG pixel width** matches the **actual grid width** (`estimateGridWidth(colWidths)`), not the full editor viewport.
+5. Grid text/layout lives in `src/tables/responsive-svg.ts` (`buildGridRowPayload`, `layoutWrappedGridRow`, `renderGridLinesSvg`).
 6. Decoration application in `src/decorator/table-responsive.ts` and `src/decorator/responsive-table-decorations.ts`.
+7. Rows above the active row may clip wrap lines via `getClipLineCount` + `maxWrapLines`.
 
 Activation threshold: `RESPONSIVE_COLUMN_THRESHOLD` (80) in `src/tables/responsive-layout.ts`.
 
 ## Key files
 
 ```
-src/decorator/table-responsive.ts       Apply/hide ranges, active-row splits
+src/decorator/table-responsive.ts       Per-row apply, shared layout, active-row clip
 src/decorator/responsive-table-decorations.ts   SVG before-icon decorations
 src/tables/responsive-svg.ts            Grid layout + SVG generation
 src/tables/responsive-layout.ts         Column widths, wrapping, viewport cap
 src/mermaid/editor-width.ts             Visible viewport column estimate
-src/visual/table-fixture-renderer.ts    Offline overlay (no VS Code host)
+src/visual/table-fixture-renderer.ts    Offline overlay (per-row projection)
 scripts/screenshot-long-cell-wrapping.mjs   Extension host screenshots
 docs/tests/long-cell-wrapping.md        Primary fixture
 ```
@@ -113,12 +114,11 @@ Use to verify pipe alignment and responsive layout before stopping.
 2. **First paint / scroll** - Table decorations may need a viewport or selection refresh after the editor opens.
    Decorator schedules a layout settle on `setActiveEditor`, visible-range changes should refresh table decorations.
 
-3. **Decoration order** - Apply hide ranges before show decorations.
-   Anchor row uses transparent text + `before` SVG, hidden rows use `display: none`.
+3. **Decoration order** - Call `applyHidden(editor, [])` before show decorations to clear stale hides.
+   Each row uses transparent text + `before` SVG with explicit width/height.
 
-4. **Width vs Goal** - `Goal.md` grid lines are ~156 characters.
-   Editor viewport at 800px is narrower (~90-100 cols), at 1280px it is wider.
-   Decide whether to cap at Goal width or follow live viewport.
+4. **Responsive width** - `Goal.md` is generated at viewport 90 columns (~800x600).
+   Wider editor windows produce fewer wrap lines by design.
 
 5. **Active row editing** - Raw markdown with pipe artifacts while the cursor is inside a row is expected.
 
@@ -129,9 +129,9 @@ Work on responsive long-cell table rendering in markdown-inline-editor-vscode.
 
 Read Goal.png, Goal.md, and docs/tests/long-cell-wrapping.md. Use the responsive-tables skill.
 
-Goal: wrapped pipe-grid table in the editor matches Goal visually (pipes, dividers, muted right column, 3-4 wrap lines per row, 10 rows).
+Goal: wrapped pipe-grid table in the editor matches Goal visually (pipes, dividers, muted right column, responsive wrap lines, 10 rows).
 
-Use whole-table SVG on the header row with other rows hidden. Do not revert to per-row SVG.
+Use per-row SVG via buildGridRowPayload with shared colWidths per table.
 
 After changes: run unit tests, npm run screenshot:long-cell-wrapping, and npm run visual:tables. Iterate until screenshots match Goal.
 ```

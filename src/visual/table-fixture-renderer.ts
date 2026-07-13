@@ -94,13 +94,36 @@ interface OverlayBuildResult {
   sourceLineForOverlayLine: number[];
 }
 
-function responsiveTableOverlayText(table: TableBlock, viewportColumns: number): string {
-  const lines: string[] = [];
-  const lastRowIdx = table.rowRanges.length - 1;
-  for (let rowIdx = 0; rowIdx <= lastRowIdx; rowIdx++) {
-    lines.push(...layoutWrappedGridRow(table, rowIdx, viewportColumns));
+function responsiveRowOverlayText(
+  table: TableBlock,
+  rowIdx: number,
+  viewportColumns: number,
+): string {
+  return layoutWrappedGridRow(table, rowIdx, viewportColumns).join('\n');
+}
+
+function buildResponsiveRowOverlayMap(
+  tableBlocks: TableBlock[],
+  responsiveRanges: { startPos: number; endPos: number }[],
+  lineStarts: number[],
+  viewportColumns: number,
+): Map<number, string> {
+  const overlays = new Map<number, string>();
+
+  for (const table of tableBlocks) {
+    if (!responsiveRanges.some((range) => range.startPos === table.startPos && range.endPos === table.endPos)) {
+      continue;
+    }
+    for (let rowIdx = 0; rowIdx < table.rowRanges.length; rowIdx++) {
+      const sourceLine = offsetToLine(table.rowRanges[rowIdx].startPos, lineStarts);
+      overlays.set(
+        sourceLine,
+        responsiveRowOverlayText(table, rowIdx, viewportColumns),
+      );
+    }
   }
-  return lines.join('\n');
+
+  return overlays;
 }
 
 function buildOverlayLines(
@@ -114,34 +137,21 @@ function buildOverlayLines(
   const sourceLines = text.split('\n');
   const lines: string[] = [];
   const sourceLineForOverlayLine: number[] = [];
-  const responsiveTables = new Map<number, TableBlock>();
-  for (const table of tableBlocks) {
-    if (!responsiveRanges.some((range) => range.startPos === table.startPos && range.endPos === table.endPos)) {
-      continue;
-    }
-    const headerLine = offsetToLine(table.rowRanges[0].startPos, lineStarts);
-    responsiveTables.set(headerLine, table);
-  }
+  const responsiveRowOverlays = buildResponsiveRowOverlayMap(
+    tableBlocks,
+    responsiveRanges,
+    lineStarts,
+    viewportColumns,
+  );
 
   for (let lineIdx = 0; lineIdx < sourceLines.length; lineIdx++) {
     const lineStart = lineStarts[lineIdx] ?? 0;
     const lineEnd =
       lineIdx + 1 < lineStarts.length ? lineStarts[lineIdx + 1] - 1 : text.length;
 
-    const responsiveTable = responsiveTables.get(lineIdx);
-    if (responsiveTable) {
-      lines.push(responsiveTableOverlayText(responsiveTable, viewportColumns));
-      sourceLineForOverlayLine.push(lineIdx);
-      continue;
-    }
-
-    const isHiddenResponsiveLine = [...responsiveTables.values()].some((table) => {
-      const headerLine = offsetToLine(table.rowRanges[0].startPos, lineStarts);
-      const endLine = offsetToLine(Math.max(table.startPos, table.endPos - 1), lineStarts);
-      return lineIdx > headerLine && lineIdx <= endLine;
-    });
-    if (isHiddenResponsiveLine) {
-      lines.push('');
+    const responsiveOverlay = responsiveRowOverlays.get(lineIdx);
+    if (responsiveOverlay !== undefined) {
+      lines.push(responsiveOverlay);
       sourceLineForOverlayLine.push(lineIdx);
       continue;
     }

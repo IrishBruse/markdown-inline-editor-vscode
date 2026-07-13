@@ -464,7 +464,6 @@ function editorCaptureLocator(page) {
 }
 
 async function captureEditorScreenshot(page, filepath) {
-  await resetEditorHorizontalScroll(page);
   const editor = editorCaptureLocator(page);
   await editor.waitFor({ state: "visible", timeout: 10_000 });
   await editor.screenshot({ path: filepath });
@@ -499,6 +498,7 @@ async function scrollEditorToTop(page) {
   await sleep(100);
   await page.keyboard.press("Control+Home");
   await sleep(300);
+  await resetEditorHorizontalScroll(page);
 }
 
 async function moveCursorToLine(page, line) {
@@ -629,7 +629,6 @@ async function waitForWrappedTable(page, timeoutMs = decorationTimeoutMs) {
     if (!(await hasRawTableSourceLines(page))) {
       return;
     }
-    await scrollEditorViewport(page);
     await sleep(400);
   }
 
@@ -713,7 +712,6 @@ async function captureScrollingScreenshots(page, sizeLabel) {
     await sleep(decorationSettleMs);
   }
   await waitForDecorations(page);
-  await waitForWrappedTable(page);
 
   // Warmup scroll triggers viewport-based table relayout before the first capture.
   await scrollEditorViewport(page);

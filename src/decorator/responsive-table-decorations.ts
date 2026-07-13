@@ -40,7 +40,7 @@ export class ResponsiveTableDecorations {
   private usageCounter = 0;
   private hideDecorationType: TextEditorDecorationType | undefined;
 
-  constructor(private maxEntries: number = 30) {}
+  constructor(private maxEntries: number = 50) {}
 
   apply(
     editor: TextEditor,
@@ -79,6 +79,9 @@ export class ResponsiveTableDecorations {
 
   applyHidden(editor: TextEditor, ranges: Range[]): void {
     if (ranges.length === 0) {
+      if (this.hideDecorationType) {
+        editor.setDecorations(this.hideDecorationType, []);
+      }
       return;
     }
     if (!this.hideDecorationType) {
@@ -110,8 +113,8 @@ export class ResponsiveTableDecorations {
     }
 
     const decorationType = window.createTextEditorDecorationType({
-      color: 'transparent',
-      textDecoration: 'none; display: inline-block; width: 0;',
+      color: '#00000000',
+      textDecoration: 'none; opacity: 0; font-size: 1px; line-height: 1px; display: inline-block; width: 0; max-width: 0; overflow: hidden; white-space: nowrap;',
       before: {
         contentIconPath: Uri.parse(payload.dataUri),
         textDecoration: 'none;',
