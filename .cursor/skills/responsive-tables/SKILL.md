@@ -18,6 +18,7 @@ Product spec: `docs/tests/05-tables.md`.
 ### Step 1. Orient to Goal
 
 Read `Goal.png`, `Goal.md`, and `docs/tests/long-cell-wrapping.md`.
+`Goal.png` is a fixed, read-only visual reference. Compare screenshots against it, never copy onto it or regenerate it.
 
 **Done when:** you can name every visual gap between current output and Goal
 (pipe alignment, row dividers, muted right column, wrap line count, all 10 rows reachable by scroll).
@@ -30,24 +31,23 @@ GOAL_WRITE=1 npm test -- --run src/tables/__tests__/responsive-svg.test.ts -t "g
 
 ### Step 2. Implement per-row SVG
 
-One decoration per table row, anchored on that row's source line.
+One decoration per uncovered table row, anchored on that row's source line.
 
-- Call `buildGridRowPayload()` once per row, each SVG renders only that row's wrapped grid lines.
-- Hide each row's own source line (`display: none`). Sibling rows stay visible in source.
-- Layout width from `estimateResponsiveTableLayout()` in `src/mermaid/editor-width.ts`.
+- Call `buildGridRowPayload()` once per row; each SVG renders only that row's wrapped grid lines (`compact: true`).
+- Use `buildCoveredLines()` so rows covered by a prior row's wrap preview are hidden (`display: none`) and skip decoration.
+- Shared `layoutWidth` / `colWidths` from the header start column via `estimateResponsiveTableLayout()`.
 - SVG pixel width matches `estimateGridWidth(colWidths)`, not the full editor viewport.
-- Apply hide ranges before show decorations (transparent text + `before` SVG per line).
+- Apply hide ranges before show decorations (transparent text + `before` SVG per uncovered line).
 - Grid layout in `src/tables/responsive-svg.ts`.
 - Decoration wiring in `src/decorator/table-responsive.ts` and `src/decorator/responsive-table-decorations.ts`.
 
-**Per-row SVG only.** Each row owns its `buildGridRowPayload()` anchor.
-Whole-table stacking via `buildGridTableSegmentPayload()` breaks scroll alignment and active-row editing.
+**Per-row SVG only.** VS Code cannot expand a single source line for multiline `before` SVG, so covered rows must be hidden per `docs/tests/05-tables.md`.
 
-**Done when:** every touched file is accounted for and the decorator still follows one-row-one-SVG.
+**Done when:** uncovered rows each have their own `buildGridRowPayload()` anchor and covered rows are hidden.
 
 ### Step 3. Tight verification loop
 
-Run without asking. Iterate until screenshots match Goal.
+Run without asking. Iterate until `screenshots/` matches Goal.
 
 **Build and unit tests:**
 
@@ -77,14 +77,14 @@ npm run visual:tables
 Output: `dist/visual/`.
 
 **Done when:** unit tests pass,
-800x600 screenshots match `Goal.png` (wrap density, alignment, dividers, muted colors, 10 scrollable rows),
+800x600 frames in `screenshots/` match `Goal.png` (wrap density, alignment, dividers, muted colors, 10 scrollable rows),
 1280x800 checked, overlay pipes align.
 
 ## Goal reference
 
 | Asset | Purpose |
 |-------|---------|
-| `Goal.png` | Target screenshot at 800x600 |
+| `Goal.png` | Fixed visual reference (read-only, human-maintained) |
 | `Goal.md` | Target grid text at viewport 90 columns (~800x600) |
 | `docs/tests/long-cell-wrapping.md` | Fixture (single-line source, wrapping is decoration-only) |
 
@@ -112,4 +112,6 @@ Trust `range.end.character` as the viewport edge only when plausibly small vs li
 Decorator schedules layout settle on `setActiveEditor`.
 Visible-range changes should refresh table decorations.
 
-**Decoration order** - Hide ranges before show decorations on each row line.
+**Decoration order** - Hide covered rows before show decorations on each uncovered row line.
+
+**Covered rows** - VS Code cannot give a single source line multiline height for `before` SVG. Rows whose document line falls inside a prior row's wrap span are hidden until the cursor is on that row (see `buildCoveredLines` in `src/tables/responsive-svg.ts`).
