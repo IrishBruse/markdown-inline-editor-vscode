@@ -113,8 +113,8 @@ export class ResponsiveTableDecorations {
     }
 
     const decorationType = window.createTextEditorDecorationType({
-      color: '#00000000',
-      textDecoration: 'none; opacity: 0; font-size: 1px; line-height: 1px; display: inline-block; width: 0; max-width: 0; overflow: hidden; white-space: nowrap;',
+      color: 'transparent',
+      textDecoration: 'none; display: inline-block; width: 0;',
       before: {
         contentIconPath: Uri.parse(payload.dataUri),
         textDecoration: 'none;',

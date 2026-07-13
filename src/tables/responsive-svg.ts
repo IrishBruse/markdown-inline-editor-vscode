@@ -606,7 +606,7 @@ export function buildGridRowPayload(
     isHeader,
     showBottomDivider,
     colWidths,
-    compact: rowIdx === 1,
+    compact: true,
   });
   const heightPx = Math.ceil(
     parseFloat(svg.match(/\bheight="(\d+(?:\.\d+)?)(?:px)?"/)?.[1] ?? '1'),
@@ -650,7 +650,7 @@ export function buildGridTableSegmentPayload(
       gridLines,
       lineHeight,
       showBottomDivider,
-      isSeparator,
+      true,
     );
     if (maxHeightPx !== undefined && yOffset + rowHeight > maxHeightPx) {
       break;
@@ -668,7 +668,7 @@ export function buildGridTableSegmentPayload(
         isHeader,
         showBottomDivider,
         colWidths,
-        compact: isSeparator,
+        compact: true,
       },
       yOffset,
       textElements,

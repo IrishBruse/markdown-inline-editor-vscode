@@ -27,6 +27,31 @@ function createFullLineRange(
   return new Range(line.range.start, line.range.end);
 }
 
+function createTableSegmentRange(
+  editor: TextEditor,
+  table: TableBlock,
+  normalizedText: string,
+  fromRowIdx: number,
+  toRowIdx: number,
+): Range | null {
+  const startRange = createFullLineRange(
+    editor,
+    table.rowRanges[fromRowIdx].startPos,
+    table.rowRanges[fromRowIdx].endPos,
+    normalizedText,
+  );
+  const endRange = createFullLineRange(
+    editor,
+    table.rowRanges[toRowIdx].startPos,
+    table.rowRanges[toRowIdx].endPos,
+    normalizedText,
+  );
+  if (!startRange || !endRange) {
+    return null;
+  }
+  return new Range(startRange.start, endRange.end);
+}
+
 function getEditorLineHeight(fontSize: number): number {
   const editorConfig = workspace.getConfiguration('editor');
   const lineHeightSetting = editorConfig.get<number>('lineHeight', 0);
@@ -91,7 +116,6 @@ function applyTableSegment(
   normalizedText: string,
   fromRowIdx: number,
   toRowIdx: number,
-  anchorRowIdx: number,
   fontFamily: string,
   fontSize: number,
   lineHeight: number,
@@ -99,26 +123,26 @@ function applyTableSegment(
   isDarkTheme: boolean,
   optionsByKey: Map<string, DecorationOptions[]>,
   payloadsByKey: Map<string, ResponsiveTableDecorationPayload>,
-  hiddenRanges: Range[],
   maxHeightPx?: number,
 ): void {
   if (fromRowIdx > toRowIdx) {
     return;
   }
 
-  const anchorRange = createFullLineRange(
+  const segmentRange = createTableSegmentRange(
     editor,
-    table.rowRanges[anchorRowIdx].startPos,
-    table.rowRanges[anchorRowIdx].endPos,
+    table,
     normalizedText,
+    fromRowIdx,
+    toRowIdx,
   );
-  if (!anchorRange) {
+  if (!segmentRange) {
     return;
   }
 
   const { layoutWidth } = estimateResponsiveTableLayout(
     editor,
-    anchorRange.start.character,
+    segmentRange.start.character,
   );
   const { layoutKey, payload } = buildGridTableSegmentPayload(
     table,
@@ -145,24 +169,8 @@ function applyTableSegment(
   );
   payloadsByKey.set(key, payload);
   const options = optionsByKey.get(key) ?? [];
-  options.push({ range: anchorRange });
+  options.push({ range: segmentRange });
   optionsByKey.set(key, options);
-
-  for (let rowIdx = fromRowIdx; rowIdx <= toRowIdx; rowIdx++) {
-    if (rowIdx === anchorRowIdx) {
-      continue;
-    }
-    const rowRange = table.rowRanges[rowIdx];
-    const range = createFullLineRange(
-      editor,
-      rowRange.startPos,
-      rowRange.endPos,
-      normalizedText,
-    );
-    if (range) {
-      hiddenRanges.push(range);
-    }
-  }
 }
 
 export function getResponsiveTableOffsetRanges(
@@ -197,7 +205,6 @@ export function applyResponsiveTableDecorations(
 
   const optionsByKey = new Map<string, DecorationOptions[]>();
   const payloadsByKey = new Map<string, ResponsiveTableDecorationPayload>();
-  const hiddenRanges: Range[] = [];
 
   for (const table of tableBlocks) {
     if (!shouldUseResponsiveLayout(table.colWidths)) {
@@ -214,7 +221,6 @@ export function applyResponsiveTableDecorations(
         normalizedText,
         0,
         lastRowIdx,
-        0,
         fontFamily,
         fontSize,
         lineHeight,
@@ -222,7 +228,6 @@ export function applyResponsiveTableDecorations(
         isDarkTheme,
         optionsByKey,
         payloadsByKey,
-        hiddenRanges,
       );
       continue;
     }
@@ -250,7 +255,6 @@ export function applyResponsiveTableDecorations(
         normalizedText,
         0,
         activeRowIdx - 1,
-        0,
         fontFamily,
         fontSize,
         lineHeight,
@@ -258,7 +262,6 @@ export function applyResponsiveTableDecorations(
         isDarkTheme,
         optionsByKey,
         payloadsByKey,
-        hiddenRanges,
         maxHeightPx,
       );
     }
@@ -271,7 +274,6 @@ export function applyResponsiveTableDecorations(
         normalizedText,
         belowFrom,
         lastRowIdx,
-        belowFrom,
         fontFamily,
         fontSize,
         lineHeight,
@@ -279,11 +281,10 @@ export function applyResponsiveTableDecorations(
         isDarkTheme,
         optionsByKey,
         payloadsByKey,
-        hiddenRanges,
       );
     }
   }
 
-  decorations.applyHidden(editor, hiddenRanges);
+  decorations.applyHidden(editor, []);
   decorations.apply(editor, optionsByKey, payloadsByKey);
 }

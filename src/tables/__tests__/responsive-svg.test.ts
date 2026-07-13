@@ -156,6 +156,7 @@ describe('responsive-svg', () => {
       isHeader: false,
       showBottomDivider: true,
       colWidths,
+      compact: true,
       theme: {
         foreground: '#d4d4d4',
         mutedForeground: '#858585',
@@ -170,7 +171,7 @@ describe('responsive-svg', () => {
     expect(svg).toContain('fill="#858585"');
     expect(svg).toContain('fill="#d4d4d4"');
     expect(svg).toContain('<line');
-    const expectedHeight = Math.round(20 * 0.4) * 2 + dataLines.length * 20 + 1;
+    const expectedHeight = dataLines.length * 20 + 1;
     expect(svg).toContain(`height="${expectedHeight}"`);
   });
 
