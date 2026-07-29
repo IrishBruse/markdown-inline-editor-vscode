@@ -137,7 +137,8 @@ export function applyFilteredDecorations(
   force = false
 ): void {
   const renderOptionsTypes = new Set<DecorationType>([
-    'emoji', 'orderedListItem', 'tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash', 'tableCell',
+    'emoji', 'orderedListItem', 'tablePipe', 'tableSeparatorPipe', 'tableSeparatorDash',
+    'tableRule', 'tableCell',
   ]);
   const appliedCache = getOrCreateAppliedCache(editor);
 
